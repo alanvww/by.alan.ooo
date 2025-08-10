@@ -1,0 +1,181 @@
+---
+title: 'Interactive Data Visualization with React and D3'
+date: '2025-02-15'
+excerpt: 'Building an interactive data visualization dashboard combining the power of React and D3.js.'
+coverImage: 'https://placehold.co/600x400.png'
+projectUrl: 'https://example.com/data-viz-demo'
+technologies: ['React', 'D3.js', 'TailwindCSS', 'Vitest']
+---
+
+# Interactive Data Visualization with React and D3
+
+This project demonstrates how to build interactive data visualizations by combining the strengths of React for UI components and D3.js for powerful data transformations and visualizations.
+
+## Project Overview
+
+The dashboard visualizes global climate data with multiple interactive components:
+
+- Time-series temperature charts with adjustable time ranges
+- Geographic heat maps showing temperature anomalies
+- Interactive filters for different data scenarios
+- Responsive design that works across device sizes
+
+## Technical Implementation
+
+### Architecture
+
+I used a hybrid approach where D3 handles the data calculations and scales, while React manages the DOM:
+
+```jsx
+function TemperatureChart({ data, timeRange }) {
+	const svgRef = useRef();
+
+	useEffect(() => {
+		// D3 calculations for scales and data transformations
+		const xScale = d3
+			.scaleTime()
+			.domain([timeRange.start, timeRange.end])
+			.range([0, width]);
+
+		const yScale = d3
+			.scaleLinear()
+			.domain([d3.min(data, (d) => d.temp), d3.max(data, (d) => d.temp)])
+			.range([height, 0]);
+
+		// D3 for axis creation
+		d3.select(svgRef.current).select('.x-axis').call(d3.axisBottom(xScale));
+
+		d3.select(svgRef.current).select('.y-axis').call(d3.axisLeft(yScale));
+	}, [data, timeRange]);
+
+	// React renders the SVG elements
+	return (
+		<svg
+			ref={svgRef}
+			width={width + margin.left + margin.right}
+			height={height + margin.top + margin.bottom}
+		>
+			<g transform={`translate(${margin.left}, ${margin.top})`}>
+				<g className="x-axis" transform={`translate(0, ${height})`} />
+				<g className="y-axis" />
+				<path
+					d={lineGenerator(data)}
+					fill="none"
+					stroke="steelblue"
+					strokeWidth={2}
+				/>
+			</g>
+		</svg>
+	);
+}
+```
+
+### Data Processing
+
+Climate data comes with various challenges:
+
+1. Handling missing or inconsistent values
+2. Normalizing data from different sources
+3. Implementing efficient filtering for real-time interactions
+
+I created a data processing pipeline that streamlines these operations:
+
+```javascript
+// Data processing pipeline
+const processData = (rawData) => {
+	return rawData
+		.filter((d) => isValidDataPoint(d))
+		.map(normalizeDataPoint)
+		.sort((a, b) => a.date - b.date);
+};
+
+// Custom filtering for user interactions
+const applyUserFilters = (data, filters) => {
+	return data.filter((d) => {
+		return (
+			d.date >= filters.timeRange.start &&
+			d.date <= filters.timeRange.end &&
+			(filters.regions.length === 0 || filters.regions.includes(d.region))
+		);
+	});
+};
+```
+
+## Performance Optimizations
+
+With large datasets, performance becomes critical. I implemented several optimizations:
+
+1. **Data downsampling**: For time-series with thousands of points, I implemented a downsampling algorithm that preserves visual fidelity while reducing the number of DOM elements
+
+2. **Memoization**: Using React's `useMemo` to avoid recalculating derived data:
+
+```jsx
+// Memoize expensive data transformations
+const processedData = useMemo(() => {
+	return processData(rawData);
+}, [rawData]);
+
+// Memoize filtered data
+const filteredData = useMemo(() => {
+	return applyUserFilters(processedData, filters);
+}, [processedData, filters]);
+```
+
+3. **Canvas rendering**: For particularly dense visualizations, I switched from SVG to Canvas rendering:
+
+```jsx
+function DensityMap({ data }) {
+	const canvasRef = useRef();
+
+	useEffect(() => {
+		const ctx = canvasRef.current.getContext('2d');
+		ctx.clearRect(0, 0, width, height);
+
+		data.forEach((point) => {
+			const x = xScale(point.x);
+			const y = yScale(point.y);
+			const intensity = intensityScale(point.value);
+
+			ctx.fillStyle = `rgba(0, 0, 255, ${intensity})`;
+			ctx.beginPath();
+			ctx.arc(x, y, 3, 0, Math.PI * 2);
+			ctx.fill();
+		});
+	}, [data]);
+
+	return <canvas ref={canvasRef} width={width} height={height} />;
+}
+```
+
+## User Experience Enhancements
+
+I focused on making the interactions intuitive and responsive:
+
+1. Tooltips that follow the mouse and show detailed data
+2. Animated transitions between different views
+3. Touch-friendly controls for mobile users
+4. Keyboard navigation for accessibility
+
+## Lessons Learned
+
+This project taught me several valuable lessons:
+
+1. **Find the right abstraction level**: Too much abstraction makes customization difficult, while too little leads to repetitive code
+
+2. **Test with real data early**: Synthetic data rarely exposes the edge cases that real-world data contains
+
+3. **Progressive enhancement**: Start with basic visualizations that work, then enhance them with animations and interactions
+
+## Future Improvements
+
+I plan to enhance this project with:
+
+1. Adding machine learning predictions for trend forecasting
+2. Implementing WebGL rendering for larger datasets
+3. Adding collaborative features for team analysis
+
+## Conclusion
+
+This project demonstrates that by combining React's component model with D3's visualization capabilities, we can create powerful yet maintainable data visualizations that perform well even with large datasets.
+
+The code is open source and available on [GitHub](https://github.com/yourusername/data-viz-project).

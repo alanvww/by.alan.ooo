@@ -1,0 +1,186 @@
+---
+title: 'Hello World: Getting Started with Next.js 15'
+date: '2025-03-01'
+excerpt: 'Exploring the latest features and improvements in Next.js 15, including Turbopack and Server Components.'
+coverImage: 'https://placehold.co/600x400.png'
+tags: ['nextjs', 'react', 'web-development', 'tutorial']
+author: 'Alan'
+readTime: 8
+---
+
+# Hello World: Getting Started with Next.js 15
+
+Next.js 15 introduces several exciting new features that push the boundaries of web development. In this post, I'll walk through some of the most significant improvements and show you how to leverage them in your projects.
+
+## Server Components: A New Paradigm
+
+React Server Components represent a paradigm shift in how we build React applications. With Next.js 15, they're now the default approach.
+
+```jsx
+// This is a Server Component
+export default function Page() {
+	return (
+		<div>
+			<h1>Hello, Server Component!</h1>
+		</div>
+	);
+}
+```
+
+Server Components offer several advantages:
+
+- **Reduced bundle size** - Server Components aren't included in the JavaScript bundle sent to the client
+- **Direct backend access** - Server Components can directly access backend resources
+- **Improved initial page load** - Content can be rendered on the server for faster first load
+
+## Turbopack: Lightning-Fast Builds
+
+Turbopack is a Rust-based successor to Webpack, designed for incredible speed. Next.js 15 includes an improved version with better compatibility and performance.
+
+To enable Turbopack in development:
+
+```bash
+npm run dev -- --turbo
+```
+
+Or in your package.json:
+
+```json
+{
+	"scripts": {
+		"dev": "next dev --turbo"
+	}
+}
+```
+
+The performance improvements are substantial, especially for larger applications:
+
+| Metric      | Webpack | Turbopack |
+| ----------- | ------- | --------- |
+| Cold start  | 35s     | 1.8s      |
+| File update | 180ms   | 20ms      |
+
+## Improved Image Optimization
+
+Next.js 15 enhances the `Image` component with better performance and quality controls:
+
+```jsx
+import Image from 'next/image';
+
+export default function Hero() {
+	return (
+		<Image
+			src="/hero.jpg"
+			width={1200}
+			height={600}
+			priority
+			quality={90}
+			alt="Hero image"
+		/>
+	);
+}
+```
+
+## Advanced Features
+
+### Custom Components
+
+You can use custom components in your MDX content for enhanced styling and functionality.
+
+### Code Examples
+
+Here's a more complex example showing how to create a custom hook:
+
+```typescript
+import { useState, useEffect } from 'react';
+
+interface UseLocalStorageOptions<T> {
+  defaultValue?: T;
+  serialize?: (value: T) => string;
+  deserialize?: (value: string) => T;
+}
+
+export function useLocalStorage<T>(
+  key: string,
+  options: UseLocalStorageOptions<T> = {}
+): [T | undefined, (value: T) => void] {
+  const {
+    defaultValue,
+    serialize = JSON.stringify,
+    deserialize = JSON.parse,
+  } = options;
+
+  const [value, setValue] = useState<T | undefined>(() => {
+    if (typeof window === 'undefined') return defaultValue;
+    
+    try {
+      const item = window.localStorage.getItem(key);
+      return item ? deserialize(item) : defaultValue;
+    } catch (error) {
+      console.warn(`Error reading localStorage key "${key}":`, error);
+      return defaultValue;
+    }
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    try {
+      if (value === undefined) {
+        window.localStorage.removeItem(key);
+      } else {
+        window.localStorage.setItem(key, serialize(value));
+      }
+    } catch (error) {
+      console.warn(`Error setting localStorage key "${key}":`, error);
+    }
+  }, [key, value, serialize]);
+
+  return [value, setValue];
+}
+```
+
+## Getting Started with Next.js 15
+
+Creating a new Next.js 15 project is straightforward:
+
+1. Use create-next-app:
+
+```bash
+npx create-next-app@latest my-app
+```
+
+2. Start the development server:
+
+```bash
+cd my-app
+npm run dev
+```
+
+3. Open http://localhost:3000 to see your application.
+
+## Project Structure
+
+Here's a recommended project structure for Next.js 15 applications:
+
+```
+my-app/
+├── src/
+│   ├── app/           # App Router pages
+│   ├── components/    # Reusable components
+│   ├── lib/          # Utility functions
+│   └── content/      # MDX content files
+├── public/            # Static assets
+├── package.json
+└── next.config.ts
+```
+
+## Conclusion
+
+Next.js 15 represents a significant step forward for React development, with improvements in performance, developer experience, and capabilities. Whether you're building a small blog or a large-scale application, the new features provide compelling reasons to upgrade or start fresh with Next.js 15.
+
+In future posts, I'll dive deeper into specific aspects of Next.js 15 and share techniques for building fast, scalable applications with the framework.
+
+---
+
+*This post was written with the help of the improved MDX components and styling system.*
