@@ -11,7 +11,7 @@ const rl = readline.createInterface({
 });
 
 // Ensure the content directories exist
-const contentDir = path.join(process.cwd(), 'content');
+const contentDir = path.join(process.cwd(), 'src', 'content');
 const postsDir = path.join(contentDir, 'posts');
 const projectsDir = path.join(contentDir, 'projects');
 
@@ -50,7 +50,7 @@ rl.question('What do you want to create? (post/project): ', (type) => {
 title: "${title}"
 date: "${date}"
 excerpt: "${excerpt}"
-coverImage: "/${type === 'post' ? 'blog' : 'projects'}/${slug}.jpg"
+coverImage: "./cover.jpg"
 `;
 
             // Add additional fields for projects
@@ -87,19 +87,18 @@ Write your content here...
 
                 // Determine the target directory
                 const targetDir = type.toLowerCase() === 'post' ? postsDir : projectsDir;
-                const filePath = path.join(targetDir, `${slug}.mdx`);
+                const folderPath = path.join(targetDir, slug);
+                if (!fs.existsSync(folderPath)) {
+                    fs.mkdirSync(folderPath, { recursive: true });
+                }
+                const filePath = path.join(folderPath, 'index.mdx');
 
                 // Write the file
                 fs.writeFileSync(filePath, frontmatter);
                 console.log(`Created ${type} at: ${filePath}`);
 
                 // Create a simple symbolic image file if needed
-                const imagesDir = path.join(process.cwd(), 'public', type === 'post' ? 'blog' : 'projects');
-                if (!fs.existsSync(imagesDir)) {
-                    fs.mkdirSync(imagesDir, { recursive: true });
-                }
-
-                console.log(`Remember to add an image at public/${type === 'post' ? 'blog' : 'projects'}/${slug}.jpg`);
+                console.log(`Remember to add images next to index.mdx (e.g. ${folderPath}/cover.jpg).`);
                 console.log(`You can now edit the file at ${filePath}`);
 
                 // Ask if they want to open the file

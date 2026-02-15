@@ -199,7 +199,8 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
             const elapsedTime = (currentTime - startTime) / 1000; // time in seconds
 
             // Set background color based on theme
-            const bgColor = theme === 'light' ? [0.95, 0.95, 0.97, 1] : [0.02, 0.02, 0.05, 1];
+            // Matches globals.css background tokens
+            const bgColor = theme === 'light' ? [0.98, 0.98, 0.98, 1] : [0.08, 0.08, 0.12, 1];
             gl.clearColor(bgColor[0], bgColor[1], bgColor[2], bgColor[3]);
             gl.clear(gl.COLOR_BUFFER_BIT);
 
@@ -243,7 +244,7 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     return (
         <div className="fixed top-0 left-0 w-full h-full z-[-1]">
             {/* Theme-aware backdrop */}
-            <div className={`absolute inset-0 ${theme === 'light' ? 'bg-gray-50' : 'bg-gray-950'}`} />
+            <div className={`absolute inset-0 transition-colors duration-300 ${theme === 'light' ? 'bg-[#fafafa]' : 'bg-[#14141f]'}`} />
             {mounted && (
                 <canvas
                     ref={canvasRef}

@@ -33,75 +33,203 @@ export interface ProjectFrontmatter extends BaseFrontmatter {
   permalink?: string;
 }
 
-type ContentType = 'posts' | 'projects';
+/**
+ * Content type is the folder name under src/content/
+ * (e.g., 'posts', 'projects', or any auto-discovered folder)
+ */
+type ContentType = string;
+
+interface ContentEntry {
+  slug: string;
+  filePath: string;
+  basePath?: string;
+}
+
+export interface ContentFile<T extends BaseFrontmatter> {
+  frontmatter: T;
+  content: string;
+  slug: string;
+}
 
 /**
  * Get all files of a specific content type
  */
 export async function getFiles(type: ContentType): Promise<string[]> {
-  return fs.readdirSync(path.join(contentDirectory, type));
+  const entries = await getContentEntries(type);
+  return entries.map((entry) => entry.slug);
+}
+
+function getContentEntries(type: ContentType): ContentEntry[] {
+  const typeDirectory = path.join(contentDirectory, type);
+  const dirEntries = fs.readdirSync(typeDirectory, { withFileTypes: true });
+
+  const entries: ContentEntry[] = [];
+
+  dirEntries.forEach((entry) => {
+    if (entry.isDirectory()) {
+      const folderPath = path.join(typeDirectory, entry.name);
+      const mdxPath = path.join(folderPath, 'index.mdx');
+      const mdPath = path.join(folderPath, 'index.md');
+
+      if (fs.existsSync(mdxPath)) {
+        entries.push({
+          slug: entry.name,
+          filePath: mdxPath,
+          basePath: `/content/${type}/${entry.name}`,
+        });
+        return;
+      }
+
+      if (fs.existsSync(mdPath)) {
+        entries.push({
+          slug: entry.name,
+          filePath: mdPath,
+          basePath: `/content/${type}/${entry.name}`,
+        });
+      }
+      return;
+    }
+
+    if (entry.isFile() && /\.(mdx|md)$/.test(entry.name)) {
+      const slug = entry.name.replace(/\.(mdx|md)$/, '');
+      entries.push({
+        slug,
+        filePath: path.join(typeDirectory, entry.name),
+      });
+    }
+  });
+
+  return entries;
+}
+
+function resolveFrontmatterAssets<T extends BaseFrontmatter>(
+  frontmatter: T,
+  basePath?: string
+): T {
+  if (!basePath) return frontmatter;
+
+  const coverImage = frontmatter.coverImage;
+  const resolvedCoverImage = coverImage && isRelativePath(coverImage)
+    ? `${basePath}/${coverImage.replace(/^\.\//, '')}`
+    : coverImage;
+
+  return {
+    ...frontmatter,
+    coverImage: resolvedCoverImage,
+  };
+}
+
+function rewriteRelativeContentPaths(content: string, basePath?: string): string {
+  if (!basePath) return content;
+
+  const withMarkdownImages = content.replace(
+    /!\[([^\]]*)\]\(\.\//g,
+    `![$1](${basePath}/`
+  );
+
+  const withHtmlImages = withMarkdownImages.replace(
+    /(<img[^>]*\s+src=)(["'])\.\//g,
+    `$1$2${basePath}/`
+  );
+
+  const withComponentImages = withHtmlImages.replace(
+    /(<Image[^>]*\s+src=)(["'])\.\//g,
+    `$1$2${basePath}/`
+  );
+
+  return withComponentImages.replace(
+    /(\ssrc=\{\s*["'])\.\//g,
+    `$1${basePath}/`
+  );
+}
+
+function isRelativePath(value: string): boolean {
+  return value.startsWith('./');
+}
+
+/**
+ * Discover all content type folders in src/content/
+ * Returns an array of folder names (e.g., ['posts', 'projects'])
+ */
+export function getContentTypes(): string[] {
+  const entries = fs.readdirSync(contentDirectory, { withFileTypes: true });
+  return entries
+    .filter(entry => entry.isDirectory())
+    .map(entry => entry.name);
+}
+
+/**
+ * Check if a content type folder exists
+ */
+export function contentTypeExists(type: string): boolean {
+  const typeDirectory = path.join(contentDirectory, type);
+  return fs.existsSync(typeDirectory);
 }
 
 /**
  * Get the file extension for a given slug
  */
 export async function getFileExtensionForSlug(type: ContentType, slug: string): Promise<string> {
-  const mdxPath = path.join(contentDirectory, type, `${slug}.mdx`);
-  const mdPath = path.join(contentDirectory, type, `${slug}.md`);
-  
-  if (fs.existsSync(mdxPath)) {
-    return 'mdx';
-  } else if (fs.existsSync(mdPath)) {
-    return 'md';
+  const entries = getContentEntries(type);
+  const entry = entries.find((item) => item.slug === slug);
+
+  if (!entry) {
+    throw new Error(`File with slug "${slug}" not found in ${type}`);
   }
-  
-  throw new Error(`File with slug "${slug}" not found in ${type}`);
+
+  return path.extname(entry.filePath).replace('.', '');
 }
 
 /**
  * Get data for a specific file by slug
  */
-export async function getFileData(type: ContentType, slug: string): Promise<PostFrontmatter | ProjectFrontmatter> {
-  // Try .mdx first, then .md if that fails
-  let filePath = path.join(contentDirectory, type, `${slug}.mdx`);
-  
-  if (!fs.existsSync(filePath)) {
-    filePath = path.join(contentDirectory, type, `${slug}.md`);
-    
-    // If neither extension exists, throw an error
-    if (!fs.existsSync(filePath)) {
-      throw new Error(`File with slug "${slug}" not found in ${type}`);
-    }
+export async function getFileData(
+  type: ContentType,
+  slug: string
+): Promise<ContentFile<PostFrontmatter | ProjectFrontmatter>> {
+  const entries = getContentEntries(type);
+  const entry = entries.find((item) => item.slug === slug);
+
+  if (!entry) {
+    throw new Error(`File with slug "${slug}" not found in ${type}`);
   }
-  
-  const source = fs.readFileSync(filePath, 'utf8');
-  const { data } = matter(source);
+
+  const source = fs.readFileSync(entry.filePath, 'utf8');
+  const { data, content } = matter(source);
+  const frontmatter = resolveFrontmatterAssets(
+    {
+      ...data,
+      slug,
+    } as PostFrontmatter | ProjectFrontmatter,
+    entry.basePath
+  );
 
   return {
-    ...data,
+    frontmatter,
+    content: rewriteRelativeContentPaths(content, entry.basePath),
     slug,
-  } as PostFrontmatter | ProjectFrontmatter;
+  };
 }
 
 /**
  * Get all posts with their frontmatter
  */
 export async function getAllPosts(): Promise<PostFrontmatter[]> {
-  const files = await getFiles('posts');
-  
-  const posts = files.map((filename) => {
-    // Support both .mdx and .md extensions
-    const slug = filename.replace(/\.(mdx|md)$/, '');
-    const filePath = path.join(contentDirectory, 'posts', filename);
-    const source = fs.readFileSync(filePath, 'utf8');
+  const entries = getContentEntries('posts');
+
+  const posts = entries.map((entry) => {
+    const source = fs.readFileSync(entry.filePath, 'utf8');
     const { data } = matter(source);
-    
-    return {
-      ...data,
-      slug,
-    } as PostFrontmatter;
+
+    return resolveFrontmatterAssets(
+      {
+        ...data,
+        slug: entry.slug,
+      } as PostFrontmatter,
+      entry.basePath
+    );
   });
-  
+
   return posts.sort((a, b) => {
     return new Date(b.date).getTime() - new Date(a.date).getTime();
   });
@@ -111,56 +239,58 @@ export async function getAllPosts(): Promise<PostFrontmatter[]> {
  * Get all projects with their frontmatter
  */
 export async function getAllProjects(): Promise<ProjectFrontmatter[]> {
-  const files = await getFiles('projects');
-  
-  const projects = files.map((filename) => {
-    // Support both .mdx and .md extensions
-    const slug = filename.replace(/\.(mdx|md)$/, '');
-    const filePath = path.join(contentDirectory, 'projects', filename);
-    const source = fs.readFileSync(filePath, 'utf8');
+  const entries = getContentEntries('projects');
+
+  const projects = entries.map((entry) => {
+    const source = fs.readFileSync(entry.filePath, 'utf8');
     const { data } = matter(source);
-    
-    return {
-      ...data,
-      slug,
-    } as ProjectFrontmatter;
+
+    return resolveFrontmatterAssets(
+      {
+        ...data,
+        slug: entry.slug,
+      } as ProjectFrontmatter,
+      entry.basePath
+    );
   });
-  
+
   return projects.sort((a, b) => {
     return new Date(b.date).getTime() - new Date(a.date).getTime();
   });
 }
 
 /**
- * Legacy function for backward compatibility
+ * Generic function to get all content of any type
+ * Used by dynamic XMB category generation
  */
-export async function getAllFilesFrontmatter(type: ContentType) {
-  if (type === 'posts') {
-    return getAllPosts();
-  } else {
-    return getAllProjects();
-  }
+export async function getAllContent(type: string): Promise<BaseFrontmatter[]> {
+  const entries = getContentEntries(type);
+
+  const items = entries.map((entry) => {
+    const source = fs.readFileSync(entry.filePath, 'utf8');
+    const { data } = matter(source);
+
+    return resolveFrontmatterAssets(
+      {
+        ...data,
+        slug: entry.slug,
+      } as BaseFrontmatter,
+      entry.basePath
+    );
+  });
+
+  return items.sort((a, b) => {
+    return new Date(b.date).getTime() - new Date(a.date).getTime();
+  });
 }
 
 /**
- * Legacy function for backward compatibility
- */
-export async function getFileBySlug(type: ContentType, slug: string) {
-  const data = await getFileData(type, slug);
-  
-  return {
-    // No code property needed with @next/mdx
-    frontmatter: data,
-  };
-}
-
-/**
- * Filter content by tags
+ * Filter content by tags (exact match)
  */
 export function filterByTag<T extends BaseFrontmatter>(content: T[], tag: string): T[] {
   return content.filter(item => 
     item.tags && item.tags.some(t => 
-      t.toLowerCase().includes(tag.toLowerCase())
+      t.toLowerCase() === tag.toLowerCase()
     )
   );
 }

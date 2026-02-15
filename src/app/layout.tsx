@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import Navigation from "@/components/Navigation";
-import Footer from "@/components/Footer";
-import WebGLBackground from "@/components/WebGLBackground";
 import { ThemeProvider } from "@/lib/theme-context";
 import ThemeScript from "@/components/ThemeScript";
+import LayoutWrapper from "@/components/LayoutWrapper";
+import { XMBNavigationProvider } from "@/lib/xmb-navigation-context";
+import { getXMBData } from "@/lib/xmb-data";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -25,13 +25,15 @@ export const metadata: Metadata = {
   description: "Personal website and digital garden of Alan, a web developer and creative coder.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const categories = await getXMBData();
+
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning data-scroll-behavior="smooth">
       <head>
         <ThemeScript />
       </head>
@@ -39,17 +41,11 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen text-foreground bg-background transition-colors duration-300`}
       >
         <ThemeProvider>
-          {/* Top navigation */}
-          <Navigation />
-
-          {/* Page content */}
-          {/* Background systems */}
-          <WebGLBackground />
-          <main className="relative mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 pt-12">
-            {children}
-          </main>
-
-          <Footer />
+          <XMBNavigationProvider categories={categories}>
+            <LayoutWrapper>
+              {children}
+            </LayoutWrapper>
+          </XMBNavigationProvider>
         </ThemeProvider>
       </body>
     </html>
