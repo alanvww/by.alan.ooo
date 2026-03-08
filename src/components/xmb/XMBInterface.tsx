@@ -51,7 +51,6 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
     setCategoryIndex,
     setItemIndex,
     setNavigationPath,
-    pressedKeys,
     finishNavigation
   } = useXMBNavigation(augmentedCategories);
 
@@ -311,7 +310,7 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
       </AnimatePresence>
 
       {/* Keyboard Helper */}
-      <XMBKeyboardHelper pressedKeys={pressedKeys} />
+      <XMBKeyboardHelper />
     </div>
   );
 };

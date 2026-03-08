@@ -1,4 +1,4 @@
-import { getAllContent, BaseFrontmatter } from './mdx';
+import { getContentManifest } from './mdx';
 
 export interface SiblingInfo {
     prev?: { slug: string; title: string };
@@ -13,7 +13,8 @@ export async function getContentSiblings(
     type: string,
     currentSlug: string
 ): Promise<SiblingInfo> {
-    const items = await getAllContent(type);
+    const manifest = await getContentManifest();
+    const items = manifest[type]?.map((entry) => entry.frontmatter) ?? [];
 
     const currentIndex = items.findIndex(item => item.slug === currentSlug);
     

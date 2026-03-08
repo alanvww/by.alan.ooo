@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
 import { motion } from 'motion/react';
 import { useRouter } from 'next/navigation';
 import { XMB_ANIMATION } from '@/lib/xmb-constants';
@@ -121,10 +122,12 @@ const XMBPostViewer = ({ type, slug, frontmatter, children, siblings }: XMBPostV
             {/* Background Image (Blurred) */}
             {frontmatter.coverImage && (
                 <div className="absolute inset-0 -z-10 opacity-20 overflow-hidden">
-                    <img 
-                        src={frontmatter.coverImage} 
-                        alt="" 
-                        className="w-full h-full object-cover blur-3xl scale-110"
+                    <Image
+                        src={frontmatter.coverImage}
+                        alt=""
+                        fill
+                        sizes="100vw"
+                        className="object-cover blur-3xl scale-110"
                     />
                     <div className="absolute inset-0 bg-linear-to-b from-black/60 via-black/40 to-black/80" />
                 </div>
@@ -208,10 +211,13 @@ const XMBPostViewer = ({ type, slug, frontmatter, children, siblings }: XMBPostV
                             transition={{ delay: 0.3, duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
                             className="relative aspect-video rounded-2xl overflow-hidden border border-white/10 shadow-[0_0_80px_rgba(255,255,255,0.05)] mb-24"
                         >
-                            <img 
-                                src={frontmatter.coverImage} 
+                            <Image
+                                src={frontmatter.coverImage}
                                 alt={frontmatter.title}
-                                className="w-full h-full object-cover"
+                                fill
+                                sizes="(max-width: 1024px) 100vw, 1024px"
+                                className="object-cover"
+                                priority
                             />
                             <div className="absolute inset-0 ring-1 ring-inset ring-white/20 rounded-2xl" />
                         </motion.div>

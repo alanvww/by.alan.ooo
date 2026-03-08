@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect, forwardRef } from "react";
+import Image from 'next/image';
 import { motion, AnimatePresence } from "motion/react";
 import { useRouter } from "next/navigation";
 import { useXMBNavigationContext } from "@/lib/xmb-navigation-context";
@@ -82,12 +83,16 @@ const XMBListItem = forwardRef<HTMLDivElement, XMBListItemProps>(
                                 <XMBIcon name="Folder" size={24} />
                             </div>
                         ) : item.image && !imgError ? (
-                            <img
-                                src={item.image}
-                                alt=""
-                                className="w-full h-full object-cover"
-                                onError={() => setImgError(true)}
-                            />
+                            <div className="relative w-full h-full">
+                                <Image
+                                    src={item.image}
+                                    alt=""
+                                    fill
+                                    sizes="96px"
+                                    className="object-cover"
+                                    onError={() => setImgError(true)}
+                                />
+                            </div>
                         ) : (
                             <XMBIcon name="File" size={24} />
                         )}

@@ -2,6 +2,7 @@
 import fs from 'fs';
 import path from 'path';
 import matter from 'gray-matter';
+import { cache } from 'react';
 
 const contentDirectory = path.join(process.cwd(), 'src/content');
 
@@ -45,6 +46,11 @@ interface ContentEntry {
   basePath?: string;
 }
 
+interface ParsedContentEntry<T extends BaseFrontmatter = BaseFrontmatter> extends ContentEntry {
+  frontmatter: T;
+  content: string;
+}
+
 export interface ContentFile<T extends BaseFrontmatter> {
   frontmatter: T;
   content: string;
@@ -55,11 +61,11 @@ export interface ContentFile<T extends BaseFrontmatter> {
  * Get all files of a specific content type
  */
 export async function getFiles(type: ContentType): Promise<string[]> {
-  const entries = await getContentEntries(type);
+  const entries = getContentEntries(type);
   return entries.map((entry) => entry.slug);
 }
 
-function getContentEntries(type: ContentType): ContentEntry[] {
+const getContentEntries = cache((type: ContentType): ContentEntry[] => {
   const typeDirectory = path.join(contentDirectory, type);
   const dirEntries = fs.readdirSync(typeDirectory, { withFileTypes: true });
 
@@ -100,6 +106,33 @@ function getContentEntries(type: ContentType): ContentEntry[] {
   });
 
   return entries;
+});
+
+const parseContentEntry = <T extends BaseFrontmatter>(entry: ContentEntry): ParsedContentEntry<T> => {
+  const source = fs.readFileSync(entry.filePath, 'utf8');
+  const { data, content } = matter(source);
+
+  return {
+    ...entry,
+    frontmatter: resolveFrontmatterAssets(
+      {
+        ...data,
+        slug: entry.slug,
+      } as T,
+      entry.basePath,
+    ),
+    content: rewriteRelativeContentPaths(content, entry.basePath),
+  };
+};
+
+const getParsedContentEntries = cache((type: ContentType): ParsedContentEntry[] => {
+  return getContentEntries(type).map((entry) => parseContentEntry(entry));
+});
+
+function sortByDate<T extends BaseFrontmatter>(content: T[]): T[] {
+  return [...content].sort((a, b) => {
+    return new Date(b.date).getTime() - new Date(a.date).getTime();
+  });
 }
 
 function resolveFrontmatterAssets<T extends BaseFrontmatter>(
@@ -187,26 +220,15 @@ export async function getFileData(
   type: ContentType,
   slug: string
 ): Promise<ContentFile<PostFrontmatter | ProjectFrontmatter>> {
-  const entries = getContentEntries(type);
-  const entry = entries.find((item) => item.slug === slug);
+  const entry = getParsedContentEntries(type).find((item) => item.slug === slug);
 
   if (!entry) {
     throw new Error(`File with slug "${slug}" not found in ${type}`);
   }
 
-  const source = fs.readFileSync(entry.filePath, 'utf8');
-  const { data, content } = matter(source);
-  const frontmatter = resolveFrontmatterAssets(
-    {
-      ...data,
-      slug,
-    } as PostFrontmatter | ProjectFrontmatter,
-    entry.basePath
-  );
-
   return {
-    frontmatter,
-    content: rewriteRelativeContentPaths(content, entry.basePath),
+    frontmatter: entry.frontmatter as PostFrontmatter | ProjectFrontmatter,
+    content: entry.content,
     slug,
   };
 }
@@ -215,48 +237,14 @@ export async function getFileData(
  * Get all posts with their frontmatter
  */
 export async function getAllPosts(): Promise<PostFrontmatter[]> {
-  const entries = getContentEntries('posts');
-
-  const posts = entries.map((entry) => {
-    const source = fs.readFileSync(entry.filePath, 'utf8');
-    const { data } = matter(source);
-
-    return resolveFrontmatterAssets(
-      {
-        ...data,
-        slug: entry.slug,
-      } as PostFrontmatter,
-      entry.basePath
-    );
-  });
-
-  return posts.sort((a, b) => {
-    return new Date(b.date).getTime() - new Date(a.date).getTime();
-  });
+  return sortByDate(getParsedContentEntries('posts').map((entry) => entry.frontmatter as PostFrontmatter));
 }
 
 /**
  * Get all projects with their frontmatter
  */
 export async function getAllProjects(): Promise<ProjectFrontmatter[]> {
-  const entries = getContentEntries('projects');
-
-  const projects = entries.map((entry) => {
-    const source = fs.readFileSync(entry.filePath, 'utf8');
-    const { data } = matter(source);
-
-    return resolveFrontmatterAssets(
-      {
-        ...data,
-        slug: entry.slug,
-      } as ProjectFrontmatter,
-      entry.basePath
-    );
-  });
-
-  return projects.sort((a, b) => {
-    return new Date(b.date).getTime() - new Date(a.date).getTime();
-  });
+  return sortByDate(getParsedContentEntries('projects').map((entry) => entry.frontmatter as ProjectFrontmatter));
 }
 
 /**
@@ -264,25 +252,21 @@ export async function getAllProjects(): Promise<ProjectFrontmatter[]> {
  * Used by dynamic XMB category generation
  */
 export async function getAllContent(type: string): Promise<BaseFrontmatter[]> {
-  const entries = getContentEntries(type);
-
-  const items = entries.map((entry) => {
-    const source = fs.readFileSync(entry.filePath, 'utf8');
-    const { data } = matter(source);
-
-    return resolveFrontmatterAssets(
-      {
-        ...data,
-        slug: entry.slug,
-      } as BaseFrontmatter,
-      entry.basePath
-    );
-  });
-
-  return items.sort((a, b) => {
-    return new Date(b.date).getTime() - new Date(a.date).getTime();
-  });
+  return sortByDate(getParsedContentEntries(type).map((entry) => entry.frontmatter));
 }
+
+export const getContentManifest = cache(async (): Promise<Record<string, ParsedContentEntry[]>> => {
+  const types = getContentTypes();
+
+  return Object.fromEntries(
+    types.map((type) => [
+      type,
+      [...getParsedContentEntries(type)].sort((a, b) => {
+        return new Date(b.frontmatter.date).getTime() - new Date(a.frontmatter.date).getTime();
+      }),
+    ]),
+  );
+});
 
 /**
  * Filter content by tags (exact match)

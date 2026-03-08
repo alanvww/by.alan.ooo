@@ -1,5 +1,6 @@
 // src/components/xmb/XMBPreview.tsx
 import React from 'react';
+import Image from 'next/image';
 import { motion } from 'motion/react';
 import type { XMBItem } from '@/lib/xmb-types';
 import { XMB_ANIMATION } from '@/lib/xmb-constants';
@@ -21,10 +22,12 @@ const XMBPreview = ({ item }: XMBPreviewProps) => {
       {/* Background Dim/Blur */}
       {item.image && (
           <div className="absolute inset-0 z-0">
-              <img 
-                src={item.image} 
-                alt="" 
-                className="w-full h-full object-cover opacity-20 blur-2xl scale-110"
+              <Image
+                src={item.image}
+                alt=""
+                fill
+                sizes="100vw"
+                className="object-cover opacity-20 blur-2xl scale-110"
               />
               <div className="absolute inset-0 bg-black/60" />
           </div>
@@ -40,7 +43,13 @@ const XMBPreview = ({ item }: XMBPreviewProps) => {
             style={{ willChange: 'transform, opacity' }}
         >
             {item.image ? (
-                <img src={item.image} alt={item.title} className="w-full h-full object-cover" />
+                <Image
+                    src={item.image}
+                    alt={item.title}
+                    fill
+                    sizes="(max-width: 768px) 100vw, 450px"
+                    className="object-cover"
+                />
             ) : (
                 <div className="w-full h-full flex items-center justify-center bg-white/5">
                     <span className="text-white/20 font-mono">NO PREVIEW</span>

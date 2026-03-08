@@ -10,7 +10,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
   const { isNavigating } = useXMBNavigationContext();
 
   return (
-    <main className="w-full h-full overflow-hidden">
+    <main className="relative w-full h-full overflow-hidden">
       <WebGLBackground />
       <XMBContentTransition>
         {children}

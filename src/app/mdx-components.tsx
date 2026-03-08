@@ -101,14 +101,18 @@ export const mdxComponents: MDXComponents = {
             </div>
         )
     },
-    img: ({ src, alt, ...props }: React.ImgHTMLAttributes<HTMLImageElement>) => (
+    img: ({ src, alt }: React.ImgHTMLAttributes<HTMLImageElement>) => (
         <div className="my-10 group relative rounded-xl overflow-hidden border border-white/10 bg-white/5 shadow-2xl transition-all duration-500 hover:border-white/30">
-            <img 
-                src={src} 
-                alt={alt} 
-                className="w-full h-auto object-cover opacity-90 group-hover:opacity-100 transition-opacity" 
-                {...props} 
-            />
+            {typeof src === 'string' ? (
+                <Image
+                    src={src}
+                    alt={alt ?? ''}
+                    width={1600}
+                    height={900}
+                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 80vw, 65rem"
+                    className="w-full h-auto object-cover opacity-90 group-hover:opacity-100 transition-opacity"
+                />
+            ) : null}
             {alt && (
                 <div className="absolute bottom-0 inset-x-0 p-4 bg-linear-to-t from-black/80 to-transparent">
                     <p className="text-xs font-mono text-white/40 tracking-widest uppercase">{alt}</p>

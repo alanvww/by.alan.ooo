@@ -1,7 +1,7 @@
 // src/components/xmb/XMBKeyboardHelper.tsx
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 
 interface KeyProps {
@@ -35,11 +35,43 @@ const Key = ({ label, action, pressed }: KeyProps) => {
     );
 };
 
-interface XMBKeyboardHelperProps {
-    pressedKeys: Set<string>;
-}
+const XMBKeyboardHelper = () => {
+    const [pressedKeys, setPressedKeys] = useState<Set<string>>(new Set());
 
-const XMBKeyboardHelper = ({ pressedKeys }: XMBKeyboardHelperProps) => {
+    useEffect(() => {
+        const handleKeyDown = (event: KeyboardEvent) => {
+            setPressedKeys((prev) => {
+                if (prev.has(event.key)) {
+                    return prev;
+                }
+
+                const next = new Set(prev);
+                next.add(event.key);
+                return next;
+            });
+        };
+
+        const handleKeyUp = (event: KeyboardEvent) => {
+            setPressedKeys((prev) => {
+                if (!prev.has(event.key)) {
+                    return prev;
+                }
+
+                const next = new Set(prev);
+                next.delete(event.key);
+                return next;
+            });
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        window.addEventListener('keyup', handleKeyUp);
+
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+            window.removeEventListener('keyup', handleKeyUp);
+        };
+    }, []);
+
     return (
         <div className="absolute bottom-8 right-12 flex gap-8 text-sm opacity-70 hover:opacity-100 transition-opacity">
             {/* Arrow Keys Cluster */}

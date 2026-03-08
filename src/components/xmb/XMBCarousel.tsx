@@ -2,12 +2,13 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
+import Image from 'next/image';
 import { motion, AnimatePresence } from "motion/react";
 import { useRouter } from "next/navigation";
 import { useXMBNavigationContext } from "@/lib/xmb-navigation-context";
 import type { XMBItem } from "@/lib/xmb-types";
 import XMBIcon from "./XMBIcon";
-import { XMB_CAROUSEL, XMB_ANIMATION, XMB_LAYOUT } from "@/lib/xmb-constants";
+import { XMB_CAROUSEL, XMB_ANIMATION } from "@/lib/xmb-constants";
 
 interface XMBCarouselProps {
   items: XMBItem[];
@@ -15,12 +16,136 @@ interface XMBCarouselProps {
   onSelect: (index: number) => void;
 }
 
-const XMBCarousel = ({ items, activeIndex, onSelect }: XMBCarouselProps) => {
+interface XMBCarouselCardProps {
+  item: XMBItem;
+  index: number;
+  scrollOffset: number;
+  onSelect: (index: number) => void;
+  startNavigation: () => void;
+}
+
+const XMBCarouselCard = React.memo(({ item, index, scrollOffset, onSelect, startNavigation }: XMBCarouselCardProps) => {
   const router = useRouter();
+
+  const distance = index - scrollOffset;
+  const absDistance = Math.abs(distance);
+  const isActive = Math.round(scrollOffset) === index;
+  const isVisible = absDistance <= XMB_CAROUSEL.VISIBLE_ITEMS;
+  const yOffset = distance * XMB_CAROUSEL.ITEM_SPACING;
+  const scale = isActive ? 1 : Math.max(0.6 - absDistance * 0.05, 0.42);
+  const opacity = isActive ? 1 : Math.max(0.45 - absDistance * 0.08, 0.12);
+  const zIndex = 100 - Math.floor(absDistance);
+  const blur = isActive ? 0 : Math.min(absDistance * 1.2, 5);
+
+  return (
+    <motion.div
+      role="option"
+      aria-selected={isActive}
+      id={`carousel-item-${index}`}
+      className="absolute left-0 w-full cursor-pointer focus-visible:outline-none"
+      style={{
+        top: '50%',
+        zIndex,
+        pointerEvents: isVisible ? 'auto' : 'none',
+      }}
+      animate={{
+        y: yOffset,
+        opacity,
+        x: isActive ? 24 : 0,
+        scale,
+        filter: `blur(${blur}px)`,
+      }}
+      transition={XMB_ANIMATION.SPRING_CONFIG}
+      onClick={() => {
+        if (isActive) {
+          if (item.link) {
+            if (item.link.startsWith('http') || item.link.startsWith('mailto')) {
+              window.open(item.link, '_blank');
+            } else {
+              startNavigation();
+              router.push(item.link);
+            }
+          }
+        } else {
+          onSelect(index);
+        }
+      }}
+    >
+      <div
+        className="flex flex-col md:flex-row items-center gap-6 md:gap-12 px-4 md:px-6"
+        style={{
+          transform: 'translateY(-50%)',
+        }}
+      >
+        <div
+          className={`
+            w-64 h-36 sm:w-[24rem] sm:h-[14rem] md:w-[28rem] md:h-[16rem] shrink-0 rounded-xl overflow-hidden border shadow-2xl bg-black/75 backdrop-blur-md
+            transition-all duration-300
+            ${isActive
+              ? 'border-white/80 ring-1 ring-white/50 shadow-[0_0_35px_rgba(255,255,255,0.35)] hover:scale-[1.02] hover:shadow-[0_0_50px_rgba(255,255,255,0.5)]'
+              : 'border-white/20'
+            }
+          `}
+        >
+          {item.image ? (
+            <div className="relative w-full h-full">
+              <Image src={item.image} alt="" fill sizes="(max-width: 768px) 16rem, 28rem" className="object-cover" />
+            </div>
+          ) : (
+            <div className="w-full h-full flex items-center justify-center">
+              <XMBIcon name="File" size={isActive ? 80 : 40} className="text-white/30" />
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-col drop-shadow-2xl max-w-2xl text-center md:text-left">
+          <h2 className={`text-2xl sm:text-3xl md:text-4xl font-extralight tracking-wide transition-colors duration-300 leading-tight ${isActive ? 'text-white' : 'text-white/35'}`}>
+            {item.title}
+          </h2>
+          <AnimatePresence mode="wait">
+            {isActive && item.description && (
+              <motion.p
+                initial={{ opacity: 0, height: 0, marginTop: 0 }}
+                animate={{ opacity: 0.75, height: 'auto', marginTop: '1rem' }}
+                exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                transition={{ duration: 0.25 }}
+                className="text-sm sm:text-base md:text-lg text-white/65 line-clamp-2 md:line-clamp-3 leading-relaxed"
+              >
+                {item.description}
+              </motion.p>
+            )}
+          </AnimatePresence>
+          {isActive && item.meta?.tags && (item.meta.tags as string[]).length > 0 && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.15, duration: 0.3 }}
+              className="flex flex-wrap justify-center md:justify-start gap-2 md:gap-2.5 mt-4 md:mt-5"
+            >
+              {(item.meta.tags as string[]).slice(0, 3).map((tag: string) => (
+                <span
+                  key={tag}
+                  className="text-[10px] md:text-xs font-mono uppercase tracking-wider px-2 md:px-3 py-1 md:py-1.5 bg-white/12 rounded-lg border border-white/25 backdrop-blur-sm"
+                >
+                  {tag}
+                </span>
+              ))}
+            </motion.div>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+});
+
+XMBCarouselCard.displayName = 'XMBCarouselCard';
+
+const XMBCarousel = ({ items, activeIndex, onSelect }: XMBCarouselProps) => {
   const { startNavigation } = useXMBNavigationContext();
   const containerRef = useRef<HTMLDivElement>(null);
   const touchStartY = useRef<number>(0);
-  const lastScrollTime = useRef<number>(0);
+  const animationFrameRef = useRef<number | null>(null);
+  const wheelDeltaRef = useRef<number>(0);
   
   // Smooth scroll position - floating point for continuous scrolling
   const [scrollOffset, setScrollOffset] = useState<number>(activeIndex);
@@ -45,16 +170,22 @@ const XMBCarousel = ({ items, activeIndex, onSelect }: XMBCarouselProps) => {
   // Mouse wheel handler - smooth continuous scrolling
   const handleWheel = useCallback((e: WheelEvent) => {
     e.preventDefault();
-    
-    lastScrollTime.current = Date.now();
-    
-    // Apply scroll delta
-    const delta = e.deltaY * XMB_CAROUSEL.SCROLL_SENSITIVITY;
-    
-    setScrollOffset(prev => {
-      const newOffset = prev + delta;
-      // Clamp to valid range with smooth bounce at edges
-      return Math.max(0, Math.min(items.length - 1, newOffset));
+
+    wheelDeltaRef.current += e.deltaY * XMB_CAROUSEL.SCROLL_SENSITIVITY;
+
+    if (animationFrameRef.current !== null) {
+      return;
+    }
+
+    animationFrameRef.current = window.requestAnimationFrame(() => {
+      const delta = wheelDeltaRef.current;
+      wheelDeltaRef.current = 0;
+      animationFrameRef.current = null;
+
+      setScrollOffset((prev) => {
+        const newOffset = prev + delta;
+        return Math.max(0, Math.min(items.length - 1, newOffset));
+      });
     });
   }, [items.length]);
   
@@ -91,8 +222,19 @@ const XMBCarousel = ({ items, activeIndex, onSelect }: XMBCarouselProps) => {
     const wheelHandler = (e: WheelEvent) => handleWheel(e);
     
     container.addEventListener('wheel', wheelHandler, { passive: false });
-    return () => container.removeEventListener('wheel', wheelHandler);
+    return () => {
+      container.removeEventListener('wheel', wheelHandler);
+
+      if (animationFrameRef.current !== null) {
+        window.cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+    };
   }, [handleWheel]);
+
+  const visibleEntries = items
+    .map((item, index) => ({ item, index }))
+    .filter(({ index }) => Math.abs(index - scrollOffset) <= XMB_CAROUSEL.VISIBLE_ITEMS + 1);
 
   return (
     <motion.div 
@@ -110,121 +252,16 @@ const XMBCarousel = ({ items, activeIndex, onSelect }: XMBCarouselProps) => {
     >
       <div className="relative w-full h-full flex items-center justify-center">
         <div className="relative w-full max-w-6xl h-full px-6 md:pl-12">
-          {items.map((item, index) => {
-            // Calculate distance from CONTINUOUS scroll position
-            const distance = index - scrollOffset;
-            const absDistance = Math.abs(distance);
-            
-            const isActive = Math.round(scrollOffset) === index;
-            const isVisible = absDistance <= XMB_CAROUSEL.VISIBLE_ITEMS;
-            
-            // Visual transformations
-            const yOffset = distance * XMB_CAROUSEL.ITEM_SPACING;
-            const scale = isActive ? 1 : Math.max(0.6 - absDistance * 0.05, 0.42);
-            const opacity = !isVisible ? 0 : (isActive ? 1 : Math.max(0.45 - absDistance * 0.08, 0.12));
-            const zIndex = 100 - Math.floor(absDistance);
-            const blur = isActive ? 0 : Math.min(absDistance * 1.2, 5);
-            
+          {visibleEntries.map(({ item, index }) => {
             return (
-              <motion.div
+              <XMBCarouselCard
                 key={item.id}
-                role="option"
-                aria-selected={isActive}
-                id={`carousel-item-${index}`}
-                className="absolute left-0 w-full cursor-pointer focus-visible:outline-none"
-                style={{
-                  top: '50%',
-                  zIndex,
-                  pointerEvents: isVisible ? 'auto' : 'none',
-                }}
-                animate={{
-                  y: yOffset,
-                  opacity,
-                  x: isActive ? (typeof window !== 'undefined' && window.innerWidth < 768 ? 0 : 24) : 0,
-                  scale,
-                  filter: `blur(${blur}px)`,
-                }}
-                transition={XMB_ANIMATION.SPRING_CONFIG}
-                onClick={() => {
-                  if (isActive) {
-                    if (item.link) {
-                      if (item.link.startsWith('http') || item.link.startsWith('mailto')) {
-                        window.open(item.link, '_blank');
-                      } else {
-                        startNavigation();
-                        router.push(item.link);
-                      }
-                    }
-                  } else {
-                    onSelect(index);
-                  }
-                }}
-              >
-                {/* Centering wrapper */}
-                <div
-                  className="flex flex-col md:flex-row items-center gap-6 md:gap-12 px-4 md:px-6"
-                  style={{
-                    transform: 'translateY(-50%)',
-                  }}
-                >
-                  {/* Thumbnail / Icon */}
-                  <div 
-                    className={`
-                      w-64 h-36 sm:w-[24rem] sm:h-[14rem] md:w-[28rem] md:h-[16rem] shrink-0 rounded-xl overflow-hidden border shadow-2xl bg-black/75 backdrop-blur-md
-                      transition-all duration-300
-                      ${isActive 
-                        ? 'border-white/80 ring-1 ring-white/50 shadow-[0_0_35px_rgba(255,255,255,0.35)] hover:scale-[1.02] hover:shadow-[0_0_50px_rgba(255,255,255,0.5)]' 
-                        : 'border-white/20'
-                      }
-                    `}
-                  >
-                    {item.image ? (
-                      <img src={item.image} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <XMBIcon name="File" size={isActive ? 80 : 40} className="text-white/30" />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Text Info */}
-                  <div className="flex flex-col drop-shadow-2xl max-w-2xl text-center md:text-left">
-                    <h2 className={`text-2xl sm:text-3xl md:text-4xl font-extralight tracking-wide transition-colors duration-300 leading-tight ${isActive ? 'text-white' : 'text-white/35'}`}>
-                      {item.title}
-                    </h2>
-                    <AnimatePresence mode="wait">
-                      {isActive && item.description && (
-                        <motion.p
-                          initial={{ opacity: 0, height: 0, marginTop: 0 }}
-                          animate={{ opacity: 0.75, height: 'auto', marginTop: '1rem' }}
-                          exit={{ opacity: 0, height: 0, marginTop: 0 }}
-                          transition={{ duration: 0.25 }}
-                          className="text-sm sm:text-base md:text-lg text-white/65 line-clamp-2 md:line-clamp-3 leading-relaxed"
-                        >
-                          {item.description}
-                        </motion.p>
-                      )}
-                    </AnimatePresence>
-                    {isActive && item.meta?.tags && (item.meta.tags as string[]).length > 0 && (
-                      <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: 0.15, duration: 0.3 }}
-                        className="flex flex-wrap justify-center md:justify-start gap-2 md:gap-2.5 mt-4 md:mt-5"
-                      >
-                        {(item.meta.tags as string[]).slice(0, 3).map((tag: string) => (
-                          <span 
-                            key={tag} 
-                            className="text-[10px] md:text-xs font-mono uppercase tracking-wider px-2 md:px-3 py-1 md:py-1.5 bg-white/12 rounded-lg border border-white/25 backdrop-blur-sm"
-                          >
-                            {tag}
-                          </span>
-                        ))}
-                      </motion.div>
-                    )}
-                  </div>
-                </div>
-              </motion.div>
+                item={item}
+                index={index}
+                scrollOffset={scrollOffset}
+                onSelect={onSelect}
+                startNavigation={startNavigation}
+              />
             );
           })}
         </div>

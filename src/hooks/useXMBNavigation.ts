@@ -5,7 +5,22 @@ import { useRouter } from 'next/navigation';
 import { useXMBNavigationContext } from '@/lib/xmb-navigation-context';
 import { useKeyAudioFx } from '@/hooks/useKeyAudioFx';
 
-export function useXMBNavigation(categories: XMBCategory[]) {
+interface XMBNavigationResult {
+  categoryIndex: number;
+  itemIndex: number;
+  navigationPath: number[];
+  activeCategory: XMBCategory | null;
+  activeItem: XMBItem | null;
+  currentItems: XMBItem[];
+  isNavigating: boolean;
+  startNavigation: () => void;
+  finishNavigation: () => void;
+  setCategoryIndex: (index: number) => void;
+  setItemIndex: (index: number) => void;
+  setNavigationPath: (path: number[]) => void;
+}
+
+export function useXMBNavigation(categories: XMBCategory[]): XMBNavigationResult {
   const {
     categoryIndex,
     setCategoryIndex,
@@ -22,7 +37,6 @@ export function useXMBNavigation(categories: XMBCategory[]) {
   } = useXMBNavigationContext();
 
   const { playKeySound } = useKeyAudioFx();
-  const [pressedKeys, setPressedKeys] = useState<Set<string>>(new Set());
   const router = useRouter();
 
   // Use refs to prevent handler recreation
@@ -52,7 +66,6 @@ export function useXMBNavigation(categories: XMBCategory[]) {
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     const key = e.key;
-    setPressedKeys(prev => new Set(prev).add(key));
 
     // Play sound for all handled navigation keys
     const handledKeys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter', 'Escape', 'Backspace'];
@@ -148,22 +161,12 @@ export function useXMBNavigation(categories: XMBCategory[]) {
     }
   }, [setCategoryIndex, setItemIndex, setNavigationPath]);
 
-  const handleKeyUp = useCallback((e: KeyboardEvent) => {
-    setPressedKeys(prev => {
-      const next = new Set(prev);
-      next.delete(e.key);
-      return next;
-    });
-  }, []);
-
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [handleKeyDown, handleKeyUp]);
+  }, [handleKeyDown]);
 
   return {
     categoryIndex,
@@ -178,6 +181,5 @@ export function useXMBNavigation(categories: XMBCategory[]) {
     setCategoryIndex,
     setItemIndex,
     setNavigationPath,
-    pressedKeys
   };
 }

@@ -1,16 +1,12 @@
 'use client';
 
 import { motion, AnimatePresence } from 'motion/react';
-import { usePathname } from 'next/navigation';
 import { ReactNode } from 'react';
 
 export default function XMBContentTransition({ children }: { children: ReactNode }) {
-  const pathname = usePathname();
-
   return (
     <AnimatePresence mode="popLayout" initial={false}>
       <motion.div
-        key={pathname}
         initial={{ opacity: 0, x: 60 }}
         animate={{ opacity: 1, x: 0 }}
         exit={{ opacity: 0, x: -60 }}

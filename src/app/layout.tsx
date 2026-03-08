@@ -3,7 +3,6 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/lib/theme-context";
 import ThemeScript from "@/components/ThemeScript";
-import LayoutWrapper from "@/components/LayoutWrapper";
 import { XMBNavigationProvider } from "@/lib/xmb-navigation-context";
 import { getXMBData } from "@/lib/xmb-data";
 
@@ -42,9 +41,7 @@ export default async function RootLayout({
       >
         <ThemeProvider>
           <XMBNavigationProvider categories={categories}>
-            <LayoutWrapper>
-              {children}
-            </LayoutWrapper>
+            {children}
           </XMBNavigationProvider>
         </ThemeProvider>
       </body>

@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { getFileData, getFiles, getContentTypes, BaseFrontmatter } from '@/lib/mdx';
+import { getFileData, getContentManifest, getContentTypes } from '@/lib/mdx';
 import { getContentSiblings } from '@/lib/get-content-siblings';
 import { MDXRemote } from 'next-mdx-remote/rsc';
 import { xmbMdxComponents } from '@/components/xmb/XMBMdxComponents';
@@ -12,17 +12,11 @@ interface PageParams {
 }
 
 export async function generateStaticParams(): Promise<PageParams[]> {
-  const types = getContentTypes();
-  const params: PageParams[] = [];
-  
-  for (const type of types) {
-    const slugs = await getFiles(type);
-    for (const slug of slugs) {
-      params.push({ type, slug });
-    }
-  }
-  
-  return params;
+  const manifest = await getContentManifest();
+
+  return Object.entries(manifest).flatMap(([type, entries]) => {
+    return entries.map((entry) => ({ type, slug: entry.slug }));
+  });
 }
 
 export default async function ContentPage({ params }: { params: Promise<PageParams> }) {
