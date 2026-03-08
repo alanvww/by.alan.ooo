@@ -1,11 +1,11 @@
 // src/components/xmb/XMBCarousel.tsx
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import Image from 'next/image';
 import { motion, AnimatePresence } from "motion/react";
 import { useRouter } from "next/navigation";
-import { useXMBNavigationContext } from "@/lib/xmb-navigation-context";
+import { useXMBLoadingContext } from "@/lib/xmb-navigation-context";
 import type { XMBItem } from "@/lib/xmb-types";
 import XMBIcon from "./XMBIcon";
 import { XMB_CAROUSEL, XMB_ANIMATION } from "@/lib/xmb-constants";
@@ -141,11 +141,12 @@ const XMBCarouselCard = React.memo(({ item, index, scrollOffset, onSelect, start
 XMBCarouselCard.displayName = 'XMBCarouselCard';
 
 const XMBCarousel = ({ items, activeIndex, onSelect }: XMBCarouselProps) => {
-  const { startNavigation } = useXMBNavigationContext();
+  const { startNavigation } = useXMBLoadingContext();
   const containerRef = useRef<HTMLDivElement>(null);
   const touchStartY = useRef<number>(0);
   const animationFrameRef = useRef<number | null>(null);
   const wheelDeltaRef = useRef<number>(0);
+  const lastCommittedIndexRef = useRef<number>(activeIndex);
   
   // Smooth scroll position - floating point for continuous scrolling
   const [scrollOffset, setScrollOffset] = useState<number>(activeIndex);
@@ -153,13 +154,19 @@ const XMBCarousel = ({ items, activeIndex, onSelect }: XMBCarouselProps) => {
   // Sync scrollOffset with activeIndex when it changes externally (keyboard nav)
   useEffect(() => {
     setScrollOffset(activeIndex);
+    lastCommittedIndexRef.current = activeIndex;
   }, [activeIndex]);
   
   // Debounced sync: update parent's activeIndex when scroll settles
   useEffect(() => {
     const timer = setTimeout(() => {
       const roundedIndex = Math.round(scrollOffset);
-      if (roundedIndex !== activeIndex && roundedIndex >= 0 && roundedIndex < items.length) {
+      if (
+        roundedIndex !== lastCommittedIndexRef.current &&
+        roundedIndex >= 0 &&
+        roundedIndex < items.length
+      ) {
+        lastCommittedIndexRef.current = roundedIndex;
         onSelect(roundedIndex);
       }
     }, 100);
@@ -204,9 +211,21 @@ const XMBCarousel = ({ items, activeIndex, onSelect }: XMBCarouselProps) => {
     // Convert touch movement to scroll offset
     const delta = deltaY * 0.01; // Sensitivity for touch
     
-    setScrollOffset(prev => {
-      const newOffset = prev + delta;
-      return Math.max(0, Math.min(items.length - 1, newOffset));
+    wheelDeltaRef.current += delta;
+
+    if (animationFrameRef.current !== null) {
+      return;
+    }
+
+    animationFrameRef.current = window.requestAnimationFrame(() => {
+      const touchDelta = wheelDeltaRef.current;
+      wheelDeltaRef.current = 0;
+      animationFrameRef.current = null;
+
+      setScrollOffset((prev) => {
+        const newOffset = prev + touchDelta;
+        return Math.max(0, Math.min(items.length - 1, newOffset));
+      });
     });
   }, [items.length]);
   
@@ -232,9 +251,11 @@ const XMBCarousel = ({ items, activeIndex, onSelect }: XMBCarouselProps) => {
     };
   }, [handleWheel]);
 
-  const visibleEntries = items
-    .map((item, index) => ({ item, index }))
-    .filter(({ index }) => Math.abs(index - scrollOffset) <= XMB_CAROUSEL.VISIBLE_ITEMS + 1);
+  const visibleEntries = useMemo(() => {
+    return items
+      .map((item, index) => ({ item, index }))
+      .filter(({ index }) => Math.abs(index - scrollOffset) <= XMB_CAROUSEL.VISIBLE_ITEMS + 1);
+  }, [items, scrollOffset]);
 
   return (
     <motion.div 

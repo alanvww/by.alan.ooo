@@ -133,10 +133,10 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
     setItemIndex(-1);
   }, [itemIndex, categoryIndex, augmentedCategories.length, setCategoryIndex, setItemIndex]);
 
-  const handleFolderDrill = (idx: number) => {
+  const handleFolderDrill = useCallback((idx: number) => {
     setNavigationPath([...navigationPath, idx]);
     setItemIndex(0);
-  };
+  }, [navigationPath, setItemIndex, setNavigationPath]);
 
   // Check if we're inside a folder (drilled down)
   const isInsideFolder = navigationPath.length > 0;
@@ -185,7 +185,7 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
   // Early return after all hooks have been called
   if (augmentedCategories.length === 0 || !activeCategory) return null;
 
-  const handleCategorySelect = (idx: number) => {
+  const handleCategorySelect = useCallback((idx: number) => {
     if (layoutMode === 'paged' && idx === categoryIndex) {
       setPagedStage('categories');
       setItemIndex(-1);
@@ -199,7 +199,7 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
     } else {
       setItemIndex(-1);
     }
-  };
+  }, [categoryIndex, layoutMode, setCategoryIndex, setItemIndex]);
 
   const showFullLayout = layoutMode === 'full';
 

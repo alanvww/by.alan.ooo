@@ -1,11 +1,11 @@
 // src/components/xmb/XMBVerticalList.tsx
 "use client";
 
-import React, { useState, useRef, useEffect, forwardRef } from "react";
+import React, { useState, useMemo, useCallback, forwardRef } from "react";
 import Image from 'next/image';
 import { motion, AnimatePresence } from "motion/react";
 import { useRouter } from "next/navigation";
-import { useXMBNavigationContext } from "@/lib/xmb-navigation-context";
+import { useXMBLoadingContext } from "@/lib/xmb-navigation-context";
 import type { XMBCategory, XMBItem } from "@/lib/xmb-types";
 import XMBIcon from "./XMBIcon";
 import { XMB_LAYOUT, XMB_ANIMATION } from "@/lib/xmb-constants";
@@ -30,10 +30,10 @@ interface XMBListItemProps {
     index: number;
     isItemSelected: boolean;
     isContextView?: boolean;
-    onItemSelect: () => void;
+    onItemSelect: (index: number) => void;
 }
 
-const XMBListItem = forwardRef<HTMLDivElement, XMBListItemProps>(
+const XMBListItem = React.memo(forwardRef<HTMLDivElement, XMBListItemProps>(
     ({ item, index, isItemSelected, isContextView, onItemSelect }, ref) => {
         const [imgError, setImgError] = useState(false);
         const isFolder = item.type === 'folder';
@@ -45,10 +45,10 @@ const XMBListItem = forwardRef<HTMLDivElement, XMBListItemProps>(
                 aria-selected={isItemSelected}
                 id={`xmb-item-${index}`}
                 className="relative w-auto cursor-pointer mb-6 md:mb-8 focus-visible:outline-none"
-                onClick={onItemSelect}
+                onClick={() => onItemSelect(index)}
                 onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
-                        onItemSelect();
+                        onItemSelect(index);
                     }
                 }}
                 tabIndex={isItemSelected ? 0 : -1}
@@ -132,9 +132,13 @@ const XMBListItem = forwardRef<HTMLDivElement, XMBListItemProps>(
             </div>
         );
     },
-);
+));
 
 XMBListItem.displayName = "XMBListItem";
+
+const ROW_HEIGHT = 96;
+const ROW_GAP = 32;
+const ROW_STEP = ROW_HEIGHT + ROW_GAP;
 
 const XMBVerticalList = React.memo(
     ({
@@ -152,11 +156,15 @@ const XMBVerticalList = React.memo(
         layoutMode = 'full',
     }: XMBVerticalListProps) => {
         const router = useRouter();
-        const { startNavigation } = useXMBNavigationContext();
-        const itemsRef = useRef<(HTMLDivElement | null)[]>([]);
-        const [containerOffset, setContainerOffset] = useState(0);
+        const { startNavigation } = useXMBLoadingContext();
 
-        const handleItemClick = (idx: number, item: XMBItem) => {
+        const handleItemClick = useCallback((idx: number) => {
+            const item = currentItems[idx];
+
+            if (!item) {
+                return;
+            }
+
             if (idx === itemIndex) {
                 if (item.type === 'folder' && onFolderDrill) {
                     onFolderDrill(idx);
@@ -173,17 +181,12 @@ const XMBVerticalList = React.memo(
             } else {
                 onItemSelect(idx);
             }
-        };
+        }, [currentItems, itemIndex, onFolderDrill, onItemSelect, router, startNavigation]);
 
-        // Calculate the container offset to center the active item dynamically
-        useEffect(() => {
-            const displayIndex = itemIndex === -1 ? 0 : itemIndex;
-            const activeElement = itemsRef.current[displayIndex];
-            
-            if (activeElement) {
-                setContainerOffset(-activeElement.offsetTop);
-            }
-        }, [itemIndex, activeCategory.id, navigationPath]);
+        const displayIndex = itemIndex === -1 ? 0 : itemIndex;
+        const containerOffset = useMemo(() => {
+            return -displayIndex * ROW_STEP;
+        }, [displayIndex]);
 
         // Fallback positioning
         const fallbackLeft = categoryIndex * XMB_LAYOUT.CATEGORY_WIDTH;
@@ -275,13 +278,10 @@ const XMBVerticalList = React.memo(
                                     <XMBListItem
                                         key={item.id}
                                         index={idx}
-                                        ref={(el) => {
-                                            itemsRef.current[idx] = el;
-                                        }}
                                         item={item}
                                         isItemSelected={isItemSelected}
                                         isContextView={isContextView}
-                                        onItemSelect={() => handleItemClick(idx, item)}
+                                        onItemSelect={handleItemClick}
                                     />
                                 );
                             })}

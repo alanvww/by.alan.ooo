@@ -2,7 +2,7 @@
 import { useEffect, useCallback, useRef, useState } from 'react';
 import type { XMBCategory, XMBItem } from '@/lib/xmb-types';
 import { useRouter } from 'next/navigation';
-import { useXMBNavigationContext } from '@/lib/xmb-navigation-context';
+import { useXMBDerivedContext, useXMBLoadingContext, useXMBSelectionContext } from '@/lib/xmb-navigation-context';
 import { useKeyAudioFx } from '@/hooks/useKeyAudioFx';
 
 interface XMBNavigationResult {
@@ -28,13 +28,17 @@ export function useXMBNavigation(categories: XMBCategory[]): XMBNavigationResult
     setItemIndex,
     navigationPath,
     setNavigationPath,
+  } = useXMBSelectionContext();
+  const {
     activeCategory,
     activeItem,
     currentItems,
+  } = useXMBDerivedContext();
+  const {
     isNavigating,
     startNavigation,
     finishNavigation
-  } = useXMBNavigationContext();
+  } = useXMBLoadingContext();
 
   const { playKeySound } = useKeyAudioFx();
   const router = useRouter();

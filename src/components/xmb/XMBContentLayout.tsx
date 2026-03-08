@@ -2,7 +2,7 @@
 
 import React, { useEffect } from 'react';
 import XMBHeader from './XMBHeader';
-import { useXMBNavigationContext } from '@/lib/xmb-navigation-context';
+import { useXMBLoadingContext } from '@/lib/xmb-navigation-context';
 import WebGLBackground from '@/components/WebGLBackground';
 
 interface XMBContentLayoutProps {
@@ -11,7 +11,7 @@ interface XMBContentLayoutProps {
 }
 
 const XMBContentLayout = ({ children, shouldFinishLoading = true }: XMBContentLayoutProps) => {
-    const { finishNavigation } = useXMBNavigationContext();
+    const { finishNavigation } = useXMBLoadingContext();
 
     useEffect(() => {
         if (shouldFinishLoading) {

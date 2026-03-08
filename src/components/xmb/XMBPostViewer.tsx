@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { motion } from 'motion/react';
 import { useRouter } from 'next/navigation';
 import { XMB_ANIMATION } from '@/lib/xmb-constants';
-import { useXMBNavigationContext } from '@/lib/xmb-navigation-context';
+import { useXMBLoadingContext } from '@/lib/xmb-navigation-context';
 import XMBIcon from './XMBIcon';
 import type { PostFrontmatter, ProjectFrontmatter } from '@/lib/mdx';
 import type { SiblingInfo } from '@/lib/get-content-siblings';
@@ -20,7 +20,7 @@ interface XMBPostViewerProps {
 
 const XMBPostViewer = ({ type, slug, frontmatter, children, siblings }: XMBPostViewerProps) => {
     const router = useRouter();
-    const { startNavigation } = useXMBNavigationContext();
+    const { startNavigation } = useXMBLoadingContext();
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const [pressedKeys, setPressedKeys] = useState<Set<string>>(new Set());
 

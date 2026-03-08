@@ -4,10 +4,10 @@ import { AnimatePresence, motion } from 'motion/react';
 import WebGLBackground from './WebGLBackground';
 import XMBContentTransition from './xmb/XMBContentTransition';
 import XMBLoadingSkeleton from './xmb/XMBLoadingSkeleton';
-import { useXMBNavigationContext } from '@/lib/xmb-navigation-context';
+import { useXMBLoadingContext } from '@/lib/xmb-navigation-context';
 
 export default function LayoutWrapper({ children }: { children: React.ReactNode }) {
-  const { isNavigating } = useXMBNavigationContext();
+  const { isNavigating } = useXMBLoadingContext();
 
   return (
     <main className="relative w-full h-full overflow-hidden">
