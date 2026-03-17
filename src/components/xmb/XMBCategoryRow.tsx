@@ -61,8 +61,8 @@ const XMBCategoryRow = React.memo(({
                 {isActive && (
                   <motion.div
                     layoutId="category-glow"
-                    className="absolute inset-0 bg-white/20 rounded-full pointer-events-none"
-                    style={{ filter: 'blur(40px)' }}
+                    className="absolute inset-0 rounded-full pointer-events-none"
+                    style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.2), transparent 70%)' }}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}

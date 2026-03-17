@@ -8,18 +8,18 @@ export const XMB_LAYOUT = {
 
 export const XMB_ANIMATION = {
   SPRING_CONFIG: {
-    stiffness: 250,
-    damping: 35,
+    stiffness: 220,
+    damping: 40,
     mass: 1,
   },
   LIST_SPRING: {
-    stiffness: 350,
-    damping: 30,
+    stiffness: 300,
+    damping: 35,
     mass: 0.5,
   },
   ICON_SPRING: {
-    stiffness: 400,
-    damping: 25,
+    stiffness: 350,
+    damping: 30,
     mass: 0.3,
   }
 };

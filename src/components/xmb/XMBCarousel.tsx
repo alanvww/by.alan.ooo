@@ -21,21 +21,18 @@ interface XMBCarouselCardProps {
   index: number;
   scrollOffset: number;
   onSelect: (index: number) => void;
-  startNavigation: () => void;
+  onNavigate: (link: string) => void;
 }
 
-const XMBCarouselCard = React.memo(({ item, index, scrollOffset, onSelect, startNavigation }: XMBCarouselCardProps) => {
-  const router = useRouter();
-
+const XMBCarouselCard = React.memo(({ item, index, scrollOffset, onSelect, onNavigate }: XMBCarouselCardProps) => {
   const distance = index - scrollOffset;
   const absDistance = Math.abs(distance);
   const isActive = Math.round(scrollOffset) === index;
   const isVisible = absDistance <= XMB_CAROUSEL.VISIBLE_ITEMS;
   const yOffset = distance * XMB_CAROUSEL.ITEM_SPACING;
   const scale = isActive ? 1 : Math.max(0.6 - absDistance * 0.05, 0.42);
-  const opacity = isActive ? 1 : Math.max(0.45 - absDistance * 0.08, 0.12);
+  const opacity = isActive ? 1 : Math.max(0.3 - absDistance * 0.1, 0.08);
   const zIndex = 100 - Math.floor(absDistance);
-  const blur = isActive ? 0 : Math.min(absDistance * 1.2, 5);
 
   return (
     <motion.div
@@ -53,18 +50,12 @@ const XMBCarouselCard = React.memo(({ item, index, scrollOffset, onSelect, start
         opacity,
         x: isActive ? 24 : 0,
         scale,
-        filter: `blur(${blur}px)`,
       }}
       transition={XMB_ANIMATION.SPRING_CONFIG}
       onClick={() => {
         if (isActive) {
           if (item.link) {
-            if (item.link.startsWith('http') || item.link.startsWith('mailto')) {
-              window.open(item.link, '_blank');
-            } else {
-              startNavigation();
-              router.push(item.link);
-            }
+            onNavigate(item.link);
           }
         } else {
           onSelect(index);
@@ -79,7 +70,7 @@ const XMBCarouselCard = React.memo(({ item, index, scrollOffset, onSelect, start
       >
         <div
           className={`
-            w-64 h-36 sm:w-[24rem] sm:h-[14rem] md:w-[28rem] md:h-[16rem] shrink-0 rounded-xl overflow-hidden border shadow-2xl bg-black/75 backdrop-blur-md
+            w-64 h-36 sm:w-[24rem] sm:h-[14rem] md:w-[28rem] md:h-[16rem] shrink-0 rounded-xl overflow-hidden border shadow-2xl bg-black/85
             transition-all duration-300
             ${isActive
               ? 'border-white/80 ring-1 ring-white/50 shadow-[0_0_35px_rgba(255,255,255,0.35)] hover:scale-[1.02] hover:shadow-[0_0_50px_rgba(255,255,255,0.5)]'
@@ -125,7 +116,7 @@ const XMBCarouselCard = React.memo(({ item, index, scrollOffset, onSelect, start
               {(item.meta.tags as string[]).slice(0, 3).map((tag: string) => (
                 <span
                   key={tag}
-                  className="text-[10px] md:text-xs font-mono uppercase tracking-wider px-2 md:px-3 py-1 md:py-1.5 bg-white/12 rounded-lg border border-white/25 backdrop-blur-sm"
+                  className="text-[10px] md:text-xs font-mono uppercase tracking-wider px-2 md:px-3 py-1 md:py-1.5 bg-white/15 rounded-lg border border-white/25"
                 >
                   {tag}
                 </span>
@@ -141,6 +132,7 @@ const XMBCarouselCard = React.memo(({ item, index, scrollOffset, onSelect, start
 XMBCarouselCard.displayName = 'XMBCarouselCard';
 
 const XMBCarousel = ({ items, activeIndex, onSelect }: XMBCarouselProps) => {
+  const router = useRouter();
   const { startNavigation } = useXMBLoadingContext();
   const containerRef = useRef<HTMLDivElement>(null);
   const touchStartY = useRef<number>(0);
@@ -232,6 +224,15 @@ const XMBCarousel = ({ items, activeIndex, onSelect }: XMBCarouselProps) => {
   const handleTouchEnd = useCallback(() => {
     touchStartY.current = 0;
   }, []);
+
+  const handleNavigate = useCallback((link: string) => {
+    if (link.startsWith('http') || link.startsWith('mailto')) {
+      window.open(link, '_blank');
+    } else {
+      startNavigation();
+      router.push(link);
+    }
+  }, [router, startNavigation]);
   
   // Attach wheel event listener
   useEffect(() => {
@@ -281,7 +282,7 @@ const XMBCarousel = ({ items, activeIndex, onSelect }: XMBCarouselProps) => {
                 index={index}
                 scrollOffset={scrollOffset}
                 onSelect={onSelect}
-                startNavigation={startNavigation}
+                onNavigate={handleNavigate}
               />
             );
           })}

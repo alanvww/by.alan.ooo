@@ -45,6 +45,7 @@ const XMBListItem = React.memo(forwardRef<HTMLDivElement, XMBListItemProps>(
                 aria-selected={isItemSelected}
                 id={`xmb-item-${index}`}
                 className="relative w-auto cursor-pointer mb-6 md:mb-8 focus-visible:outline-none"
+                style={{ contain: 'content' }}
                 onClick={() => onItemSelect(index)}
                 onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
@@ -200,10 +201,9 @@ const XMBVerticalList = React.memo(
                 <motion.div
                     key={listKey}
                     initial={{ opacity: 0, x: -20 }}
-                    animate={{ 
-                        opacity: 1, 
+                    animate={{
+                        opacity: 1,
                         x: 0,
-                        filter: 'blur(0px)'
                     }}
                     exit={{ opacity: 0, x: 20 }}
                     transition={{ duration: 0.3 }}

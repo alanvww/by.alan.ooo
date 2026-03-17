@@ -207,6 +207,7 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
     <div
       ref={containerRef}
       className="fixed inset-0 text-white overflow-hidden font-sans select-none"
+      style={{ contain: 'layout style' }}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >

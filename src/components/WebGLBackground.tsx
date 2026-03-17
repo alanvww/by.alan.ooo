@@ -4,7 +4,8 @@ import type { ReactElement } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useTheme } from '@/lib/theme-context';
 
-const MAX_DEVICE_PIXEL_RATIO = 1.5;
+const MAX_DEVICE_PIXEL_RATIO = 1.0;
+const TARGET_FRAME_MS = 33; // ~30fps cap for the shader
 
 interface WebGLResources {
   gl: WebGLRenderingContext;
@@ -90,7 +91,7 @@ function setupWebGL(canvas: HTMLCanvasElement): WebGLResources | null {
     */
 
     #ifdef GL_ES
-    precision highp float;
+    precision mediump float;
     #endif
 
     uniform float uTime;
@@ -100,7 +101,7 @@ function setupWebGL(canvas: HTMLCanvasElement): WebGLResources | null {
     #define iResolution uResolution
 
     #define t iTime
-    #define SAMPLES 5
+    #define SAMPLES 3
     #define FOCAL_DISTANCE 0.1
     #define FOCAL_RANGE 1.0
 
@@ -123,7 +124,7 @@ function setupWebGL(canvas: HTMLCanvasElement): WebGLResources | null {
       vec3 cl = vec3(0.);
       float d = depth;
 
-      for (int i = 0; i <= 5; i++) {
+      for (int i = 0; i <= 3; i++) {
         vec3 p = vec3(0, 0, 5.0) + normalize(vec3(p, -1.0)) * d;
         float rz = map(p);
         float f = clamp((rz - map(p + .1)) * 0.5, -1.1, 1.0);
@@ -248,6 +249,7 @@ const WebGLBackground = (): ReactElement => {
   const resourcesRef = useRef<WebGLResources | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const startTimeRef = useRef<number>(0);
+  const lastRenderTimeRef = useRef<number>(0);
   const isVisibleRef = useRef<boolean>(true);
   const [mounted, setMounted] = useState(false);
   const { theme } = useTheme();
@@ -279,8 +281,18 @@ const WebGLBackground = (): ReactElement => {
         return;
       }
 
+      const now = performance.now();
+
+      // Cap at ~30fps — skip draw if less than 33ms since last render
+      if (now - lastRenderTimeRef.current < TARGET_FRAME_MS) {
+        animationFrameRef.current = window.requestAnimationFrame(render);
+        return;
+      }
+
+      lastRenderTimeRef.current = now;
+
       const { gl, program, uTimeLocation, uResolutionLocation } = currentResources;
-      const elapsedTime = (performance.now() - startTimeRef.current) / 1000;
+      const elapsedTime = (now - startTimeRef.current) / 1000;
       const bgColor = theme === 'light' ? [0.98, 0.98, 0.98, 1] : [0.08, 0.08, 0.12, 1];
 
       gl.clearColor(bgColor[0], bgColor[1], bgColor[2], bgColor[3]);
