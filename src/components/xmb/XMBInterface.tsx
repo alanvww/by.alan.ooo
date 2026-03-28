@@ -221,7 +221,7 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
       <XMBHeader />
 
       {layoutMode === 'full' && (
-        <div className="absolute left-[15%] top-[30%]">
+        <div className="absolute left-[15%] top-[30%] overflow-visible">
           <XMBCategoryRow
             categories={augmentedCategories}
             categoryIndex={categoryIndex}

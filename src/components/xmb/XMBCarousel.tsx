@@ -263,7 +263,7 @@ const XMBCarousel = ({ items, activeIndex, onSelect }: XMBCarouselProps) => {
       ref={containerRef}
       role="listbox"
       aria-label="Folder contents"
-      className="absolute top-0 right-0 w-full md:w-[70%] h-screen flex items-center justify-center pointer-events-auto overflow-hidden transition-all duration-500"
+      className="absolute top-0 right-0 w-full md:w-[70%] h-screen flex items-center justify-center pointer-events-auto overflow-clip transition-all duration-500"
       initial={{ opacity: 0, x: 100 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: 100 }}
