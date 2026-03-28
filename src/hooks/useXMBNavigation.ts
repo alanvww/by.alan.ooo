@@ -4,6 +4,7 @@ import type { XMBCategory, XMBItem } from '@/lib/xmb-types';
 import { useRouter } from 'next/navigation';
 import { useXMBDerivedContext, useXMBLoadingContext, useXMBSelectionContext } from '@/lib/xmb-navigation-context';
 import { useKeyAudioFx } from '@/hooks/useKeyAudioFx';
+import { navigateToLink } from '@/lib/xmb-navigation';
 
 interface XMBNavigationResult {
   categoryIndex: number;
@@ -103,12 +104,7 @@ export function useXMBNavigation(categories: XMBCategory[]): XMBNavigationResult
             if (activeItemRef.current.action) {
               activeItemRef.current.action();
             } else if (activeItemRef.current.link) {
-              if (activeItemRef.current.link.startsWith('http') || activeItemRef.current.link.startsWith('mailto')) {
-                window.open(activeItemRef.current.link, '_blank');
-              } else {
-                startNavigationRef.current();
-                routerRef.current.push(activeItemRef.current.link);
-              }
+              navigateToLink(activeItemRef.current.link, routerRef.current, startNavigationRef.current);
             }
             // If it's a folder, → does nothing (Enter is required to drill into nested folders)
           }
@@ -136,12 +132,7 @@ export function useXMBNavigation(categories: XMBCategory[]): XMBNavigationResult
           } else if (activeItemRef.current.action) {
             activeItemRef.current.action();
           } else if (activeItemRef.current.link) {
-            if (activeItemRef.current.link.startsWith('http') || activeItemRef.current.link.startsWith('mailto')) {
-              window.open(activeItemRef.current.link, '_blank');
-            } else {
-              startNavigationRef.current();
-              routerRef.current.push(activeItemRef.current.link);
-            }
+            navigateToLink(activeItemRef.current.link, routerRef.current, startNavigationRef.current);
           }
         } else {
             if (currentItemsRef.current.length > 0) {

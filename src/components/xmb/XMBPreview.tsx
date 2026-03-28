@@ -3,7 +3,7 @@ import React from 'react';
 import Image from 'next/image';
 import { motion } from 'motion/react';
 import type { XMBItem } from '@/lib/xmb-types';
-import { XMB_ANIMATION } from '@/lib/xmb-constants';
+import { XMB_ANIMATION, EASE } from '@/lib/xmb-constants';
 
 interface XMBPreviewProps {
   item: XMBItem;
@@ -38,7 +38,7 @@ const XMBPreview = ({ item }: XMBPreviewProps) => {
         <motion.div
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            transition={{ delay: 0.1, ...XMB_ANIMATION.SPRING_CONFIG }}
+            transition={{ delay: 0.05, ...XMB_ANIMATION.SPRING_CONFIG }}
             className="w-full max-w-[450px] aspect-video bg-white/5 rounded-lg overflow-hidden border-2 border-white/20 shadow-[0_0_50px_rgba(255,255,255,0.1)]"
             style={{ willChange: 'transform, opacity' }}
         >
@@ -62,7 +62,7 @@ const XMBPreview = ({ item }: XMBPreviewProps) => {
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.15, ...XMB_ANIMATION.SPRING_CONFIG }}
+                transition={{ delay: 0.08, ...XMB_ANIMATION.SPRING_CONFIG }}
             >
                 <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-white drop-shadow-lg">
                     {item.title}
@@ -73,7 +73,7 @@ const XMBPreview = ({ item }: XMBPreviewProps) => {
             <motion.p
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.25, ...XMB_ANIMATION.SPRING_CONFIG }}
+                transition={{ delay: 0.12, ...XMB_ANIMATION.SPRING_CONFIG }}
                 className="text-lg md:text-xl text-white/70 font-light leading-relaxed line-clamp-3 md:line-clamp-4"
             >
                 {item.description}
@@ -83,7 +83,7 @@ const XMBPreview = ({ item }: XMBPreviewProps) => {
                 <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    transition={{ delay: 0.35, duration: 0.3 }}
+                    transition={{ delay: 0.16, duration: 0.2, ease: EASE.ENTER }}
                     className="flex flex-wrap justify-center md:justify-start gap-2"
                 >
                     {(item.meta.tags as string[]).map((tag: string) => (

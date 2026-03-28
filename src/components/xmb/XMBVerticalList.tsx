@@ -8,7 +8,8 @@ import { useRouter } from "next/navigation";
 import { useXMBLoadingContext } from "@/lib/xmb-navigation-context";
 import type { XMBCategory, XMBItem } from "@/lib/xmb-types";
 import XMBIcon from "./XMBIcon";
-import { XMB_LAYOUT, XMB_ANIMATION } from "@/lib/xmb-constants";
+import { XMB_LAYOUT, XMB_ANIMATION, EASE } from "@/lib/xmb-constants";
+import { navigateToLink } from "@/lib/xmb-navigation";
 
 interface XMBVerticalListProps {
     activeCategory: XMBCategory;
@@ -28,15 +29,44 @@ interface XMBVerticalListProps {
 interface XMBListItemProps {
     item: XMBItem;
     index: number;
+    selectedIndex: number; // global selected index for distance-based fade
     isItemSelected: boolean;
     isContextView?: boolean;
     onItemSelect: (index: number) => void;
 }
 
 const XMBListItem = React.memo(forwardRef<HTMLDivElement, XMBListItemProps>(
-    ({ item, index, isItemSelected, isContextView, onItemSelect }, ref) => {
+    ({ item, index, selectedIndex, isItemSelected, isContextView, onItemSelect }, ref) => {
         const [imgError, setImgError] = useState(false);
         const isFolder = item.type === 'folder';
+
+        // Distance from selected item (negative = above, positive = below)
+        const delta = selectedIndex >= 0 ? index - selectedIndex : index;
+        const isAbove = delta < 0;
+        const distance = Math.abs(delta);
+
+        // Previous items should feel like they are routed into a narrow lane above
+        // the category/title row instead of colliding with it.
+        const aboveRowLift = isAbove && !isContextView
+            ? XMB_LAYOUT.TITLE_ROW_CLEARANCE_PX + Math.max(0, distance - 1) * XMB_LAYOUT.ABOVE_ROW_STACK_STEP_PX
+            : 0;
+
+        // Items above the selection fade more aggressively so they read as part of
+        // the same column, but no longer compete with the active category title row.
+        const opacity = isItemSelected
+            ? 1
+            : isContextView
+            ? 0.3
+            : isAbove
+            ? Math.max(0.1, 0.42 * Math.pow(0.62, distance - 1))
+            : Math.max(0.25, 0.7 - distance * 0.1);            // 0.6, 0.5, 0.4…
+
+        // Items above shrink slightly to reinforce depth / "scrolled past" feel.
+        const scale = isItemSelected && !isContextView
+            ? 1.05
+            : isAbove && !isContextView
+            ? Math.max(0.74, 0.92 - (distance - 1) * 0.06)
+            : 1;
 
         return (
             <div
@@ -65,8 +95,9 @@ const XMBListItem = React.memo(forwardRef<HTMLDivElement, XMBListItemProps>(
                     }`}
                     animate={{
                         x: isItemSelected && !isContextView ? 40 : 0,
-                        scale: isItemSelected && !isContextView ? 1.05 : 1,
-                        opacity: isContextView ? (isItemSelected ? 1 : 0.3) : (isItemSelected ? 1 : 0.7),
+                        y: -aboveRowLift,
+                        scale,
+                        opacity,
                     }}
                     transition={XMB_ANIMATION.LIST_SPRING}
                     style={{ willChange: "transform, opacity" }}
@@ -170,12 +201,7 @@ const XMBVerticalList = React.memo(
                 if (item.type === 'folder' && onFolderDrill) {
                     onFolderDrill(idx);
                 } else if (item.link) {
-                    if (item.link.startsWith('http') || item.link.startsWith('mailto')) {
-                        window.open(item.link, '_blank');
-                    } else {
-                        startNavigation();
-                        router.push(item.link);
-                    }
+                    navigateToLink(item.link, router, startNavigation);
                 } else if (item.action) {
                     item.action();
                 }
@@ -196,7 +222,7 @@ const XMBVerticalList = React.memo(
         const listKey = `${activeCategory.id}-${navigationPath.join('-')}`;
 
         return (
-            <AnimatePresence mode="wait">
+            <AnimatePresence mode="popLayout">
 
                 <motion.div
                     key={listKey}
@@ -206,7 +232,7 @@ const XMBVerticalList = React.memo(
                         x: 0,
                     }}
                     exit={{ opacity: 0, x: 20 }}
-                    transition={{ duration: 0.3 }}
+                    transition={{ duration: 0.15, ease: EASE.MOVE }}
                     className="absolute overflow-visible"
                     style={{
                         ...(layoutMode === 'paged'
@@ -219,7 +245,6 @@ const XMBVerticalList = React.memo(
                                   pointerEvents: 'auto',
                               }
                             : {
-                                  // Fallback positioning
                                   top: XMB_LAYOUT.VERTICAL_LIST_TOP,
                                   left: isContextView ? '-50px' : `${fallbackLeft}px`,
                                   transform: isContextView ? 'translateX(0)' : 'translateX(-50%)',
@@ -279,6 +304,7 @@ const XMBVerticalList = React.memo(
                                         key={item.id}
                                         index={idx}
                                         item={item}
+                                        selectedIndex={itemIndex}
                                         isItemSelected={isItemSelected}
                                         isContextView={isContextView}
                                         onItemSelect={handleItemClick}

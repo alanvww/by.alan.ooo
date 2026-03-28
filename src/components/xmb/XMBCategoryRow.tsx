@@ -5,7 +5,7 @@ import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import type { XMBCategory } from '@/lib/xmb-types';
 import XMBIcon from './XMBIcon';
-import { XMB_LAYOUT, XMB_ANIMATION } from '@/lib/xmb-constants';
+import { XMB_LAYOUT, XMB_ANIMATION, EASE } from '@/lib/xmb-constants';
 
 interface XMBCategoryRowProps {
   categories: XMBCategory[];
@@ -24,7 +24,7 @@ const XMBCategoryRow = React.memo(({
   const containerOffset = -categoryIndex * XMB_LAYOUT.CATEGORY_WIDTH;
 
   return (
-    <div className="relative h-16 md:h-20 overflow-visible" role="tablist" aria-label="XMB Categories">
+    <div className="relative z-10 h-16 md:h-20 overflow-visible" role="tablist" aria-label="XMB Categories">
       {/* Sliding container - only ONE animation instead of N */}
       <motion.div
         className="absolute left-0 top-0 flex items-center h-full"
@@ -66,7 +66,7 @@ const XMBCategoryRow = React.memo(({
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    transition={{ duration: 0.3 }}
+                    transition={{ duration: 0.2, ease: EASE.SOFT }}
                   />
                 )}
               </AnimatePresence>
@@ -78,13 +78,13 @@ const XMBCategoryRow = React.memo(({
                   opacity: isActive ? 1 : Math.max(0.3, 1 - distance * 0.3)
                 }}
                 transition={XMB_ANIMATION.ICON_SPRING}
-                className={`relative z-10 transition-shadow duration-300 ${isActive ? 'drop-shadow-[0_0_15px_rgba(255,255,255,0.8)]' : ''}`}
+                className={`relative z-10 transition-shadow duration-150 ${isActive ? 'drop-shadow-[0_0_15px_rgba(255,255,255,0.8)]' : ''}`}
                 style={{ willChange: 'transform, opacity' }}
               >
                 <XMBIcon 
                   name={category.iconName} 
                   size={isActive ? 48 : 40} 
-                  className={`transition-colors duration-300 ${isActive ? 'text-white' : 'text-white/70 hover:text-white/90'}`}
+                  className={`transition-colors duration-150 ${isActive ? 'text-white' : 'text-white/70 hover:text-white/90'}`}
                 />
               </motion.div>
 
@@ -95,7 +95,7 @@ const XMBCategoryRow = React.memo(({
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 10 }}
-                    transition={{ duration: 0.2 }}
+                    transition={{ duration: 0.12, ease: EASE.ENTER }}
                     className="text-base md:text-lg font-medium whitespace-nowrap absolute top-14 md:top-16 pointer-events-none"
                   >
                     {category.title}

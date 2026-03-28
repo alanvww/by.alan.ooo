@@ -6,9 +6,10 @@ import Image from 'next/image';
 import { motion, AnimatePresence } from "motion/react";
 import { useRouter } from "next/navigation";
 import { useXMBLoadingContext } from "@/lib/xmb-navigation-context";
+import { navigateToLink } from "@/lib/xmb-navigation";
 import type { XMBItem } from "@/lib/xmb-types";
 import XMBIcon from "./XMBIcon";
-import { XMB_CAROUSEL, XMB_ANIMATION } from "@/lib/xmb-constants";
+import { XMB_CAROUSEL, XMB_ANIMATION, EASE } from "@/lib/xmb-constants";
 
 interface XMBCarouselProps {
   items: XMBItem[];
@@ -71,7 +72,7 @@ const XMBCarouselCard = React.memo(({ item, index, scrollOffset, onSelect, onNav
         <div
           className={`
             w-64 h-36 sm:w-[24rem] sm:h-[14rem] md:w-[28rem] md:h-[16rem] shrink-0 rounded-xl overflow-hidden border shadow-2xl bg-black/85
-            transition-all duration-300
+            transition-all duration-200
             ${isActive
               ? 'border-white/80 ring-1 ring-white/50 shadow-[0_0_35px_rgba(255,255,255,0.35)] hover:scale-[1.02] hover:shadow-[0_0_50px_rgba(255,255,255,0.5)]'
               : 'border-white/20'
@@ -90,16 +91,16 @@ const XMBCarouselCard = React.memo(({ item, index, scrollOffset, onSelect, onNav
         </div>
 
         <div className="flex flex-col drop-shadow-2xl max-w-2xl text-center md:text-left">
-          <h2 className={`text-2xl sm:text-3xl md:text-4xl font-extralight tracking-wide transition-colors duration-300 leading-tight ${isActive ? 'text-white' : 'text-white/35'}`}>
+          <h2           className={`text-2xl sm:text-3xl md:text-4xl font-extralight tracking-wide transition-colors duration-150 leading-tight ${isActive ? 'text-white' : 'text-white/35'}`}>
             {item.title}
           </h2>
-          <AnimatePresence mode="wait">
+          <AnimatePresence mode="popLayout">
             {isActive && item.description && (
               <motion.p
                 initial={{ opacity: 0, height: 0, marginTop: 0 }}
                 animate={{ opacity: 0.75, height: 'auto', marginTop: '1rem' }}
                 exit={{ opacity: 0, height: 0, marginTop: 0 }}
-                transition={{ duration: 0.25 }}
+                transition={{ duration: 0.15, ease: EASE.MOVE }}
                 className="text-sm sm:text-base md:text-lg text-white/65 line-clamp-2 md:line-clamp-3 leading-relaxed"
               >
                 {item.description}
@@ -110,7 +111,7 @@ const XMBCarouselCard = React.memo(({ item, index, scrollOffset, onSelect, onNav
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ delay: 0.15, duration: 0.3 }}
+              transition={{ delay: 0.05, duration: 0.2, ease: EASE.ENTER }}
               className="flex flex-wrap justify-center md:justify-start gap-2 md:gap-2.5 mt-4 md:mt-5"
             >
               {(item.meta.tags as string[]).slice(0, 3).map((tag: string) => (
@@ -161,7 +162,7 @@ const XMBCarousel = ({ items, activeIndex, onSelect }: XMBCarouselProps) => {
         lastCommittedIndexRef.current = roundedIndex;
         onSelect(roundedIndex);
       }
-    }, 100);
+    }, 50);
     
     return () => clearTimeout(timer);
   }, [scrollOffset, activeIndex, items.length, onSelect]);
@@ -226,12 +227,7 @@ const XMBCarousel = ({ items, activeIndex, onSelect }: XMBCarouselProps) => {
   }, []);
 
   const handleNavigate = useCallback((link: string) => {
-    if (link.startsWith('http') || link.startsWith('mailto')) {
-      window.open(link, '_blank');
-    } else {
-      startNavigation();
-      router.push(link);
-    }
+    navigateToLink(link, router, startNavigation);
   }, [router, startNavigation]);
   
   // Attach wheel event listener
@@ -263,11 +259,11 @@ const XMBCarousel = ({ items, activeIndex, onSelect }: XMBCarouselProps) => {
       ref={containerRef}
       role="listbox"
       aria-label="Folder contents"
-      className="absolute top-0 right-0 w-full md:w-[70%] h-screen flex items-center justify-center pointer-events-auto overflow-clip transition-all duration-500"
+      className="absolute top-0 right-0 w-full md:w-[70%] h-screen flex items-center justify-center pointer-events-auto overflow-clip"
       initial={{ opacity: 0, x: 100 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: 100 }}
-      transition={{ duration: 0.4, ease: "circOut" }}
+      transition={{ duration: 0.25, ease: EASE.ENTER }}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}

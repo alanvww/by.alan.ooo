@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import { motion } from 'motion/react';
 import { useRouter } from 'next/navigation';
-import { XMB_ANIMATION } from '@/lib/xmb-constants';
+import { XMB_ANIMATION, EASE } from '@/lib/xmb-constants';
 import { useXMBLoadingContext } from '@/lib/xmb-navigation-context';
 import XMBIcon from './XMBIcon';
 import type { PostFrontmatter, ProjectFrontmatter } from '@/lib/mdx';
@@ -116,7 +116,7 @@ const XMBPostViewer = ({ type, slug, frontmatter, children, siblings }: XMBPostV
         <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ duration: 0.3 }}
+            transition={{ duration: 0.2, ease: EASE.ENTER }}
             className="fixed inset-0 z-50 flex flex-col bg-black/40 backdrop-blur-2xl text-white overflow-hidden"
         >
             {/* Background Image (Blurred) */}
@@ -150,7 +150,7 @@ const XMBPostViewer = ({ type, slug, frontmatter, children, siblings }: XMBPostV
                                     : 'border border-white/20 bg-white/5 text-white/70'
                             }`}
                             animate={{ scale: pressedKeys.has('Escape') ? 1.05 : 1 }}
-                            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                            transition={{ type: 'spring', stiffness: 500, damping: 30 }}
                         >
                             ESC
                         </motion.span>
@@ -171,7 +171,7 @@ const XMBPostViewer = ({ type, slug, frontmatter, children, siblings }: XMBPostV
                     <motion.header 
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.2, ...XMB_ANIMATION.SPRING_CONFIG }}
+                        transition={{ delay: 0.1, ...XMB_ANIMATION.SPRING_CONFIG }}
                         className="mb-16 text-center"
                     >
                         <div className="flex items-center justify-center gap-4 mb-8">
@@ -208,7 +208,7 @@ const XMBPostViewer = ({ type, slug, frontmatter, children, siblings }: XMBPostV
                         <motion.div
                             initial={{ opacity: 0, y: 40, scale: 0.98 }}
                             animate={{ opacity: 1, y: 0, scale: 1 }}
-                            transition={{ delay: 0.3, duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+                            transition={{ delay: 0.15, duration: 0.4, ease: EASE.MOVE }}
                             className="relative aspect-video rounded-2xl overflow-hidden border border-white/10 shadow-[0_0_80px_rgba(255,255,255,0.05)] mb-24"
                         >
                             <Image
@@ -253,7 +253,7 @@ const XMBPostViewer = ({ type, slug, frontmatter, children, siblings }: XMBPostV
                                                 : 'border border-white/20 bg-white/5 text-white/70'
                                         }`}
                                         animate={{ scale: pressedKeys.has('ArrowLeft') ? 1.05 : 1 }}
-                                        transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                                        transition={{ type: 'spring', stiffness: 500, damping: 30 }}
                                     >
                                         ←
                                     </motion.span>
@@ -283,7 +283,7 @@ const XMBPostViewer = ({ type, slug, frontmatter, children, siblings }: XMBPostV
                                                 : 'border border-white/20 bg-white/5 text-white/70'
                                         }`}
                                         animate={{ scale: pressedKeys.has('ArrowRight') ? 1.05 : 1 }}
-                                        transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                                        transition={{ type: 'spring', stiffness: 500, damping: 30 }}
                                     >
                                         →
                                     </motion.span>

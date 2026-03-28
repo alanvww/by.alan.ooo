@@ -73,7 +73,7 @@ export const XMBNavigationProvider = ({ children, categories }: { children: Reac
             if (finishPendingRef.current) {
                 setIsNavigating(false);
             }
-        }, 400);
+        }, 150);
     }, []);
 
     const finishNavigation = useCallback(() => {

@@ -5,6 +5,7 @@ import React, { useMemo, useEffect, useRef, useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'motion/react';
 import type { XMBCategory, XMBItem } from '@/lib/xmb-types';
 import { useXMBNavigation } from '@/hooks/useXMBNavigation';
+import { EASE } from '@/lib/xmb-constants';
 import XMBCategoryRow from './XMBCategoryRow';
 import XMBVerticalList from './XMBVerticalList';
 import XMBCarousel from './XMBCarousel';
@@ -243,7 +244,7 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
       )}
 
       {/* Paged layout */}
-      <AnimatePresence mode="wait">
+      <AnimatePresence mode="popLayout">
         {layoutMode === 'paged' && pagedStage === 'categories' && (
           <motion.div
             key="paged-categories"
@@ -251,7 +252,7 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: 0.12, ease: EASE.MOVE }}
           >
             <XMBCategoryRow
               categories={augmentedCategories}
@@ -269,7 +270,7 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: 0.12, ease: EASE.MOVE }}
           >
             <XMBVerticalList
               activeCategory={activeCategory}

@@ -91,7 +91,7 @@ function setupWebGL(canvas: HTMLCanvasElement): WebGLResources | null {
     */
 
     #ifdef GL_ES
-    precision mediump float;
+    precision highp float;
     #endif
 
     uniform float uTime;
