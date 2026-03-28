@@ -44,8 +44,8 @@ const XMBListItem = React.memo(forwardRef<HTMLDivElement, XMBListItemProps>(
                 role="option"
                 aria-selected={isItemSelected}
                 id={`xmb-item-${index}`}
-                className="relative w-auto cursor-pointer mb-6 md:mb-8 focus-visible:outline-none"
-                style={{ contain: 'content' }}
+                className="relative w-auto cursor-pointer mb-6 md:mb-8 focus-visible:outline-none overflow-visible"
+                style={{ contain: 'layout style' }}
                 onClick={() => onItemSelect(index)}
                 onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
