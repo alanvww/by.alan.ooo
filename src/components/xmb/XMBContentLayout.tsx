@@ -20,9 +20,9 @@ const XMBContentLayout = ({ children, shouldFinishLoading = true }: XMBContentLa
     }, [finishNavigation, shouldFinishLoading]);
 
     return (
-        <div className="fixed inset-0 text-white overflow-hidden font-sans select-none">
+        <div className="fixed inset-0 text-xmb-fg overflow-hidden font-sans select-none">
             <WebGLBackground />
-            <div className="absolute inset-0 bg-linear-to-br from-black/40 to-transparent" />
+            <div className="absolute inset-0 bg-linear-to-br dark:from-black/20 from-transparent to-transparent" />
 
             <XMBHeader />
 

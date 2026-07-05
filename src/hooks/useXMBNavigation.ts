@@ -3,8 +3,8 @@ import { useEffect, useCallback, useRef, useState } from 'react';
 import type { XMBCategory, XMBItem } from '@/lib/xmb-types';
 import { useRouter } from 'next/navigation';
 import { useXMBDerivedContext, useXMBLoadingContext, useXMBSelectionContext } from '@/lib/xmb-navigation-context';
-import { useKeyAudioFx } from '@/hooks/useKeyAudioFx';
-import { navigateToLink } from '@/lib/xmb-navigation';
+import { useKeyAudioFx, playConfirm, playCancel, playNavigate } from '@/hooks/useKeyAudioFx';
+import { activateItem } from '@/lib/xmb-navigation';
 
 interface XMBNavigationResult {
   categoryIndex: number;
@@ -41,7 +41,8 @@ export function useXMBNavigation(categories: XMBCategory[]): XMBNavigationResult
     finishNavigation
   } = useXMBLoadingContext();
 
-  const { playKeySound } = useKeyAudioFx();
+  // Ensure the shared audio context is initialised; sound functions are module-level singletons
+  useKeyAudioFx();
   const router = useRouter();
 
   // Use refs to prevent handler recreation
@@ -54,7 +55,6 @@ export function useXMBNavigation(categories: XMBCategory[]): XMBNavigationResult
   const currentItemsRef = useRef(currentItems);
   const routerRef = useRef(router);
   const startNavigationRef = useRef(startNavigation);
-  const playKeySoundRef = useRef(playKeySound);
 
   useEffect(() => {
     categoriesRef.current = categories;
@@ -66,20 +66,22 @@ export function useXMBNavigation(categories: XMBCategory[]): XMBNavigationResult
     currentItemsRef.current = currentItems;
     routerRef.current = router;
     startNavigationRef.current = startNavigation;
-    playKeySoundRef.current = playKeySound;
-  }, [categories, categoryIndex, itemIndex, navigationPath, activeCategory, activeItem, currentItems, router, startNavigation, playKeySound]);
+  }, [categories, categoryIndex, itemIndex, navigationPath, activeCategory, activeItem, currentItems, router, startNavigation]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     const key = e.key;
 
-    // Play sound for all handled navigation keys
-    const handledKeys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter', 'Escape', 'Backspace'];
-    if (handledKeys.includes(key)) {
-      // Skip Backspace sound when focused on input/textarea (Backspace is ignored there)
-      if (key === 'Backspace' && ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName || '')) {
-        // Don't play sound — this keypress is not handled by XMB
-      } else {
-        playKeySoundRef.current();
+    // Play a context-appropriate sound for handled keys
+    const isHandledKey =
+      key === 'ArrowLeft' || key === 'ArrowRight' || key === 'ArrowUp' ||
+      key === 'ArrowDown' || key === 'Enter' || key === 'Escape' || key === 'Backspace';
+    if (isHandledKey) {
+      const inEditable = (key === 'Backspace') &&
+        ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName || '');
+      if (!inEditable) {
+        if (key === 'Enter') playConfirm();
+        else if (key === 'Escape' || key === 'Backspace') playCancel();
+        else playNavigate();
       }
     }
 
@@ -99,14 +101,14 @@ export function useXMBNavigation(categories: XMBCategory[]): XMBNavigationResult
         break;
       case 'ArrowRight':
         if (navigationPathRef.current.length > 0) {
-          // Inside folder: open the selected item (link/action only, not folders)
+          // Inside folder: open the selected item (link/action only, not folders).
+          // `drillIntoFolder` is intentionally omitted so folders are no-ops
+          // here — Enter is required to drill into nested folders.
           if (activeItemRef.current) {
-            if (activeItemRef.current.action) {
-              activeItemRef.current.action();
-            } else if (activeItemRef.current.link) {
-              navigateToLink(activeItemRef.current.link, routerRef.current, startNavigationRef.current);
-            }
-            // If it's a folder, → does nothing (Enter is required to drill into nested folders)
+            activateItem(activeItemRef.current, itemIndexRef.current, {
+              router: routerRef.current,
+              startNavigation: startNavigationRef.current,
+            });
           }
         } else {
           // Category level or item selected: switch to next category
@@ -126,18 +128,16 @@ export function useXMBNavigation(categories: XMBCategory[]): XMBNavigationResult
         break;
       case 'Enter':
         if (activeItemRef.current) {
-          if (activeItemRef.current.type === 'folder' && activeItemRef.current.items) {
-            setNavigationPath([...navigationPathRef.current, itemIndexRef.current]);
-            setItemIndex(0);
-          } else if (activeItemRef.current.action) {
-            activeItemRef.current.action();
-          } else if (activeItemRef.current.link) {
-            navigateToLink(activeItemRef.current.link, routerRef.current, startNavigationRef.current);
-          }
-        } else {
-            if (currentItemsRef.current.length > 0) {
-                setItemIndex(0);
-            }
+          activateItem(activeItemRef.current, itemIndexRef.current, {
+            router: routerRef.current,
+            startNavigation: startNavigationRef.current,
+            drillIntoFolder: (idx) => {
+              setNavigationPath([...navigationPathRef.current, idx]);
+              setItemIndex(0);
+            },
+          });
+        } else if (currentItemsRef.current.length > 0) {
+          setItemIndex(0);
         }
         break;
       case 'Escape':

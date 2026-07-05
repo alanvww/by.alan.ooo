@@ -10,6 +10,7 @@ import { navigateToLink } from "@/lib/xmb-navigation";
 import type { XMBItem } from "@/lib/xmb-types";
 import XMBIcon from "./XMBIcon";
 import { XMB_CAROUSEL, XMB_ANIMATION, EASE } from "@/lib/xmb-constants";
+import { playNavigate, playConfirm } from "@/hooks/useKeyAudioFx";
 
 interface XMBCarouselProps {
   items: XMBItem[];
@@ -31,8 +32,16 @@ const XMBCarouselCard = React.memo(({ item, index, scrollOffset, onSelect, onNav
   const isActive = Math.round(scrollOffset) === index;
   const isVisible = absDistance <= XMB_CAROUSEL.VISIBLE_ITEMS;
   const yOffset = distance * XMB_CAROUSEL.ITEM_SPACING;
-  const scale = isActive ? 1 : Math.max(0.6 - absDistance * 0.05, 0.42);
-  const opacity = isActive ? 1 : Math.max(0.3 - absDistance * 0.1, 0.08);
+
+  // Continuous falloff so cards don't snap their scale/opacity/x when the
+  // rounded `isActive` flips at half-integer scroll positions. `near` covers
+  // the first step away from center (smooth scale + opacity drop), `far`
+  // handles items further out with a gentler decay.
+  const near = Math.min(absDistance, 1);
+  const far = Math.max(0, absDistance - 1);
+  const scale = Math.max(0.42, 1 - near * 0.45 - far * 0.05);
+  const opacity = Math.max(0.08, 1 - near * 0.7 - far * 0.1);
+  const xShift = 24 * (1 - near);
   const zIndex = 100 - Math.floor(absDistance);
 
   return (
@@ -46,36 +55,42 @@ const XMBCarouselCard = React.memo(({ item, index, scrollOffset, onSelect, onNav
         zIndex,
         pointerEvents: isVisible ? 'auto' : 'none',
       }}
+      // Cards entering the visibility window (after being culled by
+      // `visibleEntries`) would otherwise mount at identity (center,
+      // full scale, full opacity) and animate to their real position —
+      // a brief "ghost in the center" before they fly out. `initial=false`
+      // paints them at the computed target on first render instead.
+      initial={false}
       animate={{
         y: yOffset,
         opacity,
-        x: isActive ? 24 : 0,
+        x: xShift,
         scale,
       }}
       transition={XMB_ANIMATION.SPRING_CONFIG}
       onClick={() => {
         if (isActive) {
           if (item.link) {
+            playConfirm();
             onNavigate(item.link);
           }
         } else {
+          playNavigate();
           onSelect(index);
         }
       }}
     >
       <div
         className="flex flex-col md:flex-row items-center gap-6 md:gap-12 px-4 md:px-6"
-        style={{
-          transform: 'translateY(-50%)',
-        }}
+        style={{ transform: 'translateY(-50%)' }}
       >
         <div
           className={`
-            w-64 h-36 sm:w-[24rem] sm:h-[14rem] md:w-[28rem] md:h-[16rem] shrink-0 rounded-xl overflow-hidden border shadow-2xl bg-black/85
-            transition-all duration-200
+            w-64 h-36 sm:w-[24rem] sm:h-[14rem] md:w-[28rem] md:h-[16rem] shrink-0 rounded-xl overflow-hidden border shadow-2xl dark:bg-black/85 bg-white/90
+            transition-[border-color,box-shadow,transform] duration-200
             ${isActive
-              ? 'border-white/80 ring-1 ring-white/50 shadow-[0_0_35px_rgba(255,255,255,0.35)] hover:scale-[1.02] hover:shadow-[0_0_50px_rgba(255,255,255,0.5)]'
-              : 'border-white/20'
+              ? 'border-xmb-fg/80 ring-1 ring-xmb-fg/50 shadow-[0_0_35px_var(--color-xmb-shadow-glow)] hover:scale-[1.02] hover:shadow-[0_0_50px_var(--color-xmb-shadow-glow)]'
+              : 'border-xmb-fg/20'
             }
           `}
         >
@@ -85,13 +100,13 @@ const XMBCarouselCard = React.memo(({ item, index, scrollOffset, onSelect, onNav
             </div>
           ) : (
             <div className="w-full h-full flex items-center justify-center">
-              <XMBIcon name="File" size={isActive ? 80 : 40} className="text-white/30" />
+              <XMBIcon name="File" size={isActive ? 80 : 40} className="text-xmb-fg/30" />
             </div>
           )}
         </div>
 
-        <div className="flex flex-col drop-shadow-2xl max-w-2xl text-center md:text-left">
-          <h2           className={`text-2xl sm:text-3xl md:text-4xl font-extralight tracking-wide transition-colors duration-150 leading-tight ${isActive ? 'text-white' : 'text-white/35'}`}>
+        <div className="flex flex-col justify-center drop-shadow-2xl max-w-2xl text-center md:text-left md:h-[16rem] sm:h-[14rem] h-36 overflow-hidden">
+          <h2 className={`text-2xl sm:text-3xl md:text-4xl font-extralight tracking-wide transition-colors duration-150 leading-tight ${isActive ? 'text-xmb-fg' : 'text-xmb-fg/35'}`}>
             {item.title}
           </h2>
           <AnimatePresence mode="popLayout">
@@ -101,7 +116,7 @@ const XMBCarouselCard = React.memo(({ item, index, scrollOffset, onSelect, onNav
                 animate={{ opacity: 0.75, height: 'auto', marginTop: '1rem' }}
                 exit={{ opacity: 0, height: 0, marginTop: 0 }}
                 transition={{ duration: 0.15, ease: EASE.MOVE }}
-                className="text-sm sm:text-base md:text-lg text-white/65 line-clamp-2 md:line-clamp-3 leading-relaxed"
+                className="text-sm sm:text-base md:text-lg text-xmb-fg/65 line-clamp-2 md:line-clamp-3 leading-relaxed"
               >
                 {item.description}
               </motion.p>
@@ -117,7 +132,7 @@ const XMBCarouselCard = React.memo(({ item, index, scrollOffset, onSelect, onNav
               {(item.meta.tags as string[]).slice(0, 3).map((tag: string) => (
                 <span
                   key={tag}
-                  className="text-[10px] md:text-xs font-mono uppercase tracking-wider px-2 md:px-3 py-1 md:py-1.5 bg-white/15 rounded-lg border border-white/25"
+                  className="text-[10px] md:text-xs font-mono uppercase tracking-wider px-2 md:px-3 py-1 md:py-1.5 bg-xmb-fg/15 rounded-lg border border-xmb-fg/25"
                 >
                   {tag}
                 </span>
@@ -140,17 +155,64 @@ const XMBCarousel = ({ items, activeIndex, onSelect }: XMBCarouselProps) => {
   const animationFrameRef = useRef<number | null>(null);
   const wheelDeltaRef = useRef<number>(0);
   const lastCommittedIndexRef = useRef<number>(activeIndex);
-  
+  const snapFrameRef = useRef<number | null>(null);
+  // Flips true when we initiate the parent commit ourselves, so the
+  // activeIndex sync effect below knows not to overwrite scrollOffset
+  // (the rAF snap is already handling that transition smoothly).
+  const selfCommittingRef = useRef<boolean>(false);
+
   // Smooth scroll position - floating point for continuous scrolling
   const [scrollOffset, setScrollOffset] = useState<number>(activeIndex);
-  
-  // Sync scrollOffset with activeIndex when it changes externally (keyboard nav)
+  const scrollOffsetRef = useRef<number>(activeIndex);
+  scrollOffsetRef.current = scrollOffset;
+
+  // Smoothly ease scrollOffset to an integer index via rAF. Used after a
+  // wheel/touch scroll settles so cards drift the last fractional step
+  // instead of springing twice (once to the float rest, then back to the
+  // rounded value when the parent re-syncs).
+  const snapScrollOffsetTo = useCallback((target: number) => {
+    if (snapFrameRef.current !== null) {
+      cancelAnimationFrame(snapFrameRef.current);
+      snapFrameRef.current = null;
+    }
+    const start = scrollOffsetRef.current;
+    if (start === target) return;
+
+    const startTime = performance.now();
+    const duration = 220;
+
+    const step = () => {
+      const t = Math.min((performance.now() - startTime) / duration, 1);
+      const eased = 1 - Math.pow(1 - t, 3); // ease-out cubic
+      setScrollOffset(start + (target - start) * eased);
+      if (t < 1) {
+        snapFrameRef.current = requestAnimationFrame(step);
+      } else {
+        snapFrameRef.current = null;
+      }
+    };
+    snapFrameRef.current = requestAnimationFrame(step);
+  }, []);
+
+  // Sync scrollOffset with activeIndex when it changes externally (keyboard nav).
+  // Skip if the change came from our own debounced commit — snapScrollOffsetTo
+  // is already mid-flight and an instant reset would undo it.
   useEffect(() => {
+    if (selfCommittingRef.current) {
+      selfCommittingRef.current = false;
+      lastCommittedIndexRef.current = activeIndex;
+      return;
+    }
+    if (snapFrameRef.current !== null) {
+      cancelAnimationFrame(snapFrameRef.current);
+      snapFrameRef.current = null;
+    }
     setScrollOffset(activeIndex);
     lastCommittedIndexRef.current = activeIndex;
   }, [activeIndex]);
-  
-  // Debounced sync: update parent's activeIndex when scroll settles
+
+  // Debounced sync: commit to parent + smooth-snap our own scrollOffset
+  // when scroll settles. Both happen together so the cards animate once.
   useEffect(() => {
     const timer = setTimeout(() => {
       const roundedIndex = Math.round(scrollOffset);
@@ -160,16 +222,35 @@ const XMBCarousel = ({ items, activeIndex, onSelect }: XMBCarouselProps) => {
         roundedIndex < items.length
       ) {
         lastCommittedIndexRef.current = roundedIndex;
+        selfCommittingRef.current = true;
         onSelect(roundedIndex);
+        snapScrollOffsetTo(roundedIndex);
       }
     }, 50);
-    
+
     return () => clearTimeout(timer);
-  }, [scrollOffset, activeIndex, items.length, onSelect]);
+  }, [scrollOffset, activeIndex, items.length, onSelect, snapScrollOffsetTo]);
+
+  // Cancel any in-flight snap frame on unmount
+  useEffect(() => {
+    return () => {
+      if (snapFrameRef.current !== null) {
+        cancelAnimationFrame(snapFrameRef.current);
+        snapFrameRef.current = null;
+      }
+    };
+  }, []);
   
   // Mouse wheel handler - smooth continuous scrolling
   const handleWheel = useCallback((e: WheelEvent) => {
     e.preventDefault();
+
+    // User is steering again — abort any settle-snap in progress so the
+    // wheel input owns scrollOffset.
+    if (snapFrameRef.current !== null) {
+      cancelAnimationFrame(snapFrameRef.current);
+      snapFrameRef.current = null;
+    }
 
     wheelDeltaRef.current += e.deltaY * XMB_CAROUSEL.SCROLL_SENSITIVITY;
 
@@ -196,14 +277,19 @@ const XMBCarousel = ({ items, activeIndex, onSelect }: XMBCarouselProps) => {
   
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     if (!touchStartY.current) return;
-    
+
+    if (snapFrameRef.current !== null) {
+      cancelAnimationFrame(snapFrameRef.current);
+      snapFrameRef.current = null;
+    }
+
     const currentY = e.touches[0].clientY;
     const deltaY = touchStartY.current - currentY;
     touchStartY.current = currentY;
-    
+
     // Convert touch movement to scroll offset
     const delta = deltaY * 0.01; // Sensitivity for touch
-    
+
     wheelDeltaRef.current += delta;
 
     if (animationFrameRef.current !== null) {

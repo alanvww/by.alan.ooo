@@ -137,24 +137,17 @@ function groupItemsIntoFolders(
 function buildProfileItems(): XMBItem[] {
   return [
     {
-      id: 'profile-about',
-      title: 'About Me',
-      description: 'Learn more about my background and skills.',
-      link: '/about',
-      type: 'profile',
-    },
-    {
       id: 'profile-github',
       title: 'GitHub',
-      description: 'Check out my open source projects.',
+      description: 'Open source projects and experiments.',
       link: siteConfig.links.github,
       type: 'link',
     },
     {
-      id: 'profile-twitter',
-      title: 'Twitter',
-      description: 'Follow me for updates.',
-      link: siteConfig.links.twitter,
+      id: 'profile-email',
+      title: 'Email',
+      description: siteConfig.contact.email,
+      link: siteConfig.links.email,
       type: 'link',
     }
   ];

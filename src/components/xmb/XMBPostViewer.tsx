@@ -1,12 +1,14 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { motion } from 'motion/react';
 import { useRouter } from 'next/navigation';
-import { XMB_ANIMATION, EASE } from '@/lib/xmb-constants';
+import { XMB_ANIMATION, EASE, XMB_OVERLAY } from '@/lib/xmb-constants';
 import { useXMBLoadingContext } from '@/lib/xmb-navigation-context';
+import { usePressedKeys } from '@/hooks/usePressedKeys';
 import XMBIcon from './XMBIcon';
+import XMBKeycap from './XMBKeycap';
 import type { PostFrontmatter, ProjectFrontmatter } from '@/lib/mdx';
 import type { SiblingInfo } from '@/lib/get-content-siblings';
 
@@ -22,7 +24,7 @@ const XMBPostViewer = ({ type, slug, frontmatter, children, siblings }: XMBPostV
     const router = useRouter();
     const { startNavigation } = useXMBLoadingContext();
     const scrollContainerRef = useRef<HTMLDivElement>(null);
-    const [pressedKeys, setPressedKeys] = useState<Set<string>>(new Set());
+    const pressedKeys = usePressedKeys();
 
     // Handle keyboard navigation
     useEffect(() => {
@@ -30,11 +32,6 @@ const XMBPostViewer = ({ type, slug, frontmatter, children, siblings }: XMBPostV
             const container = scrollContainerRef.current;
             const SCROLL_AMOUNT = 150;
             const PAGE_SCROLL_AMOUNT = 500;
-            setPressedKeys(prev => {
-                const next = new Set(prev);
-                next.add(e.key);
-                return next;
-            });
 
             switch (e.key) {
                 case 'Escape':
@@ -96,19 +93,9 @@ const XMBPostViewer = ({ type, slug, frontmatter, children, siblings }: XMBPostV
             }
         };
 
-        const handleKeyUp = (e: KeyboardEvent) => {
-            setPressedKeys(prev => {
-                const next = new Set(prev);
-                next.delete(e.key);
-                return next;
-            });
-        };
-
         window.addEventListener('keydown', handleKeyDown);
-        window.addEventListener('keyup', handleKeyUp);
         return () => {
             window.removeEventListener('keydown', handleKeyDown);
-            window.removeEventListener('keyup', handleKeyUp);
         };
     }, [router, siblings, type, startNavigation]);
 
@@ -117,7 +104,7 @@ const XMBPostViewer = ({ type, slug, frontmatter, children, siblings }: XMBPostV
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.2, ease: EASE.ENTER }}
-            className="fixed inset-0 z-50 flex flex-col bg-black/40 backdrop-blur-2xl text-white overflow-hidden"
+            className={`fixed inset-0 z-50 flex flex-col ${XMB_OVERLAY.FULLSCREEN} text-xmb-fg overflow-hidden`}
         >
             {/* Background Image (Blurred) */}
             {frontmatter.coverImage && (
@@ -129,7 +116,7 @@ const XMBPostViewer = ({ type, slug, frontmatter, children, siblings }: XMBPostV
                         sizes="100vw"
                         className="object-cover blur-3xl scale-110"
                     />
-                    <div className="absolute inset-0 bg-linear-to-b from-black/60 via-black/40 to-black/80" />
+                    <div className="absolute inset-0 bg-linear-to-b dark:from-black/60 from-white/60 dark:via-black/40 via-white/40 dark:to-black/80 to-white/80" />
                 </div>
             )}
 
@@ -139,21 +126,16 @@ const XMBPostViewer = ({ type, slug, frontmatter, children, siblings }: XMBPostV
                     onClick={() => {
                         router.push('/');
                     }}
-                    className="group flex items-center gap-3 text-white/50 hover:text-white transition-colors duration-300 focus:outline-none"
+                    className="group flex items-center gap-3 text-xmb-fg/50 hover:text-xmb-fg transition-colors duration-300 focus:outline-none"
                 >
-                    <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 transition-all group-hover:border-white/30 group-hover:bg-white/10">
+                    <div className="flex items-center gap-2 rounded-full border border-xmb-fg/10 bg-xmb-fg/5 px-3 py-2 transition-all group-hover:border-xmb-fg/30 group-hover:bg-xmb-fg/10">
                         <XMBIcon name="ArrowLeft" size={18} />
-                        <motion.span
-                            className={`px-1.5 h-6 rounded flex items-center justify-center text-[10px] font-mono transition-all duration-150 hover:bg-white hover:text-black hover:shadow-[0_0_15px_rgba(255,255,255,0.6)] ${
-                                pressedKeys.has('Escape')
-                                    ? 'bg-white text-black shadow-[0_0_15px_rgba(255,255,255,0.8)]'
-                                    : 'border border-white/20 bg-white/5 text-white/70'
-                            }`}
-                            animate={{ scale: pressedKeys.has('Escape') ? 1.05 : 1 }}
-                            transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                        >
-                            ESC
-                        </motion.span>
+                        <XMBKeycap
+                            label="ESC"
+                            hoverable
+                            pressed={pressedKeys.has('Escape')}
+                            className="px-1.5 w-auto"
+                        />
                     </div>
                     <span className="text-xs font-mono uppercase tracking-[0.2em] opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300">
                         Back to Menu
@@ -175,11 +157,11 @@ const XMBPostViewer = ({ type, slug, frontmatter, children, siblings }: XMBPostV
                         className="mb-16 text-center"
                     >
                         <div className="flex items-center justify-center gap-4 mb-8">
-                             <span className="px-3 py-1 rounded-lg border border-white/10 bg-white/5 text-[10px] font-mono uppercase tracking-widest text-white/40">
+                            <span className="px-3 py-1 rounded-lg border border-xmb-fg/10 bg-xmb-fg/5 text-[10px] font-mono uppercase tracking-widest text-xmb-fg/40">
                                 {type}
                             </span>
-                            <div className="h-px w-12 bg-white/10" />
-                            <time className="text-xs font-mono text-white/40 uppercase tracking-widest">
+                            <div className="h-px w-12 bg-xmb-fg/10" />
+                            <time className="text-xs font-mono text-xmb-fg/40 uppercase tracking-widest">
                                 {new Date(frontmatter.date).toLocaleDateString('en-US', {
                                     year: 'numeric',
                                     month: 'long',
@@ -195,7 +177,7 @@ const XMBPostViewer = ({ type, slug, frontmatter, children, siblings }: XMBPostV
                         {frontmatter.tags && (
                             <div className="flex flex-wrap justify-center gap-3">
                                 {frontmatter.tags.map(tag => (
-                                    <span key={tag} className="text-[10px] font-mono uppercase tracking-widest px-3 py-1.5 bg-white/5 rounded-full border border-white/10 text-white/60">
+                                    <span key={tag} className="text-[10px] font-mono uppercase tracking-widest px-3 py-1.5 bg-xmb-fg/5 rounded-full border border-xmb-fg/10 text-xmb-fg/60">
                                         {tag}
                                     </span>
                                 ))}
@@ -209,7 +191,7 @@ const XMBPostViewer = ({ type, slug, frontmatter, children, siblings }: XMBPostV
                             initial={{ opacity: 0, y: 40, scale: 0.98 }}
                             animate={{ opacity: 1, y: 0, scale: 1 }}
                             transition={{ delay: 0.15, duration: 0.4, ease: EASE.MOVE }}
-                            className="relative aspect-video rounded-2xl overflow-hidden border border-white/10 shadow-[0_0_80px_rgba(255,255,255,0.05)] mb-24"
+                            className="relative aspect-video rounded-2xl overflow-hidden border border-xmb-fg/10 shadow-[0_0_80px_var(--color-xmb-shadow-glow)] mb-24"
                         >
                             <Image
                                 src={frontmatter.coverImage}
@@ -219,7 +201,7 @@ const XMBPostViewer = ({ type, slug, frontmatter, children, siblings }: XMBPostV
                                 className="object-cover"
                                 priority
                             />
-                            <div className="absolute inset-0 ring-1 ring-inset ring-white/20 rounded-2xl" />
+                            <div className="absolute inset-0 ring-1 ring-inset ring-xmb-fg/20 rounded-2xl" />
                         </motion.div>
                     )}
 
@@ -231,7 +213,7 @@ const XMBPostViewer = ({ type, slug, frontmatter, children, siblings }: XMBPostV
             </div>
 
             {/* Bottom Navigation Controls */}
-            <div className="absolute bottom-0 inset-x-0 h-32 bg-linear-to-t from-black/80 to-transparent pointer-events-none z-40">
+            <div className={`absolute bottom-0 inset-x-0 h-32 ${XMB_OVERLAY.BOTTOM_FADE} pointer-events-none z-40`}>
                 <div className="h-full max-w-6xl mx-auto px-12 flex items-center justify-between pointer-events-auto">
                     {/* Previous */}
                     <div className="flex-1 flex justify-start">
@@ -241,22 +223,12 @@ const XMBPostViewer = ({ type, slug, frontmatter, children, siblings }: XMBPostV
                                     startNavigation();
                                     router.push(`/${type}/${siblings.prev!.slug}`);
                                 }}
-                                className="group flex flex-col items-start gap-1 text-white/40 hover:text-white transition-all"
+                                className="group flex flex-col items-start gap-1 text-xmb-fg/40 hover:text-xmb-fg transition-all"
                             >
                                 <span className="text-[10px] font-mono uppercase tracking-widest opacity-50">Previous</span>
                                 <span className="text-sm font-light tracking-wide flex items-center gap-2">
                                     <XMBIcon name="ArrowLeft" size={12} className="group-hover:-translate-x-1 transition-transform" />
-                                    <motion.span
-                                        className={`w-6 h-6 rounded flex items-center justify-center text-[10px] font-mono transition-all duration-150 hover:bg-white hover:text-black hover:shadow-[0_0_15px_rgba(255,255,255,0.6)] ${
-                                            pressedKeys.has('ArrowLeft')
-                                                ? 'bg-white text-black shadow-[0_0_15px_rgba(255,255,255,0.8)]'
-                                                : 'border border-white/20 bg-white/5 text-white/70'
-                                        }`}
-                                        animate={{ scale: pressedKeys.has('ArrowLeft') ? 1.05 : 1 }}
-                                        transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                                    >
-                                        ←
-                                    </motion.span>
+                                    <XMBKeycap label="←" hoverable pressed={pressedKeys.has('ArrowLeft')} />
                                     {siblings.prev.title}
                                 </span>
                             </button>
@@ -271,22 +243,12 @@ const XMBPostViewer = ({ type, slug, frontmatter, children, siblings }: XMBPostV
                                     startNavigation();
                                     router.push(`/${type}/${siblings.next!.slug}`);
                                 }}
-                                className="group flex flex-col items-end gap-1 text-white/40 hover:text-white transition-all"
+                                className="group flex flex-col items-end gap-1 text-xmb-fg/40 hover:text-xmb-fg transition-all"
                             >
                                 <span className="text-[10px] font-mono uppercase tracking-widest opacity-50">Next</span>
                                 <span className="text-sm font-light tracking-wide flex items-center gap-2">
                                     {siblings.next.title}
-                                    <motion.span
-                                        className={`w-6 h-6 rounded flex items-center justify-center text-[10px] font-mono transition-all duration-150 hover:bg-white hover:text-black hover:shadow-[0_0_15px_rgba(255,255,255,0.6)] ${
-                                            pressedKeys.has('ArrowRight')
-                                                ? 'bg-white text-black shadow-[0_0_15px_rgba(255,255,255,0.8)]'
-                                                : 'border border-white/20 bg-white/5 text-white/70'
-                                        }`}
-                                        animate={{ scale: pressedKeys.has('ArrowRight') ? 1.05 : 1 }}
-                                        transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                                    >
-                                        →
-                                    </motion.span>
+                                    <XMBKeycap label="→" hoverable pressed={pressedKeys.has('ArrowRight')} />
                                     <XMBIcon name="CaretRight" size={12} className="group-hover:translate-x-1 transition-transform" />
                                 </span>
                             </button>
@@ -297,9 +259,9 @@ const XMBPostViewer = ({ type, slug, frontmatter, children, siblings }: XMBPostV
 
             {/* Scroll Indicator (Right) */}
             <div className="absolute right-12 top-1/2 -translate-y-1/2 flex flex-col items-center gap-4 z-40 opacity-30 hover:opacity-100 transition-opacity duration-500">
-                <div className="w-px h-32 bg-linear-to-b from-transparent via-white/50 to-transparent" />
+                <div className="w-px h-32 bg-linear-to-b from-transparent via-xmb-fg/50 to-transparent" />
                 <span className="[writing-mode:vertical-rl] text-[10px] font-mono uppercase tracking-widest">Scroll</span>
-                <div className="w-px h-32 bg-linear-to-t from-transparent via-white/50 to-transparent" />
+                <div className="w-px h-32 bg-linear-to-t from-transparent via-xmb-fg/50 to-transparent" />
             </div>
         </motion.div>
     );

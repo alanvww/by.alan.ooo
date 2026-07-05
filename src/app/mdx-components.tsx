@@ -10,21 +10,22 @@ import { Card } from '@/components/mdx/Card'
 import { Figure } from '@/components/mdx/Figure'
 import { Demo } from '@/components/mdx/Demo'
 import { Tabs, Tab } from '@/components/mdx/Tabs'
+import { XMB_OVERLAY } from '@/lib/xmb-constants'
 
-// XMB-styled MDX components (white text on dark, cinematic aesthetic)
+// XMB-styled MDX components (theme-aware: xmb-fg token works in both light and dark mode)
 export const mdxComponents: MDXComponents = {
     h1: ({ children, ...props }) => (
-        <h1 className="text-3xl md:text-4xl font-extralight text-white mb-8 mt-12 first:mt-0 tracking-tight leading-tight" {...props}>
+        <h1 className="text-3xl md:text-4xl font-extralight text-xmb-fg mb-8 mt-12 first:mt-0 tracking-tight leading-tight" {...props}>
             {children}
         </h1>
     ),
     h2: ({ children, ...props }) => (
-        <h2 className="text-2xl md:text-3xl font-light text-white/90 mb-6 mt-10 first:mt-0 tracking-tight" {...props}>
+        <h2 className="text-2xl md:text-3xl font-light text-xmb-fg/90 mb-6 mt-10 first:mt-0 tracking-tight" {...props}>
             {children}
         </h2>
     ),
     h3: ({ children, ...props }) => (
-        <h3 className="text-xl md:text-2xl font-light text-white/80 mb-4 mt-8 first:mt-0" {...props}>
+        <h3 className="text-xl md:text-2xl font-light text-xmb-fg/80 mb-4 mt-8 first:mt-0" {...props}>
             {children}
         </h3>
     ),
@@ -45,7 +46,7 @@ export const mdxComponents: MDXComponents = {
             return !inlineComponents.has(childType)
         })
 
-        const className = "mb-6 text-white/70 leading-relaxed font-light text-lg md:text-xl"
+        const className = "mb-6 text-xmb-fg/70 leading-relaxed font-light text-lg md:text-xl"
         
         if (containsNonInlineContent) {
             return <div className={className} {...props}>{children}</div>
@@ -54,12 +55,12 @@ export const mdxComponents: MDXComponents = {
         return <p className={className} {...props}>{children}</p>
     },
     ul: ({ children, ...props }) => (
-        <ul className="mb-6 list-disc list-outside ml-6 space-y-3 text-white/70 font-light text-lg" {...props}>
+        <ul className="mb-6 list-disc list-outside ml-6 space-y-3 text-xmb-fg/70 font-light text-lg" {...props}>
             {children}
         </ul>
     ),
     ol: ({ children, ...props }) => (
-        <ol className="mb-6 list-decimal list-outside ml-6 space-y-3 text-white/70 font-light text-lg" {...props}>
+        <ol className="mb-6 list-decimal list-outside ml-6 space-y-3 text-xmb-fg/70 font-light text-lg" {...props}>
             {children}
         </ol>
     ),
@@ -69,15 +70,15 @@ export const mdxComponents: MDXComponents = {
         </li>
     ),
     blockquote: ({ children, ...props }) => (
-        <blockquote className="my-10 border-l-2 border-white/20 pl-8 py-2 italic text-white/60 bg-white/5 rounded-r-lg backdrop-blur-sm" {...props}>
+        <blockquote className="my-10 border-l-2 border-xmb-fg/20 pl-8 py-2 italic text-xmb-fg/60 bg-xmb-fg/5 rounded-r-lg backdrop-blur-sm" {...props}>
             {children}
         </blockquote>
     ),
     hr: ({ ...props }) => (
-        <hr className="my-12 border-white/10" {...props} />
+        <hr className="my-12 border-xmb-fg/10" {...props} />
     ),
     a: ({ href, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => {
-        const className = "text-white/90 underline underline-offset-4 decoration-white/20 hover:decoration-white/60 transition-all duration-300"
+        const className = "text-xmb-fg/90 underline underline-offset-4 decoration-xmb-fg/20 hover:decoration-xmb-fg/60 transition-all duration-300"
         if (href?.startsWith('/')) {
             return <Link href={href} className={className} {...props} />
         }
@@ -90,19 +91,19 @@ export const mdxComponents: MDXComponents = {
         const isInlineCode = !className
         if (isInlineCode) {
             return (
-                <code className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-sm text-white/90 border border-white/10" {...props}>
+                <code className="rounded bg-xmb-fg/10 px-1.5 py-0.5 font-mono text-sm text-xmb-fg/90 border border-xmb-fg/10" {...props}>
                     {children}
                 </code>
             )
         }
         return (
-            <div className="my-8 rounded-xl overflow-hidden border border-white/10 shadow-2xl">
+            <div className="my-8 rounded-xl overflow-hidden border border-xmb-fg/10 shadow-2xl">
                 <CodeBlock className={className} {...props}>{children}</CodeBlock>
             </div>
         )
     },
     img: ({ src, alt }: React.ImgHTMLAttributes<HTMLImageElement>) => (
-        <div className="my-10 group relative rounded-xl overflow-hidden border border-white/10 bg-white/5 shadow-2xl transition-all duration-500 hover:border-white/30">
+        <div className="my-10 group relative rounded-xl overflow-hidden border border-xmb-fg/10 bg-xmb-fg/5 shadow-2xl transition-all duration-500 hover:border-xmb-fg/30">
             {typeof src === 'string' ? (
                 <Image
                     src={src}
@@ -114,8 +115,8 @@ export const mdxComponents: MDXComponents = {
                 />
             ) : null}
             {alt && (
-                <div className="absolute bottom-0 inset-x-0 p-4 bg-linear-to-t from-black/80 to-transparent">
-                    <p className="text-xs font-mono text-white/40 tracking-widest uppercase">{alt}</p>
+                <div className={`absolute bottom-0 inset-x-0 p-4 ${XMB_OVERLAY.BOTTOM_FADE}`}>
+                    <p className="text-xs font-mono text-xmb-fg/40 tracking-widest uppercase">{alt}</p>
                 </div>
             )}
         </div>

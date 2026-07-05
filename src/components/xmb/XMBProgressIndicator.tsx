@@ -76,8 +76,8 @@ const XMBProgressIndicator = () => {
                             transition={{ delay: i * 0.02 }}
                             className={`w-3 h-6 transition-all duration-300 ${
                                 isFilled 
-                                    ? 'bg-white shadow-[0_0_8px_rgba(255,255,255,0.6)]' 
-                                    : 'border border-white/30'
+                                    ? 'bg-xmb-fg shadow-[0_0_8px_var(--color-xmb-shadow-glow)]'
+                                    : 'border border-xmb-fg/30'
                             }`}
                             style={{ 
                                 transform: 'skewX(-15deg)',
@@ -88,8 +88,8 @@ const XMBProgressIndicator = () => {
                 })}
             </div>
             <div className="font-mono text-xs tracking-wider opacity-70 group-hover:opacity-100 transition-opacity">
-                <div className="text-[10px] leading-none mb-0.5 text-white/60">{progress.label}</div>
-                <div className="text-white font-semibold">{progress.value.toFixed(3)}%</div>
+                <div className="text-[10px] leading-none mb-0.5 text-xmb-fg/60">{progress.label}</div>
+                <div className="text-xmb-fg font-semibold">{progress.value.toFixed(3)}%</div>
             </div>
         </div>
     );

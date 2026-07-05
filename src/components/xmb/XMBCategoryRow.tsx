@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import type { XMBCategory } from '@/lib/xmb-types';
 import XMBIcon from './XMBIcon';
 import { XMB_LAYOUT, XMB_ANIMATION, EASE } from '@/lib/xmb-constants';
+import { playNavigate } from '@/hooks/useKeyAudioFx';
 
 interface XMBCategoryRowProps {
   categories: XMBCategory[];
@@ -24,7 +25,14 @@ const XMBCategoryRow = React.memo(({
   const containerOffset = -categoryIndex * XMB_LAYOUT.CATEGORY_WIDTH;
 
   return (
-    <div className="relative z-10 h-16 md:h-20 overflow-visible" role="tablist" aria-label="XMB Categories">
+    <motion.div
+      className="relative z-10 h-16 md:h-20 overflow-visible"
+      role="tablist"
+      aria-label="XMB Categories"
+      // Idle vertical drift — gentle ambient sway so the row feels alive at rest
+      animate={{ y: [-2, 2, -2] }}
+      transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
+    >
       {/* Sliding container - only ONE animation instead of N */}
       <motion.div
         className="absolute left-0 top-0 flex items-center h-full"
@@ -49,25 +57,35 @@ const XMBCategoryRow = React.memo(({
                 // @ts-ignore - CSS Anchor API
                 anchorName: isActive ? '--active-category' : undefined,
               }}
-              onClick={() => onCategorySelect(idx)}
+              onClick={() => {
+                playNavigate();
+                onCategorySelect(idx);
+              }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   onCategorySelect(idx);
                 }
               }}
             >
-              {/* Glow effect for active category */}
+              {/* Glow effect for active category — outer carries FLIP between categories,
+                  inner carries the slow breathing pulse so neither animation fights the other */}
               <AnimatePresence>
                 {isActive && (
                   <motion.div
                     layoutId="category-glow"
                     className="absolute inset-0 rounded-full pointer-events-none"
-                    style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.2), transparent 70%)' }}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.2, ease: EASE.SOFT }}
-                  />
+                  >
+                    <motion.div
+                      className="absolute inset-0 rounded-full"
+                      style={{ background: 'radial-gradient(circle, color-mix(in srgb, var(--color-xmb-fg) 18%, transparent), transparent 55%)' }}
+                      animate={{ scale: [1, 1.15, 1], opacity: [1, 0.65, 1] }}
+                      transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                    />
+                  </motion.div>
                 )}
               </AnimatePresence>
 
@@ -78,13 +96,13 @@ const XMBCategoryRow = React.memo(({
                   opacity: isActive ? 1 : Math.max(0.3, 1 - distance * 0.3)
                 }}
                 transition={XMB_ANIMATION.ICON_SPRING}
-                className={`relative z-10 transition-shadow duration-150 ${isActive ? 'drop-shadow-[0_0_15px_rgba(255,255,255,0.8)]' : ''}`}
+                className={`relative z-10 transition-shadow duration-150 ${isActive ? 'drop-shadow-[0_0_15px_var(--color-xmb-glow)]' : ''}`}
                 style={{ willChange: 'transform, opacity' }}
               >
-                <XMBIcon 
-                  name={category.iconName} 
-                  size={isActive ? 48 : 40} 
-                  className={`transition-colors duration-150 ${isActive ? 'text-white' : 'text-white/70 hover:text-white/90'}`}
+                <XMBIcon
+                  name={category.iconName}
+                  size={isActive ? 48 : 40}
+                  className={`transition-colors duration-150 ${isActive ? 'text-xmb-fg' : 'text-xmb-fg/70 hover:text-xmb-fg/90'}`}
                 />
               </motion.div>
 
@@ -106,7 +124,7 @@ const XMBCategoryRow = React.memo(({
           );
         })}
       </motion.div>
-    </div>
+    </motion.div>
   );
 });
 

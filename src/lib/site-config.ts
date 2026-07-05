@@ -5,12 +5,11 @@ export const siteConfig = {
   author: 'Alan',
   description: 'Design Engineer Portfolio',
   links: {
-    github: 'https://github.com/alan-ooo',
-    twitter: 'https://twitter.com/alan_ooo',
-    email: 'hello@alan.ooo',
+    github: 'https://github.com/alanvww',
+    email: 'mailto:alan.j.ren@pm.me',
   },
   contact: {
-    email: 'hello@alan.ooo',
+    email: 'alan.j.ren@pm.me',
   }
 } as const;
 

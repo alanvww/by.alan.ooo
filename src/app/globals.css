@@ -1,6 +1,33 @@
+/* Registering these as <color> @properties lets the browser interpolate them
+   across the .dark class change (without this, CSS variable swaps are discrete). */
+@property --color-xmb-fg {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #171717;
+}
+
+@property --color-xmb-glow {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: rgba(0, 0, 0, 0.5);
+}
+
+@property --color-xmb-shadow-glow {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: rgba(0, 0, 0, 0.15);
+}
+
 @import "tailwindcss";
 
+@custom-variant dark (&:is(.dark, .dark *));
+
 @theme {
+  /* XMB foreground + glow tokens — light defaults; .dark overrides below */
+  --color-xmb-fg: #171717;
+  --color-xmb-glow: rgba(0, 0, 0, 0.5);
+  --color-xmb-shadow-glow: rgba(0, 0, 0, 0.15);
+
   /* Light mode colors (default) */
   --color-primary: oklch(0.70 0.15 180); /* Shader Cyan/Green Glow */
   --color-primary-foreground: oklch(0.15 0.02 180);
@@ -329,7 +356,17 @@
 
 /* Explicit dark theme token overrides */
 @layer base {
+  html {
+    transition:
+      --color-xmb-fg 300ms ease-out,
+      --color-xmb-glow 300ms ease-out,
+      --color-xmb-shadow-glow 300ms ease-out;
+  }
+
   .dark {
+    --color-xmb-fg: #ffffff;
+    --color-xmb-glow: rgba(255, 255, 255, 0.8);
+    --color-xmb-shadow-glow: rgba(255, 255, 255, 0.2);
     /* Primary brand colors with good contrast - Shader Cyan/Green */
     --color-primary: oklch(0.75 0.20 180);
     --color-primary-foreground: oklch(0.10 0.05 180);

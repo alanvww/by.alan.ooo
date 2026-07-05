@@ -9,7 +9,9 @@ import { useXMBLoadingContext } from "@/lib/xmb-navigation-context";
 import type { XMBCategory, XMBItem } from "@/lib/xmb-types";
 import XMBIcon from "./XMBIcon";
 import { XMB_LAYOUT, XMB_ANIMATION, EASE } from "@/lib/xmb-constants";
-import { navigateToLink } from "@/lib/xmb-navigation";
+import { activateItem, getEnterActionLabel } from "@/lib/xmb-navigation";
+import { playNavigate, playConfirm } from "@/hooks/useKeyAudioFx";
+import XMBKeycap from "./XMBKeycap";
 
 interface XMBVerticalListProps {
     activeCategory: XMBCategory;
@@ -31,42 +33,36 @@ interface XMBListItemProps {
     index: number;
     selectedIndex: number; // global selected index for distance-based fade
     isItemSelected: boolean;
-    isContextView?: boolean;
     onItemSelect: (index: number) => void;
 }
 
 const XMBListItem = React.memo(forwardRef<HTMLDivElement, XMBListItemProps>(
-    ({ item, index, selectedIndex, isItemSelected, isContextView, onItemSelect }, ref) => {
+    ({ item, index, selectedIndex, isItemSelected, onItemSelect }, ref) => {
         const [imgError, setImgError] = useState(false);
         const isFolder = item.type === 'folder';
 
-        // Distance from selected item (negative = above, positive = below)
+        // Distance from selected item (negative = above, positive = below).
+        // Opacity falloff carries the depth cue; we deliberately skip per-item
+        // scale / x-shift so the only motion between selections is the
+        // container slide, the above-row lift, and the highlight crossfade.
+        // Visual treatment is identical regardless of `isContextView` —
+        // that prop only controls interactivity (pointer-events) so the
+        // in-folder parent list reuses the same look as the top-level list.
         const delta = selectedIndex >= 0 ? index - selectedIndex : index;
         const isAbove = delta < 0;
         const distance = Math.abs(delta);
 
-        // Previous items should feel like they are routed into a narrow lane above
-        // the category/title row instead of colliding with it.
-        const aboveRowLift = isAbove && !isContextView
+        // Items above the selection are routed into a narrow lane above the
+        // active row so they don't collide with its highlight / description.
+        const aboveRowLift = isAbove
             ? XMB_LAYOUT.TITLE_ROW_CLEARANCE_PX + Math.max(0, distance - 1) * XMB_LAYOUT.ABOVE_ROW_STACK_STEP_PX
             : 0;
 
-        // Items above the selection fade more aggressively so they read as part of
-        // the same column, but no longer compete with the active category title row.
         const opacity = isItemSelected
             ? 1
-            : isContextView
-            ? 0.3
             : isAbove
             ? Math.max(0.1, 0.42 * Math.pow(0.62, distance - 1))
-            : Math.max(0.25, 0.7 - distance * 0.1);            // 0.6, 0.5, 0.4…
-
-        // Items above shrink slightly to reinforce depth / "scrolled past" feel.
-        const scale = isItemSelected && !isContextView
-            ? 1.05
-            : isAbove && !isContextView
-            ? Math.max(0.74, 0.92 - (distance - 1) * 0.06)
-            : 1;
+            : Math.max(0.25, 0.7 - distance * 0.1);
 
         return (
             <div
@@ -74,7 +70,7 @@ const XMBListItem = React.memo(forwardRef<HTMLDivElement, XMBListItemProps>(
                 role="option"
                 aria-selected={isItemSelected}
                 id={`xmb-item-${index}`}
-                className="relative w-auto cursor-pointer mb-6 md:mb-8 focus-visible:outline-none overflow-visible"
+                className="relative w-full cursor-pointer mb-6 md:mb-8 focus-visible:outline-none overflow-visible"
                 style={{ contain: 'layout style' }}
                 onClick={() => onItemSelect(index)}
                 onKeyDown={(e) => {
@@ -86,28 +82,21 @@ const XMBListItem = React.memo(forwardRef<HTMLDivElement, XMBListItemProps>(
             >
                 {/* Item visual scale/offset animation with highlight */}
                 <motion.div
-                    className={`flex items-center gap-3 md:gap-4 w-full py-3 md:py-4 px-3 md:px-4 rounded-lg transition-all ${
-                        isItemSelected && !isContextView
-                            ? "bg-white/20 ring-1 ring-white/40 shadow-[0_0_20px_rgba(255,255,255,0.2)]"
-                            : isItemSelected && isContextView
-                            ? "bg-white/10 ring-1 ring-white/30"
-                            : "hover:bg-white/5"
+                    className={`flex items-center gap-3 md:gap-4 w-full py-3 md:py-4 px-3 md:px-4 rounded-lg transition-[background-color,box-shadow,border-color] duration-150 ${
+                        isItemSelected
+                            ? "bg-xmb-fg/20 ring-1 ring-xmb-fg/40 shadow-[0_0_20px_var(--color-xmb-shadow-glow)]"
+                            : "hover:bg-xmb-fg/5"
                     }`}
-                    animate={{
-                        x: isItemSelected && !isContextView ? 40 : 0,
-                        y: -aboveRowLift,
-                        scale,
-                        opacity,
-                    }}
+                    animate={{ y: -aboveRowLift, opacity }}
                     transition={XMB_ANIMATION.LIST_SPRING}
                     style={{ willChange: "transform, opacity" }}
                 >
                     {/* Thumbnail */}
                     <div
-                        className={`w-16 h-10 md:w-24 md:h-14 bg-white/5 rounded flex items-center justify-center overflow-hidden border shrink-0 ${
+                        className={`w-16 h-10 md:w-24 md:h-14 bg-xmb-fg/5 rounded flex items-center justify-center overflow-hidden border shrink-0 ${
                             isItemSelected
-                                ? "border-white/50"
-                                : "border-white/10"
+                                ? "border-xmb-fg/50"
+                                : "border-xmb-fg/10"
                         }`}
                     >
                         {isFolder ? (
@@ -139,7 +128,7 @@ const XMBListItem = React.memo(forwardRef<HTMLDivElement, XMBListItemProps>(
                             {isFolder && (
                                 <motion.div
                                     animate={{ x: isItemSelected ? [0, 5, 0] : 0 }}
-                                    transition={{ 
+                                    transition={{
                                         repeat: isItemSelected ? Infinity : 0,
                                         duration: 1.5,
                                         ease: "easeInOut"
@@ -149,17 +138,37 @@ const XMBListItem = React.memo(forwardRef<HTMLDivElement, XMBListItemProps>(
                                 </motion.div>
                             )}
                         </div>
-                        {isItemSelected && !isContextView && item.description && (
+                        {isItemSelected && item.description && (
                             <motion.p
                                 initial={{ opacity: 0, height: 0 }}
                                 animate={{ opacity: 0.6, height: "auto" }}
                                 exit={{ opacity: 0, height: 0 }}
-                                className="text-xs md:text-sm text-white/60 mt-1 line-clamp-2"
+                                className="text-xs md:text-sm text-xmb-fg/60 mt-1 line-clamp-2"
                             >
                                 {item.description}
                             </motion.p>
                         )}
                     </div>
+
+                    {/* Floating ENTER hint — telegraphs the action at the focus point */}
+                    <AnimatePresence>
+                        {isItemSelected && (
+                            <motion.div
+                                key="enter-hint"
+                                initial={{ opacity: 0, x: -8 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                exit={{ opacity: 0, x: -8 }}
+                                transition={{ duration: 0.18, ease: EASE.ENTER }}
+                                className="flex items-center gap-2 shrink-0 pr-1"
+                                aria-hidden="true"
+                            >
+                                <XMBKeycap label="ENTER" pressed={false} className="px-1.5 w-auto" />
+                                <span className="text-[10px] font-mono uppercase tracking-[0.18em] text-xmb-fg/55">
+                                    {getEnterActionLabel(item)}
+                                </span>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                 </motion.div>
             </div>
         );
@@ -167,10 +176,6 @@ const XMBListItem = React.memo(forwardRef<HTMLDivElement, XMBListItemProps>(
 ));
 
 XMBListItem.displayName = "XMBListItem";
-
-const ROW_HEIGHT = 96;
-const ROW_GAP = 32;
-const ROW_STEP = ROW_HEIGHT + ROW_GAP;
 
 const XMBVerticalList = React.memo(
     ({
@@ -192,34 +197,36 @@ const XMBVerticalList = React.memo(
 
         const handleItemClick = useCallback((idx: number) => {
             const item = currentItems[idx];
-
-            if (!item) {
-                return;
-            }
+            if (!item) return;
 
             if (idx === itemIndex) {
-                if (item.type === 'folder' && onFolderDrill) {
-                    onFolderDrill(idx);
-                } else if (item.link) {
-                    navigateToLink(item.link, router, startNavigation);
-                } else if (item.action) {
-                    item.action();
-                }
+                // Second click on the already-selected row = open/activate
+                playConfirm();
+                activateItem(item, idx, {
+                    router,
+                    startNavigation,
+                    drillIntoFolder: onFolderDrill,
+                });
             } else {
+                // First click on a different row = move the cursor
+                playNavigate();
                 onItemSelect(idx);
             }
         }, [currentItems, itemIndex, onFolderDrill, onItemSelect, router, startNavigation]);
 
         const displayIndex = itemIndex === -1 ? 0 : itemIndex;
         const containerOffset = useMemo(() => {
-            return -displayIndex * ROW_STEP;
+            return -displayIndex * XMB_LAYOUT.LIST_ROW_STEP_PX;
         }, [displayIndex]);
 
         // Fallback positioning
         const fallbackLeft = categoryIndex * XMB_LAYOUT.CATEGORY_WIDTH;
 
-        // Create a unique key that includes the navigation path
-        const listKey = `${activeCategory.id}-${navigationPath.join('-')}`;
+        // Re-mount the list (and replay the slide-in) only when the category
+        // changes. Drilling into / out of folders updates `currentItems` but
+        // the wrapper stays mounted, so items just reconcile against their
+        // own `item.id` keys without retriggering the entrance animation.
+        const listKey = activeCategory.id;
 
         return (
             <AnimatePresence mode="popLayout">
@@ -245,14 +252,20 @@ const XMBVerticalList = React.memo(
                                   pointerEvents: 'auto',
                               }
                             : {
-                                  top: XMB_LAYOUT.VERTICAL_LIST_TOP,
-                                  left: isContextView ? '-50px' : `${fallbackLeft}px`,
-                                  transform: isContextView ? 'translateX(0)' : 'translateX(-50%)',
-                                  // CSS Anchor positioning (progressive enhancement)
+                                  // CSS Anchor positioning with inline fallbacks
+                                  // (progressive enhancement — browsers without
+                                  // anchor support ignore anchor() and use the
+                                  // fallback value, which matches the old explicit
+                                  // top / left we had before).
                                   // @ts-ignore - CSS Anchor positioning API
                                   positionAnchor: "--active-category",
                                   // @ts-ignore
-                                  inset: "anchor(bottom) auto auto anchor(left)",
+                                  top: `anchor(bottom, ${XMB_LAYOUT.VERTICAL_LIST_TOP})`,
+                                  right: "auto",
+                                  bottom: "auto",
+                                  // @ts-ignore
+                                  left: isContextView ? '-50px' : `anchor(left, ${fallbackLeft}px)`,
+                                  transform: isContextView ? 'translateX(0)' : 'translateX(-50%)',
                                   marginTop: "2rem",
                                   pointerEvents: isContextView ? 'none' : 'auto',
                               }),
@@ -267,7 +280,7 @@ const XMBVerticalList = React.memo(
                                 onClick={onHeaderClick}
                                 initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
-                                className="mb-4 text-lg md:text-xl font-light tracking-wide text-white/80 focus-visible:outline-none"
+                                className="mb-4 text-lg md:text-xl font-light tracking-wide text-xmb-fg/80 focus-visible:outline-none"
                             >
                                 {activeCategory.title}
                             </motion.button>
@@ -282,19 +295,24 @@ const XMBVerticalList = React.memo(
                             <motion.div
                                 initial={{ opacity: 0, y: -10 }}
                                 animate={{ opacity: 1, y: 0 }}
-                                className="absolute -top-8 left-0 text-xs md:text-sm text-white/40 font-mono flex items-center gap-2"
+                                className="absolute -top-8 left-0 text-xs md:text-sm text-xmb-fg/40 font-mono flex items-center gap-2"
                             >
                                 <XMBIcon name="ArrowLeft" size={14} />
                                 <span>Press ESC to go back</span>
                             </motion.div>
                         )}
                         
-                        {/* Sliding container - Flexbox layout */}
+                        {/* Sliding container - Flexbox layout.
+                            Width is pinned here so every row in the column is the
+                            same width regardless of which one is selected. */}
                         <motion.div
                             className="flex flex-col"
+                            style={{
+                                width: layoutMode === 'paged' ? '100%' : `${XMB_LAYOUT.LIST_FULL_WIDTH_PX}px`,
+                                willChange: "transform",
+                            }}
                             animate={{ y: containerOffset }}
                             transition={XMB_ANIMATION.LIST_SPRING}
-                            style={{ willChange: "transform" }}
                         >
                             {currentItems.map((item, idx) => {
                                 const isItemSelected = idx === itemIndex;
@@ -306,7 +324,6 @@ const XMBVerticalList = React.memo(
                                         item={item}
                                         selectedIndex={itemIndex}
                                         isItemSelected={isItemSelected}
-                                        isContextView={isContextView}
                                         onItemSelect={handleItemClick}
                                     />
                                 );

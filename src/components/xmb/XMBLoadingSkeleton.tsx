@@ -2,11 +2,12 @@
 
 import React from 'react';
 import { motion } from 'motion/react';
+import { XMB_OVERLAY } from '@/lib/xmb-constants';
 import XMBIcon from './XMBIcon';
 
 const ShimmerBar = ({ className }: { className?: string }) => (
     <motion.div 
-        className={`relative overflow-hidden bg-white/5 rounded-lg ${className}`}
+        className={`relative overflow-hidden bg-xmb-fg/5 rounded-lg ${className}`}
     >
         <motion.div
             initial={{ x: '-100%' }}
@@ -16,21 +17,21 @@ const ShimmerBar = ({ className }: { className?: string }) => (
                 repeat: Infinity, 
                 ease: 'linear' 
             }}
-            className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent"
+            className="absolute inset-0 bg-gradient-to-r from-transparent via-xmb-fg/10 to-transparent"
         />
     </motion.div>
 );
 
 const XMBLoadingSkeleton = () => {
     return (
-        <div className="fixed inset-0 z-50 flex flex-col bg-black/40 backdrop-blur-2xl text-white overflow-hidden">
+        <div className={`fixed inset-0 z-50 flex flex-col ${XMB_OVERLAY.FULLSCREEN} text-xmb-fg overflow-hidden`}>
             {/* Header / Back (Top Left) */}
             <div className="absolute top-8 left-12 z-50">
-                <div className="flex items-center gap-3 text-white/20">
-                    <div className="w-10 h-10 rounded-full border border-white/5 flex items-center justify-center bg-white/5">
+                <div className="flex items-center gap-3 text-xmb-fg/20">
+                    <div className="w-10 h-10 rounded-full border border-xmb-fg/5 flex items-center justify-center bg-xmb-fg/5">
                         <XMBIcon name="ArrowLeft" size={18} />
                     </div>
-                    <div className="h-2 w-24 bg-white/5 rounded-full" />
+                    <div className="h-2 w-24 bg-xmb-fg/5 rounded-full" />
                 </div>
             </div>
 
@@ -41,7 +42,7 @@ const XMBLoadingSkeleton = () => {
                     <div className="mb-16 text-center flex flex-col items-center">
                         <div className="flex items-center justify-center gap-4 mb-8">
                             <ShimmerBar className="h-6 w-20" />
-                            <div className="h-px w-12 bg-white/10" />
+                            <div className="h-px w-12 bg-xmb-fg/10" />
                             <ShimmerBar className="h-4 w-32" />
                         </div>
 
@@ -56,7 +57,7 @@ const XMBLoadingSkeleton = () => {
                     </div>
 
                     {/* Featured Image Skeleton */}
-                    <ShimmerBar className="relative aspect-video rounded-2xl border border-white/10 mb-24" />
+                    <ShimmerBar className="relative aspect-video rounded-2xl border border-xmb-fg/10 mb-24" />
 
                     {/* Content Skeletons */}
                     <div className="space-y-8">
@@ -80,14 +81,14 @@ const XMBLoadingSkeleton = () => {
             </div>
 
             {/* Bottom Navigation Skeleton */}
-            <div className="absolute bottom-0 inset-x-0 h-32 bg-linear-to-t from-black/80 to-transparent pointer-events-none z-40">
+            <div className={`absolute bottom-0 inset-x-0 h-32 ${XMB_OVERLAY.BOTTOM_FADE} pointer-events-none z-40`}>
                 <div className="h-full max-w-6xl mx-auto px-12 flex items-center justify-between pointer-events-auto">
                     <div className="flex-1 flex flex-col items-start gap-2">
                         <ShimmerBar className="h-2 w-16" />
                         <ShimmerBar className="h-4 w-32" />
                     </div>
 
-                    <div className="hidden md:flex items-center gap-8 px-8 py-3 bg-white/5 backdrop-blur-md rounded-full border border-white/10">
+                    <div className="hidden md:flex items-center gap-8 px-8 py-3 bg-xmb-fg/5 backdrop-blur-md rounded-full border border-xmb-fg/10">
                         <ShimmerBar className="h-4 w-48" />
                     </div>
 

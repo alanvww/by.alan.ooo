@@ -27,7 +27,7 @@ const XMBClock = () => {
         <div className="flex items-center gap-3">
             <span>{timeString}</span>
             <div className="flex items-center gap-2 text-base">
-                 <span className="bg-white/20 px-1.5 py-0.5 rounded text-xs font-medium tracking-wider">{tzName}</span>
+                 <span className="bg-xmb-fg/20 px-1.5 py-0.5 rounded text-xs font-medium tracking-wider">{tzName}</span>
                  <span className="opacity-60 text-sm">@ NYC</span>
             </div>
         </div>

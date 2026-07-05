@@ -12,7 +12,7 @@ import XMBCarousel from './XMBCarousel';
 import XMBPreview from './XMBPreview';
 import { useTheme } from '@/lib/theme-context';
 import XMBHeader from './XMBHeader';
-import XMBKeyboardHelper from './XMBKeyboardHelper';
+import XMBCommandBar from './XMBCommandBar';
 
 interface XMBInterfaceProps {
   categories: XMBCategory[];
@@ -148,7 +148,7 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
     if (!isInsideFolder || !activeCategory) {
       return { parentItems: currentItems, parentIndex: itemIndex };
     }
-    
+
     // Navigate to the parent level
     let parentItems: XMBItem[] = activeCategory.items;
     for (let i = 0; i < navigationPath.length - 1; i++) {
@@ -157,10 +157,10 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
         parentItems = nextItems;
       }
     }
-    
+
     // The parent index is the last item in the navigation path (the folder we're in)
     const parentIndex = navigationPath[navigationPath.length - 1];
-    
+
     return { parentItems, parentIndex };
   }, [isInsideFolder, currentItems, itemIndex, activeCategory, navigationPath]);
 
@@ -207,12 +207,12 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
   return (
     <div
       ref={containerRef}
-      className="fixed inset-0 text-white overflow-hidden font-sans select-none"
+      className="fixed inset-0 text-xmb-fg overflow-hidden font-sans select-none"
       style={{ contain: 'layout style' }}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
-      <div className="absolute inset-0 bg-linear-to-br from-black/40 to-transparent" />
+      <div className="absolute inset-0 bg-linear-to-br dark:from-black/20 from-transparent to-transparent" />
 
       {/* Screen Reader Live Region */}
       <div aria-live="polite" className="sr-only">
@@ -304,15 +304,17 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
         )}
       </AnimatePresence>
 
-      {/* Rich Preview (Level 3) - Only show when NOT in carousel mode */}
+      {/* Rich Preview (Level 3) - Only show when NOT in carousel mode.
+          Top-level folders are containers, not previewable content — wait until
+          the user drills into them before showing a preview. */}
       <AnimatePresence>
-        {activeItem && !showCarousel && showFullLayout && (
+        {activeItem && !showCarousel && showFullLayout && activeItem.type !== 'folder' && (
           <XMBPreview item={activeItem} />
         )}
       </AnimatePresence>
 
-      {/* Keyboard Helper */}
-      <XMBKeyboardHelper />
+      {/* Contextual command bar (PS3-style hint strip) */}
+      <XMBCommandBar />
     </div>
   );
 };
