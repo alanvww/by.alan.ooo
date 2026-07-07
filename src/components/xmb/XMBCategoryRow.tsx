@@ -2,11 +2,10 @@
 'use client';
 
 import React from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import type { XMBCategory } from '@/lib/xmb-types';
 import XMBIcon from './XMBIcon';
 import { XMB_LAYOUT, XMB_ANIMATION, EASE } from '@/lib/xmb-constants';
-import { playNavigate } from '@/hooks/useKeyAudioFx';
 
 interface XMBCategoryRowProps {
   categories: XMBCategory[];
@@ -23,14 +22,20 @@ const XMBCategoryRow = React.memo(({
 }: XMBCategoryRowProps) => {
   // Calculate the container offset to center the active category
   const containerOffset = -categoryIndex * XMB_LAYOUT.CATEGORY_WIDTH;
+  const reduceMotion = useReducedMotion();
 
   return (
     <motion.div
       className="relative z-10 h-16 md:h-20 overflow-visible"
       role="tablist"
       aria-label="XMB Categories"
+      // One cell wide, so centering wrappers (paged layout) center the
+      // ACTIVE cell — the sliding strip is absolute and would otherwise
+      // give this element zero width, landing the active icon ~half a
+      // cell right of screen center.
+      style={{ width: XMB_LAYOUT.CATEGORY_WIDTH }}
       // Idle vertical drift — gentle ambient sway so the row feels alive at rest
-      animate={{ y: [-2, 2, -2] }}
+      animate={reduceMotion ? { y: 0 } : { y: [-2, 2, -2] }}
       transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
     >
       {/* Sliding container - only ONE animation instead of N */}
@@ -58,7 +63,8 @@ const XMBCategoryRow = React.memo(({
                 anchorName: isActive ? '--active-category' : undefined,
               }}
               onClick={() => {
-                playNavigate();
+                // Sound is owned by handleCategorySelect (navigate on switch,
+                // confirm when entering the active category's list).
                 onCategorySelect(idx);
               }}
               onKeyDown={(e) => {
@@ -82,7 +88,7 @@ const XMBCategoryRow = React.memo(({
                     <motion.div
                       className="absolute inset-0 rounded-full"
                       style={{ background: 'radial-gradient(circle, color-mix(in srgb, var(--color-xmb-fg) 18%, transparent), transparent 55%)' }}
-                      animate={{ scale: [1, 1.15, 1], opacity: [1, 0.65, 1] }}
+                      animate={reduceMotion ? { scale: 1, opacity: 1 } : { scale: [1, 1.15, 1], opacity: [1, 0.65, 1] }}
                       transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
                     />
                   </motion.div>

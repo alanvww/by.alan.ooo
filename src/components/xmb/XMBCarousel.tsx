@@ -9,6 +9,7 @@ import { useXMBLoadingContext } from "@/lib/xmb-navigation-context";
 import { navigateToLink } from "@/lib/xmb-navigation";
 import type { XMBItem } from "@/lib/xmb-types";
 import XMBIcon from "./XMBIcon";
+import XMBBackPill from "./XMBBackPill";
 import { XMB_CAROUSEL, XMB_ANIMATION, EASE } from "@/lib/xmb-constants";
 import { playNavigate, playConfirm } from "@/hooks/useKeyAudioFx";
 
@@ -16,6 +17,8 @@ interface XMBCarouselProps {
   items: XMBItem[];
   activeIndex: number;
   onSelect: (index: number) => void;
+  /** Exit the folder (mouse/touch equivalent of Escape). */
+  onBack?: () => void;
 }
 
 interface XMBCarouselCardProps {
@@ -147,7 +150,7 @@ const XMBCarouselCard = React.memo(({ item, index, scrollOffset, onSelect, onNav
 
 XMBCarouselCard.displayName = 'XMBCarouselCard';
 
-const XMBCarousel = ({ items, activeIndex, onSelect }: XMBCarouselProps) => {
+const XMBCarousel = ({ items, activeIndex, onSelect, onBack }: XMBCarouselProps) => {
   const router = useRouter();
   const { startNavigation } = useXMBLoadingContext();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -213,6 +216,9 @@ const XMBCarousel = ({ items, activeIndex, onSelect }: XMBCarouselProps) => {
 
   // Debounced sync: commit to parent + smooth-snap our own scrollOffset
   // when scroll settles. Both happen together so the cards animate once.
+  // This branch only runs for wheel/touch-originated moves (keyboard-driven
+  // activeIndex changes update lastCommittedIndexRef before it fires), so
+  // the tick below never double-plays on keyboard navigation.
   useEffect(() => {
     const timer = setTimeout(() => {
       const roundedIndex = Math.round(scrollOffset);
@@ -223,6 +229,7 @@ const XMBCarousel = ({ items, activeIndex, onSelect }: XMBCarouselProps) => {
       ) {
         lastCommittedIndexRef.current = roundedIndex;
         selfCommittingRef.current = true;
+        playNavigate();
         onSelect(roundedIndex);
         snapScrollOffsetTo(roundedIndex);
       }
@@ -345,7 +352,7 @@ const XMBCarousel = ({ items, activeIndex, onSelect }: XMBCarouselProps) => {
       ref={containerRef}
       role="listbox"
       aria-label="Folder contents"
-      className="absolute top-0 right-0 w-full md:w-[70%] h-screen flex items-center justify-center pointer-events-auto overflow-clip"
+      className="absolute top-0 right-0 w-full md:w-[70%] h-dvh flex items-center justify-center pointer-events-auto overflow-clip touch-none"
       initial={{ opacity: 0, x: 100 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: 100 }}
@@ -356,6 +363,19 @@ const XMBCarousel = ({ items, activeIndex, onSelect }: XMBCarouselProps) => {
     >
       <div className="relative w-full h-full flex items-center justify-center">
         <div className="relative w-full max-w-6xl h-full px-6 md:pl-12">
+          {/* Back pill above the folder's item list — sits over the faded
+              outermost cards, never the active one. */}
+          {onBack && (
+            <motion.div
+              className="absolute top-[8%] left-6 md:left-12 z-[110]"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2, ease: EASE.ENTER }}
+            >
+              <XMBBackPill onBack={onBack} />
+            </motion.div>
+          )}
           {visibleEntries.map(({ item, index }) => {
             return (
               <XMBCarouselCard

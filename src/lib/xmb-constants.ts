@@ -59,6 +59,37 @@ export const XMB_CAROUSEL = {
 };
 
 /**
+ * Touch gesture tuning. All thresholds for swipes, pans, flicks and
+ * hold-to-repeat live here so the numbers stay next to EASE/XMB_ANIMATION
+ * instead of scattering through components.
+ */
+export const XMB_GESTURE = {
+  /** Minimum horizontal travel for a category/back swipe to commit. */
+  SWIPE_THRESHOLD_PX: 50,
+  /** Swipes must be this much more horizontal than vertical (|dx| > ratio·|dy|). */
+  DIRECTION_LOCK_RATIO: 1.5,
+  /** Pan travel per one-row selection step (= LIST_ROW_STEP_PX / 2). */
+  DETENT_PX: 64,
+  /** Movement beyond this marks the gesture as a pan, not a tap. */
+  PAN_SLOP_PX: 10,
+  /** Minimum pan-end velocity (px/s) to grant bonus flick steps. */
+  FLICK_VELOCITY: 600,
+  /** One bonus row per this much velocity, capped at FLICK_MAX_STEPS. */
+  FLICK_DIVISOR: 800,
+  FLICK_MAX_STEPS: 3,
+  /** Per-step delay when a flick commits several rows (staggered ticks). */
+  STAGGER_TICK_MS: 40,
+  /** Hold-to-repeat on ▲▼ paddles, emulating keyboard auto-repeat. */
+  HOLD_REPEAT_DELAY_MS: 350,
+  HOLD_REPEAT_INTERVAL_MS: 150,
+  /** Swipes starting this close to the left screen edge are ignored so the
+      in-folder swipe-back never races the browser's own edge-back gesture. */
+  EDGE_GUARD_PX: 30,
+  /** How long after a pan a stray trailing click is still swallowed. */
+  TAP_SUPPRESS_WINDOW_MS: 150,
+};
+
+/**
  * Theme-aware className snippets for layered chrome (overlays, fades, etc.).
  * Kept as classNames rather than CSS color tokens so they don't add to the
  * animated @property set on <html> (each animated token paints all consumers

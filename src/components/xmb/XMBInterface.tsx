@@ -5,12 +5,13 @@ import React, { useMemo, useEffect, useRef, useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'motion/react';
 import type { XMBCategory, XMBItem } from '@/lib/xmb-types';
 import { useXMBNavigation } from '@/hooks/useXMBNavigation';
-import { EASE } from '@/lib/xmb-constants';
+import { useIndexPan } from '@/hooks/useIndexPan';
+import { playConfirm, playNavigate, playCancel } from '@/hooks/useKeyAudioFx';
+import { EASE, XMB_GESTURE } from '@/lib/xmb-constants';
 import XMBCategoryRow from './XMBCategoryRow';
 import XMBVerticalList from './XMBVerticalList';
 import XMBCarousel from './XMBCarousel';
 import XMBPreview from './XMBPreview';
-import { useTheme } from '@/lib/theme-context';
 import XMBHeader from './XMBHeader';
 import XMBCommandBar from './XMBCommandBar';
 
@@ -19,28 +20,11 @@ interface XMBInterfaceProps {
 }
 
 const XMBInterface = ({ categories }: XMBInterfaceProps) => {
-  const { toggleTheme } = useTheme();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
   const [layoutMode, setLayoutMode] = useState<'full' | 'paged'>('full');
   const [pagedStage, setPagedStage] = useState<'categories' | 'list'>('categories');
-
-  const augmentedCategories = useMemo(() => {
-    return categories.map(cat => {
-      if (cat.id === 'settings') {
-        return {
-          ...cat,
-          items: cat.items.map(item => {
-            if (item.actionId === 'toggle-theme') {
-              return { ...item, action: toggleTheme };
-            }
-            return item;
-          })
-        };
-      }
-      return cat;
-    });
-  }, [categories, toggleTheme]);
 
   const {
     categoryIndex,
@@ -49,11 +33,12 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
     activeCategory,
     activeItem,
     currentItems,
+    commands,
     setCategoryIndex,
     setItemIndex,
     setNavigationPath,
     finishNavigation
-  } = useXMBNavigation(augmentedCategories);
+  } = useXMBNavigation(categories);
 
   useEffect(() => {
     finishNavigation();
@@ -97,47 +82,71 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
     }
   }, [layoutMode]);
 
-  const handleTouchStart = useCallback((event: React.TouchEvent) => {
-    if (itemIndex !== -1) {
-      return;
-    }
-
-    touchStartX.current = event.touches[0]?.clientX ?? null;
-  }, [itemIndex]);
-
-  const handleTouchEnd = useCallback((event: React.TouchEvent) => {
-    if (itemIndex !== -1) {
-      touchStartX.current = null;
-      return;
-    }
-
-    const startX = touchStartX.current;
-    const endX = event.changedTouches[0]?.clientX;
-    touchStartX.current = null;
-
-    if (startX === null || endX === undefined) {
-      return;
-    }
-
-    const deltaX = startX - endX;
-    const swipeThreshold = 50;
-
-    if (Math.abs(deltaX) < swipeThreshold) {
-      return;
-    }
-
-    if (deltaX > 0) {
-      setCategoryIndex(categoryIndex < augmentedCategories.length - 1 ? categoryIndex + 1 : 0);
-    } else {
-      setCategoryIndex(categoryIndex > 0 ? categoryIndex - 1 : augmentedCategories.length - 1);
-    }
-    setItemIndex(-1);
-  }, [itemIndex, categoryIndex, augmentedCategories.length, setCategoryIndex, setItemIndex]);
-
   const handleFolderDrill = useCallback((idx: number) => {
     setNavigationPath([...navigationPath, idx]);
     setItemIndex(0);
   }, [navigationPath, setItemIndex, setNavigationPath]);
+
+  // Mouse/touch equivalent of Escape inside a folder: exit one level and
+  // restore the cursor to the folder row we drilled in from.
+  const handleFolderBack = useCallback(() => {
+    if (navigationPath.length === 0) return;
+    const parentFolderIndex = navigationPath[navigationPath.length - 1];
+    setNavigationPath(navigationPath.slice(0, -1));
+    setItemIndex(parentFolderIndex);
+  }, [navigationPath, setItemIndex, setNavigationPath]);
+
+  const handleTouchStart = useCallback((event: React.TouchEvent) => {
+    const touch = event.touches[0];
+    touchStartX.current = touch?.clientX ?? null;
+    touchStartY.current = touch?.clientY ?? null;
+  }, []);
+
+  const handleTouchEnd = useCallback((event: React.TouchEvent) => {
+    const startX = touchStartX.current;
+    const startY = touchStartY.current;
+    touchStartX.current = null;
+    touchStartY.current = null;
+
+    const endX = event.changedTouches[0]?.clientX;
+    const endY = event.changedTouches[0]?.clientY;
+
+    if (startX === null || startY === null || endX === undefined || endY === undefined) {
+      return;
+    }
+
+    const dx = endX - startX;
+    const dy = endY - startY;
+
+    // Horizontal swipes only — direction-locked so vertical list pans never
+    // read as category switches.
+    if (
+      Math.abs(dx) < XMB_GESTURE.SWIPE_THRESHOLD_PX ||
+      Math.abs(dx) <= XMB_GESTURE.DIRECTION_LOCK_RATIO * Math.abs(dy)
+    ) {
+      return;
+    }
+
+    if (navigationPath.length > 0) {
+      // Inside a folder: swipe right steps back one level. Swipes starting
+      // at the left screen edge are ignored so this never races the
+      // browser's own edge-back gesture.
+      if (dx > 0 && startX >= XMB_GESTURE.EDGE_GUARD_PX) {
+        playCancel();
+        handleFolderBack();
+      }
+      return;
+    }
+
+    // Root level (with or without a selected item, like ArrowLeft/Right):
+    // swipe left = next category, swipe right = previous. The shared
+    // commands own the wrap-around, state resets, and tick sound.
+    if (dx < 0) {
+      commands.moveRight();
+    } else {
+      commands.moveLeft();
+    }
+  }, [commands, handleFolderBack, navigationPath]);
 
   // Check if we're inside a folder (drilled down)
   const isInsideFolder = navigationPath.length > 0;
@@ -183,24 +192,43 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
     };
   }, [layoutMode]);
 
-  // Early return after all hooks have been called
-  if (augmentedCategories.length === 0 || !activeCategory) return null;
-
   const handleCategorySelect = useCallback((idx: number) => {
     if (layoutMode === 'paged' && idx === categoryIndex) {
-      setPagedStage('categories');
-      setItemIndex(-1);
+      // Tapping the already-active category ENTERS its list. (It used to
+      // reset to the categories stage, which made the initially-active
+      // column impossible to open by touch.)
+      playConfirm();
+      setNavigationPath([]);
+      setItemIndex(0);
+      setPagedStage('list');
       return;
     }
 
+    playNavigate();
     setCategoryIndex(idx);
+    // Keyboard category switches reset the folder path — clicks must too,
+    // or a stale path gets replayed inside the newly selected category.
+    setNavigationPath([]);
     if (layoutMode === 'paged') {
       setItemIndex(0);
       setPagedStage('list');
     } else {
       setItemIndex(-1);
     }
-  }, [categoryIndex, layoutMode, setCategoryIndex, setItemIndex]);
+  }, [categoryIndex, layoutMode, setCategoryIndex, setItemIndex, setNavigationPath]);
+
+  // Drag-with-snap on the paged list: vertical pan travel commits discrete
+  // index steps (clamped at 0 — deselect-to-categories stays on the visible
+  // BACK controls so a flick can't pop the stage under the user's finger).
+  const listPanHandlers = useIndexPan({
+    getIndex: () => Math.max(itemIndex, 0),
+    getMin: () => 0,
+    getMax: () => Math.max(currentItems.length - 1, 0),
+    onCommit: setItemIndex,
+  });
+
+  // Early return after all hooks have been called
+  if (categories.length === 0 || !activeCategory) return null;
 
   const showFullLayout = layoutMode === 'full';
 
@@ -224,7 +252,7 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
       {layoutMode === 'full' && (
         <div className="absolute left-[15%] top-[30%] overflow-visible">
           <XMBCategoryRow
-            categories={augmentedCategories}
+            categories={categories}
             categoryIndex={categoryIndex}
             itemIndex={itemIndex}
             onCategorySelect={handleCategorySelect}
@@ -255,7 +283,7 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
             transition={{ duration: 0.12, ease: EASE.MOVE }}
           >
             <XMBCategoryRow
-              categories={augmentedCategories}
+              categories={categories}
               categoryIndex={categoryIndex}
               itemIndex={itemIndex}
               onCategorySelect={handleCategorySelect}
@@ -267,10 +295,15 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
           <motion.div
             key="paged-list"
             className="absolute inset-x-0 top-[22%] flex justify-center"
+            style={{ touchAction: 'none' }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.12, ease: EASE.MOVE }}
+            onPanStart={listPanHandlers.onPanStart}
+            onPan={listPanHandlers.onPan}
+            onPanEnd={listPanHandlers.onPanEnd}
+            onClickCapture={listPanHandlers.onClickCapture}
           >
             <XMBVerticalList
               activeCategory={activeCategory}
@@ -281,9 +314,15 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
               isContextView={false}
               onItemSelect={setItemIndex}
               onFolderDrill={handleFolderDrill}
-              listClassName="w-[70vw] max-w-2xl"
+              onBack={handleFolderBack}
+              listClassName="w-[88vw] max-w-2xl"
               showHeader
               onHeaderClick={() => {
+                // Returning to the categories stage must be a clean root
+                // state — a stale folder path desyncs the command bar and
+                // kills root swipes (same reason handleCategorySelect
+                // clears it).
+                setNavigationPath([]);
                 setItemIndex(-1);
                 setPagedStage('categories');
               }}
@@ -300,6 +339,7 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
             items={currentItems}
             activeIndex={itemIndex >= 0 ? itemIndex : 0}
             onSelect={setItemIndex}
+            onBack={handleFolderBack}
           />
         )}
       </AnimatePresence>
@@ -313,8 +353,8 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
         )}
       </AnimatePresence>
 
-      {/* Contextual command bar (PS3-style hint strip) */}
-      <XMBCommandBar />
+      {/* Contextual command bar (PS3-style hint strip; pressable on touch) */}
+      <XMBCommandBar commands={commands} />
     </div>
   );
 };

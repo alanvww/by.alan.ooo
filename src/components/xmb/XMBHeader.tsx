@@ -31,15 +31,21 @@ const XMBHeader = () => {
   }, []);
 
   return (
-    <div ref={containerRef} className="absolute top-8 inset-x-0 px-12 z-20 pointer-events-auto">
+    <div
+      ref={containerRef}
+      className="absolute top-[max(2rem,env(safe-area-inset-top))] inset-x-0 px-6 md:px-12 z-20 pointer-events-auto"
+    >
       <div
-        className={`flex gap-6 text-2xl font-light opacity-80 tracking-wide ${
+        className={`flex gap-4 md:gap-6 text-lg md:text-2xl font-light opacity-80 tracking-wide ${
           isStacked ? 'flex-col items-start' : 'items-center justify-between'
         }`}
       >
         <div>alan.ooo</div>
+        {/* flex-wrap + right alignment: on narrow phones the clock/progress
+            group wraps instead of overflowing off the left screen edge
+            (justify-end used to push the clock to negative x at 390px). */}
         <div
-          className={`flex items-center gap-6 ${isStacked ? 'w-full justify-end' : ''}`}
+          className={`flex items-center gap-3 md:gap-6 flex-wrap justify-end ${isStacked ? 'w-full' : ''}`}
         >
           <XMBClock />
           <XMBProgressIndicator />

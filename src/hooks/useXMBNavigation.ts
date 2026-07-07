@@ -1,10 +1,31 @@
 // src/hooks/useXMBNavigation.ts
-import { useEffect, useCallback, useRef, useState } from 'react';
+import { useEffect, useCallback, useMemo, useRef } from 'react';
 import type { XMBCategory, XMBItem } from '@/lib/xmb-types';
 import { useRouter } from 'next/navigation';
 import { useXMBDerivedContext, useXMBLoadingContext, useXMBSelectionContext } from '@/lib/xmb-navigation-context';
 import { useKeyAudioFx, playConfirm, playCancel, playNavigate } from '@/hooks/useKeyAudioFx';
 import { activateItem } from '@/lib/xmb-navigation';
+
+/**
+ * The six XMB navigation primitives, shared verbatim between the keyboard
+ * dispatcher and the touch controls (command bar buttons, swipes, pans).
+ * Each command owns its own sound, so keyboard/touch parity — state
+ * transitions, clamping, wrap-around, AND audio — holds by construction.
+ */
+export interface XMBCommands {
+  /** ArrowLeft: prev category (wraps) at root; exit folder when inside one. */
+  moveLeft: () => void;
+  /** ArrowRight: next category (wraps) at root; activate (links only) inside a folder. */
+  moveRight: () => void;
+  /** ArrowUp: selection up one row; floor at -1 (deselected). */
+  moveUp: () => void;
+  /** ArrowDown: selection down one row; clamps at the last item. */
+  moveDown: () => void;
+  /** Enter: activate the selected item (incl. folder drill), or select item 0. */
+  confirm: () => void;
+  /** Escape/Backspace: exit one folder level, else deselect to the category row. */
+  back: () => void;
+}
 
 interface XMBNavigationResult {
   categoryIndex: number;
@@ -14,6 +35,7 @@ interface XMBNavigationResult {
   activeItem: XMBItem | null;
   currentItems: XMBItem[];
   isNavigating: boolean;
+  commands: XMBCommands;
   startNavigation: () => void;
   finishNavigation: () => void;
   setCategoryIndex: (index: number) => void;
@@ -68,93 +90,119 @@ export function useXMBNavigation(categories: XMBCategory[]): XMBNavigationResult
     startNavigationRef.current = startNavigation;
   }, [categories, categoryIndex, itemIndex, navigationPath, activeCategory, activeItem, currentItems, router, startNavigation]);
 
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    const key = e.key;
-
-    // Play a context-appropriate sound for handled keys
-    const isHandledKey =
-      key === 'ArrowLeft' || key === 'ArrowRight' || key === 'ArrowUp' ||
-      key === 'ArrowDown' || key === 'Enter' || key === 'Escape' || key === 'Backspace';
-    if (isHandledKey) {
-      const inEditable = (key === 'Backspace') &&
-        ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName || '');
-      if (!inEditable) {
-        if (key === 'Enter') playConfirm();
-        else if (key === 'Escape' || key === 'Backspace') playCancel();
-        else playNavigate();
-      }
+  const moveLeft = useCallback(() => {
+    playNavigate();
+    if (navigationPathRef.current.length > 0) {
+      // Inside folder: exit folder, restore cursor to the folder item we came from
+      const parentFolderIndex = navigationPathRef.current[navigationPathRef.current.length - 1];
+      setNavigationPath(navigationPathRef.current.slice(0, -1));
+      setItemIndex(parentFolderIndex);
+    } else {
+      // Category level or item selected: switch to previous category
+      setCategoryIndex((categoryIndexRef.current > 0 ? categoryIndexRef.current - 1 : categoriesRef.current.length - 1));
+      setItemIndex(-1);
+      setNavigationPath([]);
     }
+  }, [setCategoryIndex, setItemIndex, setNavigationPath]);
 
-    switch (key) {
+  const moveRight = useCallback(() => {
+    playNavigate();
+    if (navigationPathRef.current.length > 0) {
+      // Inside folder: open the selected item (link/action only, not folders).
+      // `drillIntoFolder` is intentionally omitted so folders are no-ops
+      // here — Enter is required to drill into nested folders.
+      if (activeItemRef.current) {
+        activateItem(activeItemRef.current, itemIndexRef.current, {
+          router: routerRef.current,
+          startNavigation: startNavigationRef.current,
+        });
+      }
+    } else {
+      // Category level or item selected: switch to next category
+      setCategoryIndex((categoryIndexRef.current < categoriesRef.current.length - 1 ? categoryIndexRef.current + 1 : 0));
+      setItemIndex(-1);
+      setNavigationPath([]);
+    }
+  }, [setCategoryIndex, setItemIndex, setNavigationPath]);
+
+  const moveUp = useCallback(() => {
+    playNavigate();
+    setItemIndex((itemIndexRef.current > -1 ? itemIndexRef.current - 1 : -1));
+  }, [setItemIndex]);
+
+  const moveDown = useCallback(() => {
+    playNavigate();
+    setItemIndex((() => {
+      const max = currentItemsRef.current.length - 1;
+      return itemIndexRef.current < max ? itemIndexRef.current + 1 : itemIndexRef.current;
+    })());
+  }, [setItemIndex]);
+
+  const confirm = useCallback(() => {
+    playConfirm();
+    if (activeItemRef.current) {
+      activateItem(activeItemRef.current, itemIndexRef.current, {
+        router: routerRef.current,
+        startNavigation: startNavigationRef.current,
+        drillIntoFolder: (idx) => {
+          setNavigationPath([...navigationPathRef.current, idx]);
+          setItemIndex(0);
+        },
+      });
+    } else if (currentItemsRef.current.length > 0) {
+      setItemIndex(0);
+    }
+  }, [setItemIndex, setNavigationPath]);
+
+  const back = useCallback(() => {
+    playCancel();
+    if (navigationPathRef.current.length > 0) {
+      const parentFolderIndex = navigationPathRef.current[navigationPathRef.current.length - 1];
+      setNavigationPath(navigationPathRef.current.slice(0, -1));
+      setItemIndex(parentFolderIndex);
+    } else if (itemIndexRef.current !== -1) {
+      setItemIndex(-1);
+    }
+  }, [setItemIndex, setNavigationPath]);
+
+  const commands = useMemo<XMBCommands>(() => ({
+    moveLeft,
+    moveRight,
+    moveUp,
+    moveDown,
+    confirm,
+    back,
+  }), [back, confirm, moveDown, moveLeft, moveRight, moveUp]);
+
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    switch (e.key) {
       case 'ArrowLeft':
-        if (navigationPathRef.current.length > 0) {
-          // Inside folder: exit folder, restore cursor to the folder item we came from
-          const parentFolderIndex = navigationPathRef.current[navigationPathRef.current.length - 1];
-          setNavigationPath(navigationPathRef.current.slice(0, -1));
-          setItemIndex(parentFolderIndex);
-        } else {
-          // Category level or item selected: switch to previous category
-          setCategoryIndex((categoryIndexRef.current > 0 ? categoryIndexRef.current - 1 : categoriesRef.current.length - 1));
-          setItemIndex(-1);
-          setNavigationPath([]);
-        }
+        moveLeft();
         break;
       case 'ArrowRight':
-        if (navigationPathRef.current.length > 0) {
-          // Inside folder: open the selected item (link/action only, not folders).
-          // `drillIntoFolder` is intentionally omitted so folders are no-ops
-          // here — Enter is required to drill into nested folders.
-          if (activeItemRef.current) {
-            activateItem(activeItemRef.current, itemIndexRef.current, {
-              router: routerRef.current,
-              startNavigation: startNavigationRef.current,
-            });
-          }
-        } else {
-          // Category level or item selected: switch to next category
-          setCategoryIndex((categoryIndexRef.current < categoriesRef.current.length - 1 ? categoryIndexRef.current + 1 : 0));
-          setItemIndex(-1);
-          setNavigationPath([]);
-        }
+        moveRight();
         break;
       case 'ArrowUp':
-        setItemIndex((itemIndexRef.current > -1 ? itemIndexRef.current - 1 : -1));
+        moveUp();
         break;
       case 'ArrowDown':
-        setItemIndex((() => {
-          const max = currentItemsRef.current.length - 1;
-          return itemIndexRef.current < max ? itemIndexRef.current + 1 : itemIndexRef.current;
-        })());
+        moveDown();
         break;
       case 'Enter':
-        if (activeItemRef.current) {
-          activateItem(activeItemRef.current, itemIndexRef.current, {
-            router: routerRef.current,
-            startNavigation: startNavigationRef.current,
-            drillIntoFolder: (idx) => {
-              setNavigationPath([...navigationPathRef.current, idx]);
-              setItemIndex(0);
-            },
-          });
-        } else if (currentItemsRef.current.length > 0) {
-          setItemIndex(0);
-        }
+        confirm();
         break;
       case 'Escape':
       case 'Backspace':
-        if (key === 'Backspace' && ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName || '')) {
+        // Backspace in an editable field is typing, not navigation — skip
+        // the command entirely (no sound, no action), same as before the
+        // command extraction.
+        if (e.key === 'Backspace' && ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName || '')) {
           return;
         }
-        if (navigationPathRef.current.length > 0) {
-          const parentFolderIndex = navigationPathRef.current[navigationPathRef.current.length - 1];
-          setNavigationPath(navigationPathRef.current.slice(0, -1));
-          setItemIndex(parentFolderIndex);
-        } else if (itemIndexRef.current !== -1) {
-          setItemIndex(-1);
-        }
+        back();
         break;
     }
-  }, [setCategoryIndex, setItemIndex, setNavigationPath]);
+  }, [back, confirm, moveDown, moveLeft, moveRight, moveUp]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
@@ -171,6 +219,7 @@ export function useXMBNavigation(categories: XMBCategory[]): XMBNavigationResult
     activeItem,
     currentItems,
     isNavigating,
+    commands,
     startNavigation,
     finishNavigation,
     setCategoryIndex,

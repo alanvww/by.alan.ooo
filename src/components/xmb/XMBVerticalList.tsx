@@ -3,14 +3,16 @@
 
 import React, { useState, useMemo, useCallback, forwardRef } from "react";
 import Image from 'next/image';
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import { useRouter } from "next/navigation";
 import { useXMBLoadingContext } from "@/lib/xmb-navigation-context";
 import type { XMBCategory, XMBItem } from "@/lib/xmb-types";
 import XMBIcon from "./XMBIcon";
+import XMBBackPill from "./XMBBackPill";
 import { XMB_LAYOUT, XMB_ANIMATION, EASE } from "@/lib/xmb-constants";
 import { activateItem, getEnterActionLabel } from "@/lib/xmb-navigation";
 import { playNavigate, playConfirm } from "@/hooks/useKeyAudioFx";
+import { useCoarsePointer } from "@/hooks/useCoarsePointer";
 import XMBKeycap from "./XMBKeycap";
 
 interface XMBVerticalListProps {
@@ -22,6 +24,7 @@ interface XMBVerticalListProps {
     isContextView?: boolean; // Show as context sidebar when inside folder
     onItemSelect: (index: number) => void;
     onFolderDrill?: (index: number) => void;
+    onBack?: () => void; // Exit the folder (mouse/touch equivalent of Escape)
     listClassName?: string;
     showHeader?: boolean;
     onHeaderClick?: () => void;
@@ -39,6 +42,8 @@ interface XMBListItemProps {
 const XMBListItem = React.memo(forwardRef<HTMLDivElement, XMBListItemProps>(
     ({ item, index, selectedIndex, isItemSelected, onItemSelect }, ref) => {
         const [imgError, setImgError] = useState(false);
+        const isCoarse = useCoarsePointer();
+        const reduceMotion = useReducedMotion();
         const isFolder = item.type === 'folder';
 
         // Distance from selected item (negative = above, positive = below).
@@ -127,9 +132,9 @@ const XMBListItem = React.memo(forwardRef<HTMLDivElement, XMBListItemProps>(
                             </span>
                             {isFolder && (
                                 <motion.div
-                                    animate={{ x: isItemSelected ? [0, 5, 0] : 0 }}
+                                    animate={{ x: isItemSelected && !reduceMotion ? [0, 5, 0] : 0 }}
                                     transition={{
-                                        repeat: isItemSelected ? Infinity : 0,
+                                        repeat: isItemSelected && !reduceMotion ? Infinity : 0,
                                         duration: 1.5,
                                         ease: "easeInOut"
                                     }}
@@ -150,7 +155,9 @@ const XMBListItem = React.memo(forwardRef<HTMLDivElement, XMBListItemProps>(
                         )}
                     </div>
 
-                    {/* Floating ENTER hint — telegraphs the action at the focus point */}
+                    {/* Floating ENTER hint — telegraphs the action at the focus
+                        point. On coarse pointers the hint IS the control: a
+                        tappable chip running the same activate path. */}
                     <AnimatePresence>
                         {isItemSelected && (
                             <motion.div
@@ -160,12 +167,29 @@ const XMBListItem = React.memo(forwardRef<HTMLDivElement, XMBListItemProps>(
                                 exit={{ opacity: 0, x: -8 }}
                                 transition={{ duration: 0.18, ease: EASE.ENTER }}
                                 className="flex items-center gap-2 shrink-0 pr-1"
-                                aria-hidden="true"
+                                aria-hidden={isCoarse ? undefined : 'true'}
                             >
-                                <XMBKeycap label="ENTER" pressed={false} className="px-1.5 w-auto" />
-                                <span className="text-[10px] font-mono uppercase tracking-[0.18em] text-xmb-fg/55">
-                                    {getEnterActionLabel(item)}
-                                </span>
+                                {isCoarse ? (
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            // The row's own onClick would activate too —
+                                            // one tap, one activation.
+                                            e.stopPropagation();
+                                            onItemSelect(index);
+                                        }}
+                                        className="min-h-11 px-4 rounded-full border border-xmb-fg/25 bg-xmb-fg/10 text-[10px] font-mono uppercase tracking-[0.18em] text-xmb-fg/80 touch-manipulation select-none active:bg-xmb-fg active:text-background transition-colors duration-150"
+                                    >
+                                        {getEnterActionLabel(item)}
+                                    </button>
+                                ) : (
+                                    <>
+                                        <XMBKeycap label="ENTER" pressed={false} className="px-1.5 w-auto" />
+                                        <span className="text-[10px] font-mono uppercase tracking-[0.18em] text-xmb-fg/55">
+                                            {getEnterActionLabel(item)}
+                                        </span>
+                                    </>
+                                )}
                             </motion.div>
                         )}
                     </AnimatePresence>
@@ -187,6 +211,7 @@ const XMBVerticalList = React.memo(
         isContextView = false,
         onItemSelect,
         onFolderDrill,
+        onBack,
         listClassName,
         showHeader = false,
         onHeaderClick,
@@ -219,8 +244,15 @@ const XMBVerticalList = React.memo(
             return -displayIndex * XMB_LAYOUT.LIST_ROW_STEP_PX;
         }, [displayIndex]);
 
-        // Fallback positioning
-        const fallbackLeft = categoryIndex * XMB_LAYOUT.CATEGORY_WIDTH;
+        // What the back pill does here: exit the folder when inside one,
+        // otherwise (paged top level) fall back to the header's
+        // return-to-categories action.
+        const backPillAction = navigationPath.length > 0
+            ? onBack
+            : layoutMode === 'paged'
+            ? onHeaderClick
+            : undefined;
+
 
         // Re-mount the list (and replay the slide-in) only when the category
         // changes. Drilling into / out of folders updates `currentItems` but
@@ -264,44 +296,55 @@ const XMBVerticalList = React.memo(
                                   right: "auto",
                                   bottom: "auto",
                                   // @ts-ignore
-                                  left: isContextView ? '-50px' : `anchor(left, ${fallbackLeft}px)`,
+                                  left: isContextView ? '-50px' : `anchor(left, ${categoryIndex * XMB_LAYOUT.CATEGORY_WIDTH}px)`,
                                   transform: isContextView ? 'translateX(0)' : 'translateX(-50%)',
-                                  marginTop: "2rem",
+                                  // 2rem base gap + 2rem reserving the line the old
+                                  // "Press ESC to go back" hint occupied, so the list
+                                  // keeps the same vertical rhythm below the big icons.
+                                  marginTop: "4rem",
                                   pointerEvents: isContextView ? 'none' : 'auto',
                               }),
                     }}
                 >
-                    <div 
-                        className={`relative h-[40vh] md:h-[50vh] overflow-visible ${listClassName ?? ''}`}
+                    <div
+                        className={`relative h-[40dvh] md:h-[50dvh] overflow-visible ${listClassName ?? ''}`}
                     >
-                        {showHeader && (
-                            <motion.button
-                                type="button"
-                                onClick={onHeaderClick}
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                className="mb-4 text-lg md:text-xl font-light tracking-wide text-xmb-fg/80 focus-visible:outline-none"
-                            >
-                                {activeCategory.title}
-                            </motion.button>
-                        )}
+                        {/* Header + back pill sit above the sliding rows (z-20 vs
+                            z-0) so rows that translate up past them can never
+                            swallow their taps — a touch user scrolled down a
+                            list must always be able to reach "back". */}
+                        <div className="relative z-20">
+                            {showHeader && (
+                                <motion.button
+                                    type="button"
+                                    onClick={onHeaderClick}
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    className="mb-4 text-lg md:text-xl font-light tracking-wide text-xmb-fg/80 focus-visible:outline-none"
+                                >
+                                    {activeCategory.title}
+                                </motion.button>
+                            )}
+                            {/* Back pill above the item list. In a folder it exits
+                                one level; at the top level (paged mode) it returns
+                                to the categories stage. The full layout keeps the
+                                pill folder-only — the carousel owns it there. */}
+                            {backPillAction && !isContextView && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: -10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className="mb-4"
+                                >
+                                    <XMBBackPill onBack={backPillAction} />
+                                </motion.div>
+                            )}
+                        </div>
                         <div
                             role="listbox"
                             aria-label={`Items in ${activeCategory.title}`}
-                            className="relative"
+                            className="relative z-0"
                         >
-                        {/* Breadcrumb indicator for nested navigation */}
-                        {navigationPath.length > 0 && (
-                            <motion.div
-                                initial={{ opacity: 0, y: -10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                className="absolute -top-8 left-0 text-xs md:text-sm text-xmb-fg/40 font-mono flex items-center gap-2"
-                            >
-                                <XMBIcon name="ArrowLeft" size={14} />
-                                <span>Press ESC to go back</span>
-                            </motion.div>
-                        )}
-                        
+
                         {/* Sliding container - Flexbox layout.
                             Width is pinned here so every row in the column is the
                             same width regardless of which one is selected. */}
