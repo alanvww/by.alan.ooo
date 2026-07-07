@@ -10,7 +10,10 @@ import { Card } from '@/components/mdx/Card'
 import { Figure } from '@/components/mdx/Figure'
 import { Demo } from '@/components/mdx/Demo'
 import { Tabs, Tab } from '@/components/mdx/Tabs'
-import { XMB_OVERLAY } from '@/lib/xmb-constants'
+import { MDXImage } from '@/components/mdx/MDXImage'
+import { getLocalImageDimensions } from '@/lib/content-assets'
+
+const LINK_CLASS = 'text-xmb-fg/90 underline underline-offset-4 decoration-xmb-fg/20 hover:decoration-xmb-fg/60 transition-all duration-300'
 
 // XMB-styled MDX components (theme-aware: xmb-fg token works in both light and dark mode)
 export const mdxComponents: MDXComponents = {
@@ -33,12 +36,12 @@ export const mdxComponents: MDXComponents = {
         const childrenArray = React.Children.toArray(children)
         const inlineHtmlTags = new Set(['a', 'em', 'strong', 'code', 'span', 'small', 'sup', 'sub', 'kbd', 'i', 'b', 'u'])
         const blockHtmlTags = new Set(['p', 'div', 'pre', 'blockquote', 'table', 'ul', 'ol', 'figure', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
-        const inlineComponents = new Set<any>([Badge])
+        const inlineComponents = new Set<unknown>([Badge])
 
         const containsNonInlineContent = childrenArray.some((child) => {
             if (typeof child === 'string' || typeof child === 'number') return false
             if (!React.isValidElement(child)) return false
-            const childType: any = child.type
+            const childType: unknown = child.type
             if (typeof childType === 'string') {
                 if (blockHtmlTags.has(childType)) return true
                 return !inlineHtmlTags.has(childType)
@@ -47,7 +50,7 @@ export const mdxComponents: MDXComponents = {
         })
 
         const className = "mb-6 text-xmb-fg/70 leading-relaxed font-light text-lg md:text-xl"
-        
+
         if (containsNonInlineContent) {
             return <div className={className} {...props}>{children}</div>
         }
@@ -77,50 +80,81 @@ export const mdxComponents: MDXComponents = {
     hr: ({ ...props }) => (
         <hr className="my-12 border-xmb-fg/10" {...props} />
     ),
-    a: ({ href, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => {
-        const className = "text-xmb-fg/90 underline underline-offset-4 decoration-xmb-fg/20 hover:decoration-xmb-fg/60 transition-all duration-300"
-        if (href?.startsWith('/')) {
-            return <Link href={href} className={className} {...props} />
-        }
-        return <a target="_blank" rel="noopener noreferrer" className={className} {...props} href={href} />
-    },
-    pre: ({ children }: { children: any }) => {
-        return children
-    },
-    code: ({ children, className, ...props }: { children: string, className?: string, [key: string]: any }) => {
-        const isInlineCode = !className
-        if (isInlineCode) {
-            return (
-                <code className="rounded bg-xmb-fg/10 px-1.5 py-0.5 font-mono text-sm text-xmb-fg/90 border border-xmb-fg/10" {...props}>
-                    {children}
-                </code>
-            )
-        }
-        return (
-            <div className="my-8 rounded-xl overflow-hidden border border-xmb-fg/10 shadow-2xl">
-                <CodeBlock className={className} {...props}>{children}</CodeBlock>
-            </div>
-        )
-    },
-    img: ({ src, alt }: React.ImgHTMLAttributes<HTMLImageElement>) => (
-        <div className="my-10 group relative rounded-xl overflow-hidden border border-xmb-fg/10 bg-xmb-fg/5 shadow-2xl transition-all duration-500 hover:border-xmb-fg/30">
-            {typeof src === 'string' ? (
-                <Image
-                    src={src}
-                    alt={alt ?? ''}
-                    width={1600}
-                    height={900}
-                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 80vw, 65rem"
-                    className="w-full h-auto object-cover opacity-90 group-hover:opacity-100 transition-opacity"
-                />
-            ) : null}
-            {alt && (
-                <div className={`absolute bottom-0 inset-x-0 p-4 ${XMB_OVERLAY.BOTTOM_FADE}`}>
-                    <p className="text-xs font-mono text-xmb-fg/40 tracking-widest uppercase">{alt}</p>
-                </div>
-            )}
+    table: ({ children, ...props }) => (
+        <div className="my-8 overflow-x-auto rounded-xl border border-xmb-fg/10">
+            <table className="w-full text-left text-base text-xmb-fg/70 font-light" {...props}>
+                {children}
+            </table>
         </div>
     ),
+    th: ({ children, ...props }) => (
+        <th className="px-4 py-3 bg-xmb-fg/5 border-b border-xmb-fg/10 font-medium text-xmb-fg/80 text-sm uppercase tracking-wider" {...props}>
+            {children}
+        </th>
+    ),
+    td: ({ children, ...props }) => (
+        <td className="px-4 py-3 border-b border-xmb-fg/5" {...props}>
+            {children}
+        </td>
+    ),
+    a: ({ href, className, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => {
+        // Heading anchors injected by rehype-autolink-headings style themselves via globals.css.
+        if (className?.includes('heading-anchor')) {
+            return <a href={href} className={className} {...props}>{children}</a>
+        }
+        // Unresolved [[wikilinks]] render as inert, visibly-unlinked text.
+        if (className?.includes('wikilink-missing')) {
+            return (
+                <span
+                    className="text-xmb-fg/50 border-b border-dashed border-xmb-fg/30 cursor-help"
+                    title={props.title}
+                >
+                    {children}
+                </span>
+            )
+        }
+        const mergedClass = className ? `${className} ${LINK_CLASS}` : LINK_CLASS
+        if (href?.startsWith('#')) {
+            return <a href={href} className={mergedClass} {...props}>{children}</a>
+        }
+        if (href?.startsWith('/')) {
+            return <Link href={href} className={mergedClass} {...props}>{children}</Link>
+        }
+        // External links: target/rel are set by rehype-external-links.
+        return <a className={mergedClass} href={href} {...props}>{children}</a>
+    },
+    // Code blocks are highlighted by rehype-pretty-code; CodeBlock adds the
+    // frame, language label, and copy button around the highlighted <pre>.
+    pre: (props: React.HTMLAttributes<HTMLPreElement>) => <CodeBlock {...props} />,
+    code: ({ children, className, ...props }: React.HTMLAttributes<HTMLElement> & { 'data-language'?: string }) => {
+        const isBlockCode = props['data-language'] !== undefined || className?.includes('language-')
+        if (isBlockCode) {
+            return <code className={className} {...props}>{children}</code>
+        }
+        return (
+            <code className="rounded bg-xmb-fg/10 px-1.5 py-0.5 font-mono text-sm text-xmb-fg/90 border border-xmb-fg/10" {...props}>
+                {children}
+            </code>
+        )
+    },
+    img: ({ src, alt, title }: React.ImgHTMLAttributes<HTMLImageElement>) => {
+        if (typeof src !== 'string' || !src) return null
+
+        // ![alt](src "caption") — the quoted title renders as a visible caption;
+        // alt stays purely for accessibility. Dimensions are probed server-side
+        // so the dot-wave placeholder occupies the exact final box.
+        const dimensions = src.startsWith('/') ? getLocalImageDimensions(src) : null
+
+        return (
+            <MDXImage
+                src={src}
+                alt={alt ?? ''}
+                caption={title?.trim() || undefined}
+                width={dimensions?.width}
+                height={dimensions?.height}
+            />
+        )
+    },
     // Custom MDX components
     Alert,
     Callout,
@@ -131,12 +165,4 @@ export const mdxComponents: MDXComponents = {
     Tab,
     Badge,
     Image,
-}
-
-// This file is required for Next.js to import MDX files
-export function useMDXComponents(components: MDXComponents): MDXComponents {
-  return {
-    ...mdxComponents,
-    ...components,
-  }
 }

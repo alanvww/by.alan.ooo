@@ -2,6 +2,7 @@
 
 import type { ReactElement } from 'react';
 import { useEffect, useRef, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { useTheme } from '@/lib/theme-context';
 
 const MAX_DEVICE_PIXEL_RATIO = 1.0;
@@ -71,7 +72,8 @@ function setupWebGL(canvas: HTMLCanvasElement): WebGLResources | null {
     antialias: false,
     depth: false,
     preserveDrawingBuffer: false,
-    powerPreference: 'high-performance',
+    // Ambient decoration: never force the discrete GPU on dual-GPU machines.
+    powerPreference: 'low-power',
   });
 
   if (!gl) {
@@ -244,19 +246,46 @@ function resizeCanvas(canvas: HTMLCanvasElement, gl: WebGLRenderingContext): voi
   gl.viewport(0, 0, canvas.width, canvas.height);
 }
 
+interface LoopControls {
+  start: () => void;
+  stop: () => void;
+  renderOnce: () => void;
+}
+
+/**
+ * Mounted exactly once in the root layout and kept alive across all client
+ * navigations — the GL context, compiled shaders, and shader clock persist.
+ * The render loop runs only on the home screen (content pages cover the
+ * canvas with blurred overlays, so animating under them is wasted GPU work)
+ * and while the tab is visible.
+ */
 const WebGLBackground = (): ReactElement => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const resourcesRef = useRef<WebGLResources | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const startTimeRef = useRef<number>(0);
+  const elapsedRef = useRef<number>(0);
   const lastRenderTimeRef = useRef<number>(0);
-  const isVisibleRef = useRef<boolean>(true);
+  const shouldAnimateRef = useRef<boolean>(true);
+  const loopControlsRef = useRef<LoopControls | null>(null);
   const [mounted, setMounted] = useState(false);
   const { theme } = useTheme();
+  const themeRef = useRef(theme);
+  const pathname = usePathname();
+  const isHome = pathname === '/';
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Theme only affects the clear color — track it in a ref so a theme change
+  // never tears down the GL pipeline. Repaint once if the loop is idle.
+  useEffect(() => {
+    themeRef.current = theme;
+    if (animationFrameRef.current === null) {
+      loopControlsRef.current?.renderOnce();
+    }
+  }, [theme]);
 
   useEffect(() => {
     if (!mounted || !canvasRef.current) {
@@ -264,36 +293,28 @@ const WebGLBackground = (): ReactElement => {
     }
 
     const canvas = canvasRef.current;
-    const resources = setupWebGL(canvas);
 
-    if (!resources) {
+    const setup = (): boolean => {
+      const resources = setupWebGL(canvas);
+      if (!resources) return false;
+      resourcesRef.current = resources;
+      resizeCanvas(canvas, resources.gl);
+      return true;
+    };
+
+    if (!setup()) {
       return;
     }
 
-    resourcesRef.current = resources;
-    resizeCanvas(canvas, resources.gl);
-
-    const render = (): void => {
+    const renderFrame = (now: number): void => {
       const currentResources = resourcesRef.current;
+      if (!currentResources) return;
 
-      if (!currentResources || !isVisibleRef.current) {
-        animationFrameRef.current = null;
-        return;
-      }
-
-      const now = performance.now();
-
-      // Cap at ~30fps — skip draw if less than 33ms since last render
-      if (now - lastRenderTimeRef.current < TARGET_FRAME_MS) {
-        animationFrameRef.current = window.requestAnimationFrame(render);
-        return;
-      }
-
-      lastRenderTimeRef.current = now;
+      const elapsedTime = (now - startTimeRef.current) / 1000;
+      elapsedRef.current = elapsedTime;
 
       const { gl, program, uTimeLocation, uResolutionLocation } = currentResources;
-      const elapsedTime = (now - startTimeRef.current) / 1000;
-      const bgColor = theme === 'light' ? [0.98, 0.98, 0.98, 1] : [0.08, 0.08, 0.12, 1];
+      const bgColor = themeRef.current === 'light' ? [0.98, 0.98, 0.98, 1] : [0.08, 0.08, 0.12, 1];
 
       gl.clearColor(bgColor[0], bgColor[1], bgColor[2], bgColor[3]);
       gl.clear(gl.COLOR_BUFFER_BIT);
@@ -301,49 +322,115 @@ const WebGLBackground = (): ReactElement => {
       gl.uniform1f(uTimeLocation, elapsedTime);
       gl.uniform2f(uResolutionLocation, gl.canvas.width, gl.canvas.height);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-
-      animationFrameRef.current = window.requestAnimationFrame(render);
     };
 
-    startTimeRef.current = performance.now();
-    animationFrameRef.current = window.requestAnimationFrame(render);
+    const tick = (): void => {
+      if (!resourcesRef.current || !shouldAnimateRef.current || document.hidden) {
+        animationFrameRef.current = null;
+        return;
+      }
+
+      const now = performance.now();
+
+      // Cap at ~30fps — skip draw if less than 33ms since last render
+      if (now - lastRenderTimeRef.current >= TARGET_FRAME_MS) {
+        lastRenderTimeRef.current = now;
+        renderFrame(now);
+      }
+
+      animationFrameRef.current = window.requestAnimationFrame(tick);
+    };
+
+    const startLoop = (): void => {
+      if (animationFrameRef.current !== null || !resourcesRef.current) return;
+      if (!shouldAnimateRef.current || document.hidden) return;
+      // Resume the shader clock where it left off instead of jumping to t=0.
+      startTimeRef.current = performance.now() - elapsedRef.current * 1000;
+      animationFrameRef.current = window.requestAnimationFrame(tick);
+    };
+
+    const stopLoop = (): void => {
+      if (animationFrameRef.current !== null) {
+        window.cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+    };
+
+    loopControlsRef.current = {
+      start: startLoop,
+      stop: stopLoop,
+      renderOnce: () => renderFrame(startTimeRef.current + elapsedRef.current * 1000),
+    };
+
+    // Paint one frame immediately so the canvas is never uninitialized black,
+    // even when mounting paused (direct load of a content page).
+    startTimeRef.current = performance.now() - elapsedRef.current * 1000;
+    renderFrame(performance.now());
+    startLoop();
 
     const handleResize = (): void => {
       if (canvasRef.current && resourcesRef.current) {
         resizeCanvas(canvasRef.current, resourcesRef.current.gl);
+        // Resizing clears the drawing buffer — repaint if the loop is idle.
+        if (animationFrameRef.current === null) {
+          loopControlsRef.current?.renderOnce();
+        }
       }
     };
 
     const handleVisibilityChange = (): void => {
-      isVisibleRef.current = !document.hidden;
+      if (document.hidden) {
+        stopLoop();
+      } else {
+        startLoop();
+      }
+    };
 
-      if (isVisibleRef.current && animationFrameRef.current === null) {
-        startTimeRef.current = performance.now();
-        animationFrameRef.current = window.requestAnimationFrame(render);
-      } else if (!isVisibleRef.current && animationFrameRef.current !== null) {
-        window.cancelAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = null;
+    // A GPU reset (sleep/wake, driver restart) invalidates the context —
+    // rebuild the pipeline instead of leaving a frozen background.
+    const handleContextLost = (event: Event): void => {
+      event.preventDefault();
+      stopLoop();
+      resourcesRef.current = null;
+    };
+
+    const handleContextRestored = (): void => {
+      if (setup()) {
+        renderFrame(performance.now());
+        startLoop();
       }
     };
 
     window.addEventListener('resize', handleResize);
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    canvas.addEventListener('webglcontextlost', handleContextLost);
+    canvas.addEventListener('webglcontextrestored', handleContextRestored);
 
     return () => {
       window.removeEventListener('resize', handleResize);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      canvas.removeEventListener('webglcontextlost', handleContextLost);
+      canvas.removeEventListener('webglcontextrestored', handleContextRestored);
 
-      if (animationFrameRef.current !== null) {
-        window.cancelAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = null;
-      }
+      stopLoop();
+      loopControlsRef.current = null;
 
       if (resourcesRef.current) {
         destroyWebGL(resourcesRef.current);
         resourcesRef.current = null;
       }
     };
-  }, [mounted, theme]);
+  }, [mounted]);
+
+  // Animate only on the home screen; content routes get a static frame.
+  useEffect(() => {
+    shouldAnimateRef.current = isHome;
+    if (isHome) {
+      loopControlsRef.current?.start();
+    } else {
+      loopControlsRef.current?.stop();
+    }
+  }, [isHome]);
 
   return (
     <div className="fixed top-0 left-0 w-full h-full z-[-1]" aria-hidden="true">

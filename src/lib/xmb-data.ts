@@ -154,21 +154,6 @@ function buildProfileItems(): XMBItem[] {
 }
 
 /**
- * Build the settings category items
- */
-function buildSettingItems(): XMBItem[] {
-  return [
-    {
-      id: 'setting-theme',
-      title: 'Toggle Theme',
-      description: 'Switch between light and dark mode.',
-      type: 'settings',
-      actionId: 'toggle-theme'
-    }
-  ];
-}
-
-/**
  * Build the contact category items
  */
 function buildContactItems(): XMBItem[] {
@@ -190,12 +175,6 @@ function buildContactItems(): XMBItem[] {
 export const getXMBData = cache(async (): Promise<XMBCategory[]> => {
   // Fixed categories at the start
   const fixedStartCategories: XMBCategory[] = [
-    {
-      id: 'settings',
-      title: 'Settings',
-      iconName: 'Gear',
-      items: buildSettingItems()
-    },
     {
       id: 'profile',
       title: 'Profile',

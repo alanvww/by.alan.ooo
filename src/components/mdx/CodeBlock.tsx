@@ -1,13 +1,23 @@
 "use client"
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 
-export function CodeBlock({ children, className, ...props }: { children: string, className?: string, [key: string]: any }) {
-  const language = className ? className.replace('language-', '') : ''
+/**
+ * Frame around highlighted code blocks. Syntax highlighting itself is done
+ * server-side by rehype-pretty-code (shiki) — this component only adds the
+ * chrome: language label, copy button, and the scroll container.
+ */
+export function CodeBlock({
+  children,
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLPreElement> & { 'data-language'?: string }) {
+  const preRef = useRef<HTMLPreElement>(null)
   const [copied, setCopied] = useState(false)
+  const language = props['data-language']
 
-  const copyToClipboard = async () => {
+  const copyToClipboard = async (): Promise<void> => {
     try {
-      await navigator.clipboard.writeText(children)
+      await navigator.clipboard.writeText(preRef.current?.textContent ?? '')
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch (err) {
@@ -16,16 +26,14 @@ export function CodeBlock({ children, className, ...props }: { children: string,
   }
 
   return (
-    <div className="relative my-6 overflow-hidden rounded-lg border bg-muted/50">
-      <div className="flex items-center justify-between bg-muted/80 px-4 py-2 border-b">
-        {language && (
-          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wide">
-            {language}
-          </span>
-        )}
+    <figure className="my-8 overflow-hidden rounded-xl border border-xmb-fg/10 bg-xmb-fg/5 shadow-2xl">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-xmb-fg/10 bg-xmb-fg/5">
+        <span className="text-xs font-mono text-xmb-fg/50 uppercase tracking-wide">
+          {language && language !== 'plaintext' ? language : ''}
+        </span>
         <button
           onClick={copyToClipboard}
-          className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          className="flex items-center gap-2 text-xs font-mono text-xmb-fg/50 hover:text-xmb-fg transition-colors"
           title="Copy code"
         >
           {copied ? (
@@ -45,11 +53,13 @@ export function CodeBlock({ children, className, ...props }: { children: string,
           )}
         </button>
       </div>
-      <pre className={`${className} overflow-x-auto p-4 text-sm`} {...props}>
-        <code className={className}>{children}</code>
+      <pre
+        ref={preRef}
+        className={`overflow-x-auto p-4 text-sm leading-relaxed ${className ?? ''}`}
+        {...props}
+      >
+        {children}
       </pre>
-    </div>
+    </figure>
   )
 }
-
-

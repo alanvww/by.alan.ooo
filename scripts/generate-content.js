@@ -45,11 +45,12 @@ rl.question('What do you want to create? (post/project): ', (type) => {
             const today = new Date();
             const date = today.toISOString().split('T')[0];
 
-            // Prepare the frontmatter
+            // Prepare the frontmatter (JSON.stringify escapes quotes/backslashes
+            // so a title like My "Best" Project can't corrupt the YAML)
             let frontmatter = `---
-title: "${title}"
+title: ${JSON.stringify(title)}
 date: "${date}"
-excerpt: "${excerpt}"
+excerpt: ${JSON.stringify(excerpt)}
 coverImage: "./cover.jpg"
 `;
 
@@ -88,10 +89,26 @@ Write your content here...
                 // Determine the target directory
                 const targetDir = type.toLowerCase() === 'post' ? postsDir : projectsDir;
                 const folderPath = path.join(targetDir, slug);
+                const filePath = path.join(folderPath, 'index.mdx');
+
+                if (!slug) {
+                    console.error('Title produced an empty slug — aborting.');
+                    rl.close();
+                    return;
+                }
+
+                // Never overwrite existing writing (flat file or folder variant)
+                const existing = [filePath, path.join(folderPath, 'index.md'), `${folderPath}.mdx`, `${folderPath}.md`]
+                    .find((candidate) => fs.existsSync(candidate));
+                if (existing) {
+                    console.error(`Refusing to overwrite existing content: ${existing}`);
+                    rl.close();
+                    return;
+                }
+
                 if (!fs.existsSync(folderPath)) {
                     fs.mkdirSync(folderPath, { recursive: true });
                 }
-                const filePath = path.join(folderPath, 'index.mdx');
 
                 // Write the file
                 fs.writeFileSync(filePath, frontmatter);
@@ -105,9 +122,9 @@ Write your content here...
                 rl.question('Do you want to open the file now? (y/n): ', (answer) => {
                     if (answer.toLowerCase() === 'y') {
                         // Try to open with VS Code first, fallback to the default system editor
-                        exec(`code ${filePath}`, (error) => {
+                        exec(`code ${JSON.stringify(filePath)}`, (error) => {
                             if (error) {
-                                exec(`open ${filePath}`);
+                                exec(`open ${JSON.stringify(filePath)}`);
                             }
                         });
                     }

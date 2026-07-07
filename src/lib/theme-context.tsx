@@ -6,90 +6,51 @@ type Theme = 'light' | 'dark'
 
 interface ThemeContextType {
   theme: Theme
-  toggleTheme: () => void
-  setTheme: (theme: Theme) => void
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 
+function applyDocumentTheme(theme: Theme): void {
+  document.documentElement.classList.remove('dark', 'light')
+  document.documentElement.classList.add(theme)
+  document.documentElement.setAttribute('data-theme', theme)
+}
+
+/**
+ * Theme follows the OS preference — nothing is persisted, so the site always
+ * matches the visitor's current system setting (including live changes like
+ * sunset auto-switching). The pre-hydration class is set by ThemeScript.
+ */
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>('dark')
-  const [isHydrated, setIsHydrated] = useState(false)
+  const [theme, setTheme] = useState<Theme>('dark')
 
-  useEffect(() => {
-    // Get initial theme from localStorage, system preference, or default to dark
-    const savedTheme = localStorage.getItem('theme') as Theme | null
-    const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-    const initialTheme = savedTheme || systemTheme
-    
-    setThemeState(initialTheme)
-    updateDocumentTheme(initialTheme)
-    setIsHydrated(true)
-  }, [])
-
-  // Listen for system theme changes
   useEffect(() => {
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
-    const handleChange = (e: MediaQueryListEvent) => {
-      if (!localStorage.getItem('theme')) {
-        const newTheme = e.matches ? 'dark' : 'light'
-        setThemeState(newTheme)
-        updateDocumentTheme(newTheme)
-      }
+
+    const apply = (matchesDark: boolean): void => {
+      const nextTheme: Theme = matchesDark ? 'dark' : 'light'
+      setTheme(nextTheme)
+      applyDocumentTheme(nextTheme)
     }
 
+    apply(mediaQuery.matches)
+
+    const handleChange = (event: MediaQueryListEvent): void => apply(event.matches)
     mediaQuery.addEventListener('change', handleChange)
     return () => mediaQuery.removeEventListener('change', handleChange)
   }, [])
 
-  const updateDocumentTheme = (newTheme: Theme) => {
-    if (typeof window !== 'undefined') {
-      // Remove both classes first
-      document.documentElement.classList.remove('dark', 'light')
-      // Add the appropriate class
-      document.documentElement.classList.add(newTheme)
-      // Update data attribute for better CSS targeting
-      document.documentElement.setAttribute('data-theme', newTheme)
-      localStorage.setItem('theme', newTheme)
-    }
-  }
-
-  const setTheme = (newTheme: Theme) => {
-    setThemeState(newTheme)
-    updateDocumentTheme(newTheme)
-  }
-
-  const toggleTheme = () => {
-    const newTheme = theme === 'dark' ? 'light' : 'dark'
-    setTheme(newTheme)
-  }
-
-  // Prevent hydration mismatch by not rendering until hydrated
-  if (!isHydrated) {
-    return (
-      <ThemeContext.Provider value={{ theme: 'dark', toggleTheme: () => {}, setTheme: () => {} }}>
-        {children}
-      </ThemeContext.Provider>
-    )
-  }
-
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme, setTheme }}>
+    <ThemeContext.Provider value={{ theme }}>
       {children}
     </ThemeContext.Provider>
   )
 }
 
-export function useTheme() {
+export function useTheme(): ThemeContextType {
   const context = useContext(ThemeContext)
   if (context === undefined) {
-    // Return a default context instead of throwing an error
-    console.warn('useTheme must be used within a ThemeProvider. Using default dark theme.')
-    return {
-      theme: 'dark' as Theme,
-      toggleTheme: () => {},
-      setTheme: () => {}
-    }
+    throw new Error('useTheme must be used within a ThemeProvider')
   }
   return context
 }

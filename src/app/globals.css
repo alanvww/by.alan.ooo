@@ -94,6 +94,16 @@
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 
+  /* Touch hygiene: no grey tap flash on the XMB controls, and no
+     rubber-band/pull-to-refresh chaining behind the fixed scene.
+     Scroll containers that should trap their own overscroll (the post
+     viewer) use overscroll-contain locally. */
+  html,
+  body {
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+  }
+
   /* Custom scrollbar */
   ::-webkit-scrollbar {
     width: 8px;
@@ -415,4 +425,76 @@
   .light {
     /* Use default values from @theme block */
   }
+}
+
+/* ---------------------------------------------------------------------------
+   Markdown pipeline (rehype-pretty-code + rehype-autolink-headings)
+--------------------------------------------------------------------------- */
+
+/* Shiki dual-theme tokens: light values by default, dark values under .dark.
+   keepBackground is false — the CodeBlock frame owns the surface. */
+code[data-theme] span {
+  color: var(--shiki-light);
+}
+
+.dark code[data-theme] span {
+  color: var(--shiki-dark);
+}
+
+[data-rehype-pretty-code-figure] pre {
+  background: transparent;
+}
+
+[data-rehype-pretty-code-figure] [data-line] {
+  padding-inline: 0.25rem;
+}
+
+[data-rehype-pretty-code-figure] [data-highlighted-line] {
+  background: color-mix(in oklch, var(--color-xmb-fg) 10%, transparent);
+  border-radius: 0.25rem;
+}
+
+/* Dot-wave image placeholder (DotWavePlaceholder.tsx) */
+@keyframes xmb-dot-wave {
+  0%, 100% {
+    opacity: 0.12;
+    transform: translateY(2px) scale(0.8);
+  }
+  50% {
+    opacity: 0.55;
+    transform: translateY(-2px) scale(1);
+  }
+}
+
+.dot-wave-dot {
+  width: 0.25rem;
+  height: 0.25rem;
+  border-radius: 9999px;
+  background: currentColor;
+  opacity: 0.12;
+  animation: xmb-dot-wave 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dot-wave-dot {
+    animation: none;
+    opacity: 0.25;
+  }
+}
+
+/* '#' anchor appended to headings — invisible until the heading is hovered */
+.heading-anchor {
+  margin-left: 0.4em;
+  color: var(--color-xmb-fg);
+  opacity: 0;
+  text-decoration: none;
+  transition: opacity 200ms ease-out;
+}
+
+h1:hover .heading-anchor,
+h2:hover .heading-anchor,
+h3:hover .heading-anchor,
+h4:hover .heading-anchor,
+.heading-anchor:focus-visible {
+  opacity: 0.45;
 }

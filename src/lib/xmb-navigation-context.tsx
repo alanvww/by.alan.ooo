@@ -48,8 +48,18 @@ function getCurrentItems(activeCategory: XMBCategory | null, navigationPath: num
     return nextItems;
 }
 
-export const XMBNavigationProvider = ({ children, categories }: { children: React.ReactNode; categories: XMBCategory[] }) => {
-    const [categoryIndex, setCategoryIndex] = useState(2);
+export const XMBNavigationProvider = ({
+    children,
+    categories,
+    initialCategoryIndex = 0,
+}: {
+    children: React.ReactNode;
+    categories: XMBCategory[];
+    initialCategoryIndex?: number;
+}) => {
+    const [categoryIndex, setCategoryIndex] = useState(() =>
+        Math.min(Math.max(initialCategoryIndex, 0), Math.max(categories.length - 1, 0)),
+    );
     const [itemIndex, setItemIndex] = useState(-1);
     const [navigationPath, setNavigationPath] = useState<number[]>([]);
     const [isNavigating, setIsNavigating] = useState(false);

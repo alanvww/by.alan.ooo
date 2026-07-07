@@ -1,6 +1,6 @@
 import { XMBIconName } from './xmb-constants';
 
-export type XMBItemType = 'project' | 'post' | 'profile' | 'settings' | 'link' | 'folder';
+export type XMBItemType = 'project' | 'post' | 'profile' | 'link' | 'folder';
 
 export interface XMBProjectMeta {
   tags?: string[];
@@ -27,7 +27,6 @@ export interface XMBItem {
   image?: string;
   link?: string;
   type: XMBItemType;
-  actionId?: 'toggle-theme';
   action?: () => void;
   meta?: XMBItemMeta;
   items?: XMBItem[]; // Nested items for folders
