@@ -1,7 +1,7 @@
 // src/components/xmb/XMBVerticalList.tsx
 "use client";
 
-import React, { useState, useMemo, useCallback, forwardRef } from "react";
+import React, { useState, useCallback, useEffect, useLayoutEffect, useRef, forwardRef } from "react";
 import Image from 'next/image';
 import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import { useRouter } from "next/navigation";
@@ -240,9 +240,48 @@ const XMBVerticalList = React.memo(
         }, [currentItems, itemIndex, onFolderDrill, onItemSelect, router, startNavigation]);
 
         const displayIndex = itemIndex === -1 ? 0 : itemIndex;
-        const containerOffset = useMemo(() => {
-            return -displayIndex * XMB_LAYOUT.LIST_ROW_STEP_PX;
+
+        // Row DOM nodes, keyed by render index. Written only from callback
+        // refs (React Compiler safe).
+        const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
+        const columnRef = useRef<HTMLDivElement | null>(null);
+
+        // Measured slide offset for the column. Row pitch is content-driven
+        // (responsive padding/margins, description expansion), so it must be
+        // read from the DOM rather than a constant — a fixed per-row step
+        // drifts further from the focus anchor with every index. offsetTop
+        // ignores CSS transforms, so the aboveRowLift translate on earlier
+        // rows never pollutes the measurement.
+        const [containerOffset, setContainerOffset] = useState(0);
+
+        const measureOffset = useCallback(() => {
+            const first = rowRefs.current[0];
+            const selected = rowRefs.current[displayIndex];
+            if (!first || !selected) {
+                return;
+            }
+            // Diff of offsetTops: exact regardless of offsetParent.
+            setContainerOffset(-(selected.offsetTop - first.offsetTop));
         }, [displayIndex]);
+
+        // Re-measure before paint whenever selection or the item set changes.
+        useLayoutEffect(() => {
+            measureOffset();
+        }, [measureOffset, currentItems]);
+
+        // Re-measure whenever the column's size changes: breakpoint/viewport
+        // resizes AND the previous selection's description collapse (its
+        // AnimatePresence height animation transiently shifts lower rows).
+        // Retargeting the y spring mid-flight is fine in motion.
+        useEffect(() => {
+            const column = columnRef.current;
+            if (!column) {
+                return;
+            }
+            const resizeObserver = new ResizeObserver(() => measureOffset());
+            resizeObserver.observe(column);
+            return () => resizeObserver.disconnect();
+        }, [measureOffset]);
 
         // What the back pill does here: exit the folder when inside one,
         // otherwise (paged top level) fall back to the header's
@@ -346,6 +385,7 @@ const XMBVerticalList = React.memo(
                             Width is pinned here so every row in the column is the
                             same width regardless of which one is selected. */}
                         <motion.div
+                            ref={columnRef}
                             className="flex flex-col"
                             style={{
                                 width: layoutMode === 'paged' ? '100%' : `${XMB_LAYOUT.LIST_FULL_WIDTH_PX}px`,
@@ -360,6 +400,7 @@ const XMBVerticalList = React.memo(
                                 return (
                                     <XMBListItem
                                         key={item.id}
+                                        ref={(node) => { rowRefs.current[idx] = node; }}
                                         index={idx}
                                         item={item}
                                         selectedIndex={itemIndex}

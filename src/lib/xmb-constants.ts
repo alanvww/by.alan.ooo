@@ -6,10 +6,6 @@ export const XMB_LAYOUT = {
   TITLE_ROW_CLEARANCE_PX: 72,
   ABOVE_ROW_STACK_STEP_PX: 10,
   CAROUSEL_WIDTH: '70%',
-  // Vertical list row geometry. Sliding container offset = -displayIndex * ROW_STEP_PX.
-  LIST_ROW_HEIGHT_PX: 96,
-  LIST_ROW_GAP_PX: 32,
-  LIST_ROW_STEP_PX: 128, // = LIST_ROW_HEIGHT_PX + LIST_ROW_GAP_PX
   // Pinned width of the vertical list in full layout so rows don't reflow
   // when the selected row's content (description / ENTER hint) appears.
   LIST_FULL_WIDTH_PX: 380,
@@ -68,7 +64,9 @@ export const XMB_GESTURE = {
   SWIPE_THRESHOLD_PX: 50,
   /** Swipes must be this much more horizontal than vertical (|dx| > ratio·|dy|). */
   DIRECTION_LOCK_RATIO: 1.5,
-  /** Pan travel per one-row selection step (= LIST_ROW_STEP_PX / 2). */
+  /** Pan travel (px) per one-row selection step. Gesture-feel constant —
+      deliberately shorter than the visual row pitch (~88px mobile) so
+      drags feel responsive; not derived from row geometry. */
   DETENT_PX: 64,
   /** Movement beyond this marks the gesture as a pan, not a tap. */
   PAN_SLOP_PX: 10,
