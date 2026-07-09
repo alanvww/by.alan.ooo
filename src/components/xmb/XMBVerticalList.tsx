@@ -289,13 +289,10 @@ const XMBVerticalList = React.memo(
                                   // anchor support ignore anchor() and use the
                                   // fallback value, which matches the old explicit
                                   // top / left we had before).
-                                  // @ts-ignore - CSS Anchor positioning API
                                   positionAnchor: "--active-category",
-                                  // @ts-ignore
                                   top: `anchor(bottom, ${XMB_LAYOUT.VERTICAL_LIST_TOP})`,
                                   right: "auto",
                                   bottom: "auto",
-                                  // @ts-ignore
                                   left: isContextView ? '-50px' : `anchor(left, ${categoryIndex * XMB_LAYOUT.CATEGORY_WIDTH}px)`,
                                   transform: isContextView ? 'translateX(0)' : 'translateX(-50%)',
                                   // 2rem base gap + 2rem reserving the line the old

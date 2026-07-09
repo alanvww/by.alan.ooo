@@ -1,5 +1,5 @@
 // src/lib/xmb-data.ts
-import { getAllContent, getContentTypes, getAllTags, getFeatured, BaseFrontmatter } from './mdx';
+import { getAllContent, getContentTypes, getFeatured, BaseFrontmatter } from './mdx';
 import { getContentTypeConfig, type ContentTypeConfig } from './content-config';
 import type { XMBItem, XMBCategory } from './xmb-types';
 import { siteConfig } from './site-config';

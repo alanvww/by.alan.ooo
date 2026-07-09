@@ -167,6 +167,7 @@ const XMBCarousel = ({ items, activeIndex, onSelect, onBack }: XMBCarouselProps)
   // Smooth scroll position - floating point for continuous scrolling
   const [scrollOffset, setScrollOffset] = useState<number>(activeIndex);
   const scrollOffsetRef = useRef<number>(activeIndex);
+  // eslint-disable-next-line react-hooks/refs -- render-phase mirror so wheel/rAF handlers read the latest committed offset without re-subscribing
   scrollOffsetRef.current = scrollOffset;
 
   // Smoothly ease scrollOffset to an integer index via rAF. Used after a

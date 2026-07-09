@@ -23,7 +23,7 @@ interface XMBPostViewerProps {
     siblings: SiblingInfo;
 }
 
-const XMBPostViewer = ({ type, slug, frontmatter, children, siblings }: XMBPostViewerProps) => {
+const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerProps) => {
     const router = useRouter();
     const { startNavigation } = useXMBLoadingContext();
     const scrollContainerRef = useRef<HTMLDivElement>(null);

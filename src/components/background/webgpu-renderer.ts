@@ -164,11 +164,11 @@ export async function createWebGPURenderer(
   });
   const bindGroup = root.unwrap(root.createBindGroup(layout, { uniforms: uniformsBuffer }));
 
-  const module = device.createShaderModule({ code: SHADER_SOURCE });
+  const shaderModule = device.createShaderModule({ code: SHADER_SOURCE });
   const pipeline = device.createRenderPipeline({
     layout: device.createPipelineLayout({ bindGroupLayouts: [root.unwrap(layout)] }),
-    vertex: { module, entryPoint: 'main_vert' },
-    fragment: { module, entryPoint: 'main_frag', targets: [{ format }] },
+    vertex: { module: shaderModule, entryPoint: 'main_vert' },
+    fragment: { module: shaderModule, entryPoint: 'main_frag', targets: [{ format }] },
     primitive: { topology: 'triangle-list' },
   });
 

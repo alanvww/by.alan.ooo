@@ -1,9 +1,14 @@
 "use client"
-import { useState, type ReactNode } from 'react'
+import { isValidElement, useState, type ReactNode } from 'react'
 
 export function Tabs({ children, defaultTab = 0 }: { children: ReactNode, defaultTab?: number }) {
   const [activeTab, setActiveTab] = useState(defaultTab)
-  const tabLabels = Array.isArray(children) ? (children as any[]).map((child: any) => child.props?.label || 'Tab') : ['Tab']
+  const childArray = Array.isArray(children) ? (children as ReactNode[]) : null
+  const tabLabels = childArray
+    ? childArray.map((child) =>
+        isValidElement(child) ? (child.props as { label?: string }).label || 'Tab' : 'Tab'
+      )
+    : ['Tab']
   return (
     <div className="my-6">
       <div className="flex border-b border-border">
@@ -18,7 +23,7 @@ export function Tabs({ children, defaultTab = 0 }: { children: ReactNode, defaul
         ))}
       </div>
       <div className="p-4">
-        {Array.isArray(children) ? (children as any[])[activeTab] : children}
+        {childArray ? childArray[activeTab] : children}
       </div>
     </div>
   )

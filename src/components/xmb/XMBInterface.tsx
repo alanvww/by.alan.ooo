@@ -70,6 +70,7 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
     }
 
     if (itemIndex >= 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- paged stage trails navigation state driven by the shared XMB navigation context
       setPagedStage('list');
     } else if (itemIndex === -1 && navigationPath.length === 0) {
       setPagedStage('categories');
@@ -78,6 +79,7 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
 
   useEffect(() => {
     if (layoutMode === 'full') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reset paged stage when the ResizeObserver switches layout mode
       setPagedStage('categories');
     }
   }, [layoutMode]);

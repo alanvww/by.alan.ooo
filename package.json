@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "node scripts/sync-content-media.js && next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "new": "node scripts/generate-content.js",
     "sync:content": "node scripts/sync-content-media.js"
   },
@@ -39,6 +39,8 @@
     "@types/react-dom": "^19.2.3",
     "@webgpu/types": "^0.1.71",
     "babel-plugin-react-compiler": "^1.0.0",
+    "eslint": "^9",
+    "eslint-config-next": "^16.2.10",
     "playwright": "^1.61.1",
     "tailwindcss": "^4.3.2",
     "typescript": "^5.9.3"

@@ -40,6 +40,7 @@ const WebGLBackground = (): ReactElement => {
   const isHome = pathname === '/';
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the generation-keyed canvas must only mount client-side, after hydration
     setMounted(true);
   }, []);
 

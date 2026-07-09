@@ -59,7 +59,6 @@ const XMBCategoryRow = React.memo(({
               className="flex flex-col items-center gap-2 cursor-pointer relative focus-visible:outline-none"
               style={{ 
                 width: `${XMB_LAYOUT.CATEGORY_WIDTH}px`,
-                // @ts-ignore - CSS Anchor API
                 anchorName: isActive ? '--active-category' : undefined,
               }}
               onClick={() => {
