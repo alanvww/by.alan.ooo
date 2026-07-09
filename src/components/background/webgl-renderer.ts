@@ -1,4 +1,4 @@
-import type { BackgroundRenderer, BackgroundTheme, RendererCallbacks } from './types';
+import type { BackgroundRenderer, RendererCallbacks } from './types';
 
 interface WebGLResources {
   gl: WebGLRenderingContext;
@@ -248,11 +248,10 @@ export function createWebGLRenderer(
   canvas.addEventListener('webglcontextrestored', handleContextRestored);
 
   return {
-    render(elapsedSeconds: number, theme: BackgroundTheme): void {
+    render(elapsedSeconds: number): void {
       const { gl, program, uTimeLocation, uResolutionLocation } = resources;
-      const bgColor = theme === 'light' ? [0.98, 0.98, 0.98, 1] : [0.08, 0.08, 0.12, 1];
 
-      gl.clearColor(bgColor[0], bgColor[1], bgColor[2], bgColor[3]);
+      gl.clearColor(0.08, 0.08, 0.12, 1);
       gl.clear(gl.COLOR_BUFFER_BIT);
       gl.useProgram(program);
       gl.uniform1f(uTimeLocation, elapsedSeconds);

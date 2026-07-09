@@ -3,7 +3,6 @@
 import type { ReactElement } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { useTheme } from '@/lib/theme-context';
 import { createBackgroundRenderer } from '@/components/background';
 import type { BackgroundRenderer, RendererCallbacks } from '@/components/background';
 
@@ -34,8 +33,6 @@ const WebGLBackground = (): ReactElement => {
   const loopControlsRef = useRef<LoopControls | null>(null);
   const [mounted, setMounted] = useState(false);
   const [canvasGeneration, setCanvasGeneration] = useState(0);
-  const { theme } = useTheme();
-  const themeRef = useRef(theme);
   const pathname = usePathname();
   const isHome = pathname === '/';
 
@@ -43,15 +40,6 @@ const WebGLBackground = (): ReactElement => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- the generation-keyed canvas must only mount client-side, after hydration
     setMounted(true);
   }, []);
-
-  // Theme only affects the clear color — track it in a ref so a theme change
-  // never tears down the GL pipeline. Repaint once if the loop is idle.
-  useEffect(() => {
-    themeRef.current = theme;
-    if (animationFrameRef.current === null) {
-      loopControlsRef.current?.renderOnce();
-    }
-  }, [theme]);
 
   useEffect(() => {
     if (!mounted || !canvasRef.current) {
@@ -84,7 +72,7 @@ const WebGLBackground = (): ReactElement => {
       const elapsedTime = (now - startTimeRef.current) / 1000;
       elapsedRef.current = elapsedTime;
 
-      renderer.render(elapsedTime, themeRef.current);
+      renderer.render(elapsedTime);
     };
 
     const tick = (): void => {
@@ -231,7 +219,7 @@ const WebGLBackground = (): ReactElement => {
 
   return (
     <div className="fixed top-0 left-0 w-full h-full z-[-1]" aria-hidden="true">
-      <div className={`absolute inset-0 transition-colors duration-300 ${theme === 'light' ? 'bg-[#fafafa]' : 'bg-[#14141f]'}`} />
+      <div className="absolute inset-0 bg-[#14141f]" />
       {mounted ? <canvas key={canvasGeneration} ref={canvasRef} className="absolute top-0 left-0 w-full h-full opacity-60" /> : null}
     </div>
   );

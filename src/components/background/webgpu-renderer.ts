@@ -2,7 +2,7 @@
 
 import tgpu from 'typegpu';
 import * as d from 'typegpu/data';
-import type { BackgroundRenderer, BackgroundTheme, RendererCallbacks } from './types';
+import type { BackgroundRenderer, RendererCallbacks } from './types';
 
 // Field order must match the WGSL Uniforms struct: time at offset 0,
 // resolution at offset 8 (d.struct inserts the 4 bytes of padding).
@@ -11,10 +11,7 @@ const Uniforms = d.struct({
   resolution: d.vec2f,
 });
 
-const CLEAR_COLORS = {
-  light: { r: 0.98, g: 0.98, b: 0.98, a: 1 },
-  dark: { r: 0.08, g: 0.08, b: 0.12, a: 1 },
-} as const satisfies Record<BackgroundTheme, GPUColorDict>;
+const CLEAR_COLOR = { r: 0.08, g: 0.08, b: 0.12, a: 1 } as const satisfies GPUColorDict;
 
 const SHADER_SOURCE = /* wgsl */ `
 // Ported from the GLSL fragment shader in webgl-renderer.ts
@@ -183,7 +180,7 @@ export async function createWebGPURenderer(
   });
 
   return {
-    render(elapsedSeconds: number, theme: BackgroundTheme): void {
+    render(elapsedSeconds: number): void {
       uniformsBuffer.write({
         time: elapsedSeconds,
         resolution: d.vec2f(canvas.width, canvas.height),
@@ -194,7 +191,7 @@ export async function createWebGPURenderer(
         colorAttachments: [
           {
             view: context.getCurrentTexture().createView(),
-            clearValue: CLEAR_COLORS[theme],
+            clearValue: CLEAR_COLOR,
             loadOp: 'clear',
             storeOp: 'store',
           },

@@ -1,7 +1,7 @@
 import type { BackgroundRenderer, RendererCallbacks } from './types';
 import { createWebGLRenderer } from './webgl-renderer';
 
-export type { BackgroundRenderer, BackgroundTheme, RendererCallbacks } from './types';
+export type { BackgroundRenderer, RendererCallbacks } from './types';
 
 let fallbackLogged = false;
 

@@ -1,7 +1,5 @@
-export type BackgroundTheme = 'light' | 'dark';
-
 export interface BackgroundRenderer {
-  render(elapsedSeconds: number, theme: BackgroundTheme): void;
+  render(elapsedSeconds: number): void;
   resize(width: number, height: number): void;
   destroy(): void;
 }
