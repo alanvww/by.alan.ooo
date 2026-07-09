@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { getFileData, getFiles, getContentTypes, BaseFrontmatter } from '@/lib/mdx';
+import { getFileData, getFiles, getContentTypes } from '@/lib/mdx';
 import { getContentSiblings } from '@/lib/get-content-siblings';
 import { MDXRemote } from 'next-mdx-remote/rsc';
 import { xmbMdxComponents } from '@/components/xmb/XMBMdxComponents';
@@ -34,24 +34,28 @@ export default async function ContentPage({ params }: { params: Promise<PagePara
     return notFound();
   }
 
+  // Load data inside try/catch, but construct JSX outside of it: errors thrown
+  // while rendering the components below would never be caught here anyway.
+  let data: Awaited<ReturnType<typeof getFileData>>;
+  let siblings: Awaited<ReturnType<typeof getContentSiblings>>;
   try {
-    const data = await getFileData(type, slug);
-    const siblings = await getContentSiblings(type, slug);
-
-    return (
-      <XMBContentLayout>
-        <XMBPostViewer 
-          type={type} 
-          slug={slug} 
-          frontmatter={data.frontmatter} 
-          siblings={siblings}
-        >
-          <MDXRemote source={data.content} components={xmbMdxComponents} />
-        </XMBPostViewer>
-      </XMBContentLayout>
-    );
+    data = await getFileData(type, slug);
+    siblings = await getContentSiblings(type, slug);
   } catch (error) {
-    console.error(`Error rendering ${type}/${slug}:`, error);
+    console.error(`Error loading ${type}/${slug}:`, error);
     return notFound();
   }
+
+  return (
+    <XMBContentLayout>
+      <XMBPostViewer
+        type={type}
+        slug={slug}
+        frontmatter={data.frontmatter}
+        siblings={siblings}
+      >
+        <MDXRemote source={data.content} components={xmbMdxComponents} />
+      </XMBPostViewer>
+    </XMBContentLayout>
+  );
 }

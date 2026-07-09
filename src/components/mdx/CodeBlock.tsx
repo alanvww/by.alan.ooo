@@ -1,7 +1,7 @@
 "use client"
-import { useState } from 'react'
+import { useState, type HTMLAttributes } from 'react'
 
-export function CodeBlock({ children, className, ...props }: { children: string, className?: string, [key: string]: any }) {
+export function CodeBlock({ children, className, ...props }: { children: string } & Omit<HTMLAttributes<HTMLElement>, 'children'>) {
   const language = className ? className.replace('language-', '') : ''
   const [copied, setCopied] = useState(false)
 

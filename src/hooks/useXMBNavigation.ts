@@ -1,6 +1,6 @@
 // src/hooks/useXMBNavigation.ts
 import { useEffect, useCallback, useRef, useState } from 'react';
-import type { XMBCategory, XMBItem } from '@/lib/xmb-types';
+import type { XMBCategory } from '@/lib/xmb-types';
 import { useRouter } from 'next/navigation';
 import { useXMBNavigationContext } from '@/lib/xmb-navigation-context';
 import { useKeyAudioFx } from '@/hooks/useKeyAudioFx';

@@ -12,6 +12,18 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 
+const updateDocumentTheme = (newTheme: Theme) => {
+  if (typeof window !== 'undefined') {
+    // Remove both classes first
+    document.documentElement.classList.remove('dark', 'light')
+    // Add the appropriate class
+    document.documentElement.classList.add(newTheme)
+    // Update data attribute for better CSS targeting
+    document.documentElement.setAttribute('data-theme', newTheme)
+    localStorage.setItem('theme', newTheme)
+  }
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>('dark')
   const [isHydrated, setIsHydrated] = useState(false)
@@ -21,7 +33,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const savedTheme = localStorage.getItem('theme') as Theme | null
     const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
     const initialTheme = savedTheme || systemTheme
-    
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- theme must be read from localStorage/matchMedia after hydration; reading it during render would cause an SSR mismatch
     setThemeState(initialTheme)
     updateDocumentTheme(initialTheme)
     setIsHydrated(true)
@@ -41,18 +54,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     mediaQuery.addEventListener('change', handleChange)
     return () => mediaQuery.removeEventListener('change', handleChange)
   }, [])
-
-  const updateDocumentTheme = (newTheme: Theme) => {
-    if (typeof window !== 'undefined') {
-      // Remove both classes first
-      document.documentElement.classList.remove('dark', 'light')
-      // Add the appropriate class
-      document.documentElement.classList.add(newTheme)
-      // Update data attribute for better CSS targeting
-      document.documentElement.setAttribute('data-theme', newTheme)
-      localStorage.setItem('theme', newTheme)
-    }
-  }
 
   const setTheme = (newTheme: Theme) => {
     setThemeState(newTheme)

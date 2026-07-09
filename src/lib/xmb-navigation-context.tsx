@@ -1,8 +1,7 @@
 'use client';
 
-import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
 import type { XMBCategory, XMBItem } from './xmb-types';
-import { useRouter } from 'next/navigation';
 
 interface XMBNavigationContextType {
     categoryIndex: number;
@@ -28,15 +27,13 @@ export const XMBNavigationProvider = ({ children, categories }: { children: Reac
     const [categoryIndex, setCategoryIndex] = useState(2); // Default to Projects
     const [itemIndex, setItemIndex] = useState(-1);
     const [navigationPath, setNavigationPath] = useState<number[]>([]);
-    const [pressedKeys, setPressedKeys] = useState<Set<string>>(new Set());
+    const [pressedKeys] = useState<Set<string>>(new Set());
     const [isContentViewing, setIsContentViewing] = useState(false);
     const [isNavigating, setIsNavigating] = useState(false);
     
     const navTimerRef = useRef<NodeJS.Timeout | null>(null);
     const minDelayReachedRef = useRef(false);
     const finishPendingRef = useRef(false);
-
-    const router = useRouter();
 
     const startNavigation = useCallback(() => {
         setIsNavigating(true);

@@ -216,9 +216,7 @@ const XMBVerticalList = React.memo(
                                   left: isContextView ? '-50px' : `${fallbackLeft}px`,
                                   transform: isContextView ? 'translateX(0)' : 'translateX(-50%)',
                                   // CSS Anchor positioning (progressive enhancement)
-                                  // @ts-ignore - CSS Anchor positioning API
                                   positionAnchor: "--active-category",
-                                  // @ts-ignore
                                   inset: "anchor(bottom) auto auto anchor(left)",
                                   marginTop: "2rem",
                                   pointerEvents: isContextView ? 'none' : 'auto',

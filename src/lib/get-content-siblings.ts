@@ -1,4 +1,4 @@
-import { getAllContent, BaseFrontmatter } from './mdx';
+import { getAllContent } from './mdx';
 
 export interface SiblingInfo {
     prev?: { slug: string; title: string };

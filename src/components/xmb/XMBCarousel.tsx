@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { useXMBNavigationContext } from "@/lib/xmb-navigation-context";
 import type { XMBItem } from "@/lib/xmb-types";
 import XMBIcon from "./XMBIcon";
-import { XMB_CAROUSEL, XMB_ANIMATION, XMB_LAYOUT } from "@/lib/xmb-constants";
+import { XMB_CAROUSEL, XMB_ANIMATION } from "@/lib/xmb-constants";
 
 interface XMBCarouselProps {
   items: XMBItem[];
@@ -27,6 +27,7 @@ const XMBCarousel = ({ items, activeIndex, onSelect }: XMBCarouselProps) => {
   
   // Sync scrollOffset with activeIndex when it changes externally (keyboard nav)
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- scrollOffset intentionally trails the externally controlled activeIndex
     setScrollOffset(activeIndex);
   }, [activeIndex]);
   

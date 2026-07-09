@@ -1,21 +1,12 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useTheme } from '@/lib/theme-context';
 
 const WebGLBackground = () => {
     const canvasRef = useRef(null);
     const { theme } = useTheme();
-    const [mounted, setMounted] = useState(false);
-    let program: WebGLProgram;
-    let uTimeLocation: WebGLUniformLocation;
-    let uResolutionLocation: WebGLUniformLocation;
 
     useEffect(() => {
-        setMounted(true);
-    }, []);
-
-    useEffect(() => {
-        if (!mounted) return;
         const canvas = canvasRef.current as unknown as HTMLCanvasElement;
         const gl = canvas.getContext('webgl');
 
@@ -48,9 +39,10 @@ const WebGLBackground = () => {
 
         const createProgram = (
             gl: WebGLRenderingContext,
-            vertexShader: any,
-            fragmentShader: any
+            vertexShader: WebGLShader | null,
+            fragmentShader: WebGLShader | null
         ) => {
+            if (!vertexShader || !fragmentShader) return null;
             const program = gl.createProgram() as WebGLProgram;
             gl.attachShader(program, vertexShader);
             gl.attachShader(program, fragmentShader);
@@ -171,7 +163,8 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
         );
 
         // Create program
-        program = createProgram(gl, vertexShader, fragmentShader) as WebGLProgram;
+        const program = createProgram(gl, vertexShader, fragmentShader);
+        if (!program) return;
 
         // Set up buffers and attributes
         const positionBuffer = gl.createBuffer();
@@ -183,17 +176,17 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
         gl.vertexAttribPointer(positionAttributeLocation, 2, gl.FLOAT, false, 0, 0);
 
         // Set up uniforms
-        uTimeLocation = gl.getUniformLocation(
+        const uTimeLocation = gl.getUniformLocation(
             program,
             'uTime'
         ) as WebGLUniformLocation;
-        uResolutionLocation = gl.getUniformLocation(
+        const uResolutionLocation = gl.getUniformLocation(
             program,
             'uResolution'
         ) as WebGLUniformLocation;
 
         // Animation loop
-        let startTime = performance.now();
+        const startTime = performance.now();
         const render = () => {
             const currentTime = performance.now();
             const elapsedTime = (currentTime - startTime) / 1000; // time in seconds
@@ -238,19 +231,16 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
             gl.deleteShader(vertexShader);
             gl.deleteBuffer(positionBuffer);
         };
-    }, [mounted, theme]);
+    }, [theme]);
 
-    // Don't render canvas until mounted to avoid hydration mismatch
     return (
         <div className="fixed top-0 left-0 w-full h-full z-[-1]">
             {/* Theme-aware backdrop */}
             <div className={`absolute inset-0 transition-colors duration-300 ${theme === 'light' ? 'bg-[#fafafa]' : 'bg-[#14141f]'}`} />
-            {mounted && (
-                <canvas
-                    ref={canvasRef}
-                    className="absolute top-0 left-0 w-full h-full opacity-60"
-                />
-            )}
+            <canvas
+                ref={canvasRef}
+                className="absolute top-0 left-0 w-full h-full opacity-60"
+            />
         </div>
     );
 };

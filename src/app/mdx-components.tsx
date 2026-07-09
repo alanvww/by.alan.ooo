@@ -32,12 +32,12 @@ export const mdxComponents: MDXComponents = {
         const childrenArray = React.Children.toArray(children)
         const inlineHtmlTags = new Set(['a', 'em', 'strong', 'code', 'span', 'small', 'sup', 'sub', 'kbd', 'i', 'b', 'u'])
         const blockHtmlTags = new Set(['p', 'div', 'pre', 'blockquote', 'table', 'ul', 'ol', 'figure', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
-        const inlineComponents = new Set<any>([Badge])
+        const inlineComponents = new Set<React.ElementType>([Badge])
 
         const containsNonInlineContent = childrenArray.some((child) => {
             if (typeof child === 'string' || typeof child === 'number') return false
             if (!React.isValidElement(child)) return false
-            const childType: any = child.type
+            const childType = child.type
             if (typeof childType === 'string') {
                 if (blockHtmlTags.has(childType)) return true
                 return !inlineHtmlTags.has(childType)
@@ -83,10 +83,10 @@ export const mdxComponents: MDXComponents = {
         }
         return <a target="_blank" rel="noopener noreferrer" className={className} {...props} href={href} />
     },
-    pre: ({ children }: { children: any }) => {
+    pre: ({ children }: { children?: React.ReactNode }) => {
         return children
     },
-    code: ({ children, className, ...props }: { children: string, className?: string, [key: string]: any }) => {
+    code: ({ children, className, ...props }: { children: string } & Omit<React.HTMLAttributes<HTMLElement>, 'children'>) => {
         const isInlineCode = !className
         if (isInlineCode) {
             return (
