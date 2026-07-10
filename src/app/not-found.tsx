@@ -1,9 +1,27 @@
 'use client';
 
+import { useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { playCancel } from '@/hooks/useKeyAudioFx';
 import { XMB_OVERLAY } from '@/lib/xmb-constants';
 
 export default function NotFound() {
+    const router = useRouter();
+
+    // The 404 renders at the ROOT not-found boundary, outside the [type]
+    // layout — XMBPostFrame's Escape handler is unmounted here, so the ESC
+    // keycap below needs its own.
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key !== 'Escape') return;
+            playCancel();
+            router.push('/');
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [router]);
+
     return (
         <div className={`fixed inset-0 z-50 flex flex-col items-center justify-center ${XMB_OVERLAY.FULLSCREEN} text-xmb-fg`}>
             <div className="text-center max-w-lg px-6">

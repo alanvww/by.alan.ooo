@@ -10,7 +10,6 @@ import rehypeExternalLinks from 'rehype-external-links';
 import rehypePrettyCode from 'rehype-pretty-code';
 import { xmbMdxComponents } from '@/components/xmb/XMBMdxComponents';
 import XMBPostViewer from '@/components/xmb/XMBPostViewer';
-import XMBContentLayout from '@/components/xmb/XMBContentLayout';
 
 interface PageParams {
   type: string;
@@ -85,20 +84,20 @@ export default async function ContentPage({ params }: { params: Promise<PagePara
     ],
   };
 
+  // The surrounding shell (header, frosted frame, back button) comes from the
+  // persistent [type] layout — this page renders only the per-post content.
   return (
-    <XMBContentLayout>
-      <XMBPostViewer
-        type={type}
-        slug={slug}
-        frontmatter={data.frontmatter}
-        siblings={siblings}
-      >
-        <MDXRemote
-          source={data.content}
-          components={xmbMdxComponents}
-          options={{ mdxOptions }}
-        />
-      </XMBPostViewer>
-    </XMBContentLayout>
+    <XMBPostViewer
+      type={type}
+      slug={slug}
+      frontmatter={data.frontmatter}
+      siblings={siblings}
+    >
+      <MDXRemote
+        source={data.content}
+        components={xmbMdxComponents}
+        options={{ mdxOptions }}
+      />
+    </XMBPostViewer>
   );
 }

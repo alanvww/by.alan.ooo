@@ -22,18 +22,35 @@ const ShimmerBar = ({ className }: { className?: string }) => (
     </motion.div>
 );
 
-const XMBLoadingSkeleton = () => {
+interface XMBLoadingSkeletonProps {
+    /**
+     * 'fullscreen' draws its own frosted backdrop and back-button placeholder
+     * (standalone overlay, e.g. over the home menu). 'content' fills the
+     * persistent XMBPostFrame, which already provides both.
+     */
+    variant?: 'fullscreen' | 'content';
+}
+
+const XMBLoadingSkeleton = ({ variant = 'fullscreen' }: XMBLoadingSkeletonProps) => {
+    const isFullscreen = variant === 'fullscreen';
+
     return (
-        <div className={`fixed inset-0 z-50 flex flex-col ${XMB_OVERLAY.FULLSCREEN} text-xmb-fg overflow-hidden`}>
+        <div
+            className={`${
+                isFullscreen ? `fixed inset-0 z-50 ${XMB_OVERLAY.FULLSCREEN}` : 'absolute inset-0'
+            } flex flex-col text-xmb-fg overflow-hidden`}
+        >
             {/* Header / Back (Top Left) */}
-            <div className="absolute top-8 left-12 z-50">
-                <div className="flex items-center gap-3 text-xmb-fg/20">
-                    <div className="w-10 h-10 rounded-full border border-xmb-fg/5 flex items-center justify-center bg-xmb-fg/5">
-                        <XMBIcon name="ArrowLeft" size={18} />
+            {isFullscreen && (
+                <div className="absolute top-8 left-12 z-50">
+                    <div className="flex items-center gap-3 text-xmb-fg/20">
+                        <div className="w-10 h-10 rounded-full border border-xmb-fg/5 flex items-center justify-center bg-xmb-fg/5">
+                            <XMBIcon name="ArrowLeft" size={18} />
+                        </div>
+                        <div className="h-2 w-24 bg-xmb-fg/5 rounded-full" />
                     </div>
-                    <div className="h-2 w-24 bg-xmb-fg/5 rounded-full" />
                 </div>
-            </div>
+            )}
 
             {/* Scrollable Content */}
             <div className="flex-1 overflow-y-auto pt-32 pb-48 px-6 md:px-0 scroll-smooth">
@@ -80,16 +97,14 @@ const XMBLoadingSkeleton = () => {
                 </div>
             </div>
 
-            {/* Bottom Navigation Skeleton */}
+            {/* Bottom Navigation Skeleton — geometry mirrors the real bottom
+                nav in XMBPostViewer so the placeholders sit exactly where the
+                Previous/Next buttons land when the post arrives. */}
             <div className={`absolute bottom-0 inset-x-0 h-32 ${XMB_OVERLAY.BOTTOM_FADE} pointer-events-none z-40`}>
-                <div className="h-full max-w-6xl mx-auto px-12 flex items-center justify-between pointer-events-auto">
+                <div className="h-full max-w-6xl mx-auto px-6 md:px-12 pb-[env(safe-area-inset-bottom)] flex items-center justify-between pointer-events-none">
                     <div className="flex-1 flex flex-col items-start gap-2">
                         <ShimmerBar className="h-2 w-16" />
                         <ShimmerBar className="h-4 w-32" />
-                    </div>
-
-                    <div className="hidden md:flex items-center gap-8 px-8 py-3 bg-xmb-fg/5 backdrop-blur-md rounded-full border border-xmb-fg/10">
-                        <ShimmerBar className="h-4 w-48" />
                     </div>
 
                     <div className="flex-1 flex flex-col items-end gap-2 text-right">

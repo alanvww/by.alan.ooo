@@ -6,10 +6,9 @@ import { DotWavePlaceholder } from '@/components/mdx/DotWavePlaceholder';
 import { motion } from 'motion/react';
 import { useRouter } from 'next/navigation';
 import { XMB_ANIMATION, EASE, XMB_OVERLAY } from '@/lib/xmb-constants';
-import { useXMBLoadingContext } from '@/lib/xmb-navigation-context';
-import { usePressedKeys } from '@/hooks/usePressedKeys';
+import { useKeyPressed } from '@/hooks/usePressedKeys';
 import { useCoarsePointer } from '@/hooks/useCoarsePointer';
-import { playCancel, playNavigate } from '@/hooks/useKeyAudioFx';
+import { playNavigate } from '@/hooks/useKeyAudioFx';
 import XMBIcon from './XMBIcon';
 import XMBKeycap from './XMBKeycap';
 import type { PostFrontmatter, ProjectFrontmatter } from '@/lib/mdx';
@@ -25,10 +24,17 @@ interface XMBPostViewerProps {
 
 const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerProps) => {
     const router = useRouter();
-    const { startNavigation } = useXMBLoadingContext();
     const scrollContainerRef = useRef<HTMLDivElement>(null);
-    const pressedKeys = usePressedKeys();
+    const prevPressed = useKeyPressed('ArrowLeft');
+    const nextPressed = useKeyPressed('ArrowRight');
     const isCoarse = useCoarsePointer();
+
+    // Warm the sibling routes so ←/→ swaps render instantly instead of
+    // dropping to the loading skeleton (router.push alone never prefetches).
+    useEffect(() => {
+        if (siblings.prev) router.prefetch(`/${type}/${siblings.prev.slug}`);
+        if (siblings.next) router.prefetch(`/${type}/${siblings.next.slug}`);
+    }, [router, siblings, type]);
 
     // Dot-wave placeholder sits behind the cover until it finishes loading.
     const [coverLoaded, setCoverLoaded] = useState(false);
@@ -44,26 +50,15 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
             const PAGE_SCROLL_AMOUNT = 500;
 
             switch (e.key) {
-                case 'Escape':
-                case 'Backspace':
-                    // Prevent backspace from navigating back if focused on an input
-                    if (e.key === 'Backspace' && ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName || '')) {
-                        return;
-                    }
-                    playCancel();
-                    router.push('/');
-                    break;
                 case 'ArrowLeft':
                     if (siblings.prev) {
                         playNavigate();
-                        startNavigation();
                         router.push(`/${type}/${siblings.prev.slug}`);
                     }
                     break;
                 case 'ArrowRight':
                     if (siblings.next) {
                         playNavigate();
-                        startNavigation();
                         router.push(`/${type}/${siblings.next.slug}`);
                     }
                     break;
@@ -110,14 +105,17 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
         return () => {
             window.removeEventListener('keydown', handleKeyDown);
         };
-    }, [router, siblings, type, startNavigation]);
+    }, [router, siblings, type]);
 
+    // The frosted backdrop and back button live in XMBPostFrame (the [type]
+    // layout), which persists across sibling navigation — this root only
+    // fades the per-post content in over the already-opaque frame.
     return (
         <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.2, ease: EASE.ENTER }}
-            className={`fixed inset-0 z-50 flex flex-col ${XMB_OVERLAY.FULLSCREEN} text-xmb-fg overflow-hidden`}
+            className="absolute inset-0 flex flex-col overflow-hidden"
         >
             {/* Background Image (Blurred) */}
             {frontmatter.coverImage && (
@@ -132,38 +130,6 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
                     <div className="absolute inset-0 bg-linear-to-b dark:from-black/60 from-white/60 dark:via-black/40 via-white/40 dark:to-black/80 to-white/80" />
                 </div>
             )}
-
-            {/* Close Button / Back (Top Left) */}
-            <div className="absolute top-[max(2rem,env(safe-area-inset-top))] left-6 md:left-12 z-50">
-                <button
-                    onClick={() => {
-                        playCancel();
-                        router.push('/');
-                    }}
-                    className="group flex items-center gap-3 text-xmb-fg/50 hover:text-xmb-fg transition-colors duration-300 focus:outline-none touch-manipulation"
-                >
-                    <div className="flex items-center gap-2 min-h-11 rounded-full border border-xmb-fg/10 bg-xmb-fg/5 px-3 py-2 transition-all group-hover:border-xmb-fg/30 group-hover:bg-xmb-fg/10 group-active:border-xmb-fg/40 group-active:bg-xmb-fg/15">
-                        <XMBIcon name="ArrowLeft" size={18} />
-                        {!isCoarse && (
-                            <XMBKeycap
-                                label="ESC"
-                                hoverable
-                                pressed={pressedKeys.has('Escape')}
-                                className="px-1.5 w-auto"
-                            />
-                        )}
-                    </div>
-                    <span
-                        className={`text-xs font-mono uppercase tracking-[0.2em] transition-all duration-300 ${
-                            isCoarse
-                                ? 'opacity-100 translate-x-0'
-                                : 'opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0'
-                        }`}
-                    >
-                        Back to Menu
-                    </span>
-                </button>
-            </div>
 
             {/* Scrollable Content */}
             <div
@@ -253,7 +219,6 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
                             <button
                                 onClick={() => {
                                     playNavigate();
-                                    startNavigation();
                                     router.push(`/${type}/${siblings.prev!.slug}`);
                                 }}
                                 className="group pointer-events-auto touch-manipulation min-h-11 flex flex-col items-start justify-center gap-1 text-xmb-fg/40 hover:text-xmb-fg transition-all"
@@ -261,7 +226,7 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
                                 <span className="text-[10px] font-mono uppercase tracking-widest opacity-50">Previous</span>
                                 <span className="text-sm font-light tracking-wide flex items-center gap-2">
                                     <XMBIcon name="ArrowLeft" size={12} className="group-hover:-translate-x-1 transition-transform" />
-                                    {!isCoarse && <XMBKeycap label="←" hoverable pressed={pressedKeys.has('ArrowLeft')} />}
+                                    {!isCoarse && <XMBKeycap label="←" hoverable pressed={prevPressed} />}
                                     <span className="max-w-[32vw] truncate">{siblings.prev.title}</span>
                                 </span>
                             </button>
@@ -274,7 +239,6 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
                             <button
                                 onClick={() => {
                                     playNavigate();
-                                    startNavigation();
                                     router.push(`/${type}/${siblings.next!.slug}`);
                                 }}
                                 className="group pointer-events-auto touch-manipulation min-h-11 flex flex-col items-end justify-center gap-1 text-xmb-fg/40 hover:text-xmb-fg transition-all"
@@ -282,7 +246,7 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
                                 <span className="text-[10px] font-mono uppercase tracking-widest opacity-50">Next</span>
                                 <span className="text-sm font-light tracking-wide flex items-center gap-2">
                                     <span className="max-w-[32vw] truncate">{siblings.next.title}</span>
-                                    {!isCoarse && <XMBKeycap label="→" hoverable pressed={pressedKeys.has('ArrowRight')} />}
+                                    {!isCoarse && <XMBKeycap label="→" hoverable pressed={nextPressed} />}
                                     <XMBIcon name="CaretRight" size={12} className="group-hover:translate-x-1 transition-transform" />
                                 </span>
                             </button>

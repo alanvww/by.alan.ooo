@@ -1,10 +1,10 @@
 import XMBLoadingSkeleton from '@/components/xmb/XMBLoadingSkeleton';
-import XMBContentLayout from '@/components/xmb/XMBContentLayout';
 
+/**
+ * Article-shaped fallback rendered inside the persistent [type] layout while
+ * the next post's payload streams in — the frame, header, and back button
+ * stay put; only the content area shimmers.
+ */
 export default function Loading() {
-  return (
-    <XMBContentLayout shouldFinishLoading={false}>
-      <XMBLoadingSkeleton />
-    </XMBContentLayout>
-  );
+  return <XMBLoadingSkeleton variant="content" />;
 }
