@@ -31,6 +31,10 @@ export interface IndexPanHandlers {
  * step ticks like a key press; a fast flick grants up to FLICK_MAX_STEPS
  * bonus rows with staggered ticks.
  *
+ * The gesture axis is locked once total travel exceeds PAN_SLOP_PX:
+ * x-locked pans (category swipes) commit no detents and no flick bonus,
+ * only tap suppression.
+ *
  * All refs are mutated inside event handlers only (React Compiler safe).
  */
 export function useIndexPan({ getIndex, getMin, getMax, onCommit }: UseIndexPanOptions): IndexPanHandlers {
@@ -42,6 +46,10 @@ export function useIndexPan({ getIndex, getMin, getMax, onCommit }: UseIndexPanO
   const panConsumedRef = useRef(false);
   const panEndedAtRef = useRef(0);
   const flickTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  // Axis lock, decided ONCE when total travel first exceeds PAN_SLOP_PX.
+  // A wobbly horizontal category swipe must not commit item detents (or
+  // flick bonus steps) that the switch immediately discards.
+  const axisRef = useRef<'x' | 'y' | null>(null);
 
   const clearFlickTimers = useCallback(() => {
     for (const timer of flickTimersRef.current) {
@@ -67,11 +75,26 @@ export function useIndexPan({ getIndex, getMin, getMax, onCommit }: UseIndexPanO
     pendingIndexRef.current = getIndex();
     accumulatedRef.current = 0;
     panConsumedRef.current = false;
+    axisRef.current = null;
   }, [clearFlickTimers, getIndex]);
 
   const onPan = useCallback((_event: PointerEvent, info: PanInfo) => {
-    if (Math.abs(info.offset.x) > XMB_GESTURE.PAN_SLOP_PX || Math.abs(info.offset.y) > XMB_GESTURE.PAN_SLOP_PX) {
+    if (
+      axisRef.current === null &&
+      (Math.abs(info.offset.x) > XMB_GESTURE.PAN_SLOP_PX || Math.abs(info.offset.y) > XMB_GESTURE.PAN_SLOP_PX)
+    ) {
+      axisRef.current = Math.abs(info.offset.x) > Math.abs(info.offset.y) ? 'x' : 'y';
+      // Both axes mark the gesture as a pan — x-locked gestures still need
+      // their stray release click swallowed by onClickCapture.
       panConsumedRef.current = true;
+    }
+
+    // x-locked gestures belong to the category-swipe handler; accumulating
+    // their y wobble would commit detent steps the switch then discards.
+    // Sub-slop (unlocked) deltas still accumulate so a y gesture's first
+    // few pixels count toward its first detent, as before.
+    if (axisRef.current === 'x') {
+      return;
     }
 
     accumulatedRef.current += info.delta.y;
@@ -92,6 +115,13 @@ export function useIndexPan({ getIndex, getMin, getMax, onCommit }: UseIndexPanO
   const onPanEnd = useCallback((_event: PointerEvent, info: PanInfo) => {
     if (panConsumedRef.current) {
       panEndedAtRef.current = performance.now();
+    }
+
+    // A horizontal fling can release with enough stray y velocity to pass
+    // FLICK_VELOCITY — x-locked gestures never grant bonus rows.
+    if (axisRef.current === 'x') {
+      accumulatedRef.current = 0;
+      return;
     }
 
     const velocity = info.velocity.y;

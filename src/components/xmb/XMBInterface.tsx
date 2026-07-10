@@ -24,7 +24,6 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
   const [layoutMode, setLayoutMode] = useState<'full' | 'paged'>('full');
-  const [pagedStage, setPagedStage] = useState<'categories' | 'list'>('categories');
 
   const {
     categoryIndex,
@@ -64,25 +63,14 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
     };
   }, []);
 
-  useEffect(() => {
-    if (layoutMode !== 'paged') {
-      return;
-    }
-
-    if (itemIndex >= 0) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- paged stage trails navigation state driven by the shared XMB navigation context
-      setPagedStage('list');
-    } else if (itemIndex === -1 && navigationPath.length === 0) {
-      setPagedStage('categories');
-    }
-  }, [layoutMode, itemIndex, navigationPath.length]);
-
-  useEffect(() => {
-    if (layoutMode === 'full') {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- reset paged stage when the ResizeObserver switches layout mode
-      setPagedStage('categories');
-    }
-  }, [layoutMode]);
+  // The paged stage is fully derived from navigation state: a selection or an
+  // open folder means the list is showing, otherwise the category row is.
+  // Deriving during render (instead of mirroring into state via trailing
+  // effects) removes a throwaway frame on category swipes where the NEW
+  // category's full list mounted, painted once, and was discarded when the
+  // effect flipped the stage back — the primary mobile switch lag.
+  const pagedStage: 'categories' | 'list' =
+    itemIndex >= 0 || navigationPath.length > 0 ? 'list' : 'categories';
 
   const handleFolderDrill = useCallback((idx: number) => {
     setNavigationPath([...navigationPath, idx]);
@@ -175,24 +163,12 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
     return { parentItems, parentIndex };
   }, [isInsideFolder, currentItems, itemIndex, activeCategory, navigationPath]);
 
-  // Handle Escape key for paged layout back navigation
-  // This must be called before any early returns to satisfy Rules of Hooks
-  useEffect(() => {
-    const handlePagedBack = (event: KeyboardEvent) => {
-      if (layoutMode !== 'paged') {
-        return;
-      }
-
-      if (event.key === 'Escape') {
-        setPagedStage('categories');
-      }
-    };
-
-    window.addEventListener('keydown', handlePagedBack);
-    return () => {
-      window.removeEventListener('keydown', handlePagedBack);
-    };
-  }, [layoutMode]);
+  // No paged-specific Escape handler: with the derived stage, the shared
+  // `back` command (window keydown in useXMBNavigation) already lands on the
+  // right stage — at the root it deselects (itemIndex -1 → 'categories'), and
+  // inside a folder it pops ONE level with the cursor on the folder row
+  // (itemIndex >= 0 → stays 'list'). A second Escape listener would fight it
+  // and jump folders straight back to the category row.
 
   const handleCategorySelect = useCallback((idx: number) => {
     if (layoutMode === 'paged' && idx === categoryIndex) {
@@ -202,7 +178,6 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
       playConfirm();
       setNavigationPath([]);
       setItemIndex(0);
-      setPagedStage('list');
       return;
     }
 
@@ -211,12 +186,8 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
     // Keyboard category switches reset the folder path — clicks must too,
     // or a stale path gets replayed inside the newly selected category.
     setNavigationPath([]);
-    if (layoutMode === 'paged') {
-      setItemIndex(0);
-      setPagedStage('list');
-    } else {
-      setItemIndex(-1);
-    }
+    // In paged mode, selecting item 0 is what derives the 'list' stage.
+    setItemIndex(layoutMode === 'paged' ? 0 : -1);
   }, [categoryIndex, layoutMode, setCategoryIndex, setItemIndex, setNavigationPath]);
 
   // Drag-with-snap on the paged list: vertical pan travel commits discrete
@@ -242,8 +213,6 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
-      <div className="absolute inset-0 bg-linear-to-br dark:from-black/20 from-transparent to-transparent" />
-
       {/* Screen Reader Live Region */}
       <div aria-live="polite" className="sr-only">
         {activeItem ? `Selected item: ${activeItem.title}` : `Selected category: ${activeCategory.title}`}
@@ -323,10 +292,9 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
                 // Returning to the categories stage must be a clean root
                 // state — a stale folder path desyncs the command bar and
                 // kills root swipes (same reason handleCategorySelect
-                // clears it).
+                // clears it). Clean root state IS the 'categories' stage.
                 setNavigationPath([]);
                 setItemIndex(-1);
-                setPagedStage('categories');
               }}
               layoutMode="paged"
             />
@@ -350,7 +318,7 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
           Top-level folders are containers, not previewable content — wait until
           the user drills into them before showing a preview. */}
       <AnimatePresence>
-        {activeItem && !showCarousel && showFullLayout && activeItem.type !== 'folder' && (
+        {activeItem && !showCarousel && showFullLayout && activeItem.type !== 'folder' && !activeItem.hidePreview && (
           <XMBPreview item={activeItem} />
         )}
       </AnimatePresence>

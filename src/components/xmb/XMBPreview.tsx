@@ -14,7 +14,10 @@ const XMBPreview = ({ item }: XMBPreviewProps) => {
     <motion.div
       initial={{ opacity: 0, x: 100 }}
       animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: 100 }}
+      // Exit is an opacity-only fast tween (not the shared spring): this
+      // subtree holds a full-viewport blurred backdrop, and springing it
+      // out concurrently with a category switch's own springs causes jank.
+      exit={{ opacity: 0, transition: { duration: 0.13, ease: EASE.EXIT } }}
       transition={XMB_ANIMATION.SPRING_CONFIG}
       className="absolute inset-0 z-10 pointer-events-none"
       style={{ willChange: 'transform, opacity' }}

@@ -3,7 +3,7 @@
 import React from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useXMBDerivedContext, useXMBSelectionContext } from '@/lib/xmb-navigation-context';
-import { usePressedKeys } from '@/hooks/usePressedKeys';
+import { useKeyPressed } from '@/hooks/usePressedKeys';
 import { useCoarsePointer } from '@/hooks/useCoarsePointer';
 import { EASE } from '@/lib/xmb-constants';
 import { getEnterActionLabel } from '@/lib/xmb-navigation';
@@ -43,6 +43,17 @@ interface XMBCommandBarProps {
 }
 
 /**
+ * Leaf subscriber for a single key's held state. Keeping the subscription
+ * here (not in the bar) means keydown/keyup re-render only this keycap —
+ * a bar-wide re-render would repaint the backdrop-blurred pill and used to
+ * land mid-category-slide, janking the animation.
+ */
+const HintKeycap = ({ label, pressedKey, wide }: KeyHintGlyph) => {
+  const pressed = useKeyPressed(pressedKey);
+  return <XMBKeycap label={label} pressed={pressed} className={wide ? 'px-1.5 w-auto' : undefined} />;
+};
+
+/**
  * PS3-style command bar. On fine pointers it is the classic contextual hint
  * strip: display keycaps that light up while the matching key is held. On
  * coarse pointers the same frosted pill renders the hints as real pressable
@@ -50,7 +61,6 @@ interface XMBCommandBarProps {
  * becomes the controller.
  */
 const XMBCommandBar = ({ commands }: XMBCommandBarProps) => {
-  const pressedKeys = usePressedKeys();
   const isCoarse = useCoarsePointer();
   const { itemIndex, navigationPath } = useXMBSelectionContext();
   const { activeItem } = useXMBDerivedContext();
@@ -165,12 +175,15 @@ const XMBCommandBar = ({ commands }: XMBCommandBarProps) => {
             ? controls.map((control) => (
                 <motion.div
                   key={control.id}
-                  layout
-                  initial={{ opacity: 0, scale: 0.85, width: 0 }}
-                  animate={{ opacity: 1, scale: 1, width: 'auto' }}
-                  exit={{ opacity: 0, scale: 0.85, width: 0 }}
+                  // Compositor-only swap: animating width here tweened a
+                  // layout property, forcing a reflow + re-blur of the
+                  // frosted pill every frame — right as categories slide.
+                  initial={{ opacity: 0, scaleX: 0.85 }}
+                  animate={{ opacity: 1, scaleX: 1 }}
+                  exit={{ opacity: 0, scaleX: 0.85 }}
                   transition={{ duration: 0.2, ease: EASE.MOVE }}
-                  className="flex items-center gap-1 overflow-hidden whitespace-nowrap"
+                  style={{ transformOrigin: 'left center' }}
+                  className="flex items-center gap-1 whitespace-nowrap"
                 >
                   {control.buttons.map((button, i) => (
                     <XMBTouchButton
@@ -192,21 +205,19 @@ const XMBCommandBar = ({ commands }: XMBCommandBarProps) => {
             : hints.map((hint) => (
                 <motion.div
                   key={hint.id}
-                  layout
-                  initial={{ opacity: 0, scale: 0.85, width: 0 }}
-                  animate={{ opacity: 1, scale: 1, width: 'auto' }}
-                  exit={{ opacity: 0, scale: 0.85, width: 0 }}
+                  // Compositor-only swap: animating width here tweened a
+                  // layout property, forcing a reflow + re-blur of the
+                  // frosted pill every frame — right as categories slide.
+                  initial={{ opacity: 0, scaleX: 0.85 }}
+                  animate={{ opacity: 1, scaleX: 1 }}
+                  exit={{ opacity: 0, scaleX: 0.85 }}
                   transition={{ duration: 0.2, ease: EASE.MOVE }}
-                  className="flex items-center gap-2 overflow-hidden whitespace-nowrap"
+                  style={{ transformOrigin: 'left center' }}
+                  className="flex items-center gap-2 whitespace-nowrap"
                 >
                   <div className="flex gap-1">
                     {hint.keys.map((k, i) => (
-                      <XMBKeycap
-                        key={i}
-                        label={k.label}
-                        pressed={pressedKeys.has(k.pressedKey)}
-                        className={k.wide ? 'px-1.5 w-auto' : undefined}
-                      />
+                      <HintKeycap key={i} label={k.label} pressedKey={k.pressedKey} wide={k.wide} />
                     ))}
                   </div>
                   <span className="text-[11px] font-mono uppercase tracking-[0.18em] text-xmb-fg/65">

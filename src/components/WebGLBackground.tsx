@@ -85,7 +85,16 @@ const WebGLBackground = (): ReactElement => {
 
       // Cap at ~30fps — skip draw if less than 33ms since last render
       if (now - lastRenderTimeRef.current >= TARGET_FRAME_MS) {
-        lastRenderTimeRef.current = now;
+        // Fixed-timestep accumulator: advance the anchor by exactly one
+        // interval per draw so main-thread jitter cannot flip the cadence
+        // between 2- and 3-vsync gaps (resetting to `now` compounds the
+        // jitter into visible judder during springs). When more than one
+        // full interval behind (loop was paused or a long frame stalled us),
+        // re-anchor to `now` instead of bursting catch-up draws.
+        lastRenderTimeRef.current =
+          now - lastRenderTimeRef.current >= TARGET_FRAME_MS * 2
+            ? now
+            : lastRenderTimeRef.current + TARGET_FRAME_MS;
         renderFrame(now);
       }
 
@@ -219,8 +228,11 @@ const WebGLBackground = (): ReactElement => {
 
   return (
     <div className="fixed top-0 left-0 w-full h-full z-[-1]" aria-hidden="true">
+      {/* Visible until the canvas boots (or if GL init fails); once the canvas
+          paints it is fully opaque — the dim is baked into the shaders — so the
+          compositor can occlusion-cull this underlay. */}
       <div className="absolute inset-0 bg-[#14141f]" />
-      {mounted ? <canvas key={canvasGeneration} ref={canvasRef} className="absolute top-0 left-0 w-full h-full opacity-60" /> : null}
+      {mounted ? <canvas key={canvasGeneration} ref={canvasRef} className="absolute top-0 left-0 w-full h-full" /> : null}
     </div>
   );
 };

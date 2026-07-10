@@ -356,7 +356,10 @@ const XMBCarousel = ({ items, activeIndex, onSelect, onBack }: XMBCarouselProps)
       className="absolute top-0 right-0 w-full md:w-[70%] h-dvh flex items-center justify-center pointer-events-auto overflow-clip touch-none"
       initial={{ opacity: 0, x: 100 }}
       animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: 100 }}
+      // Exit is opacity-only and faster than the entrance: sliding this
+      // 70%-viewport subtree of glowing cards out concurrently with a
+      // category switch's springs causes jank, so it just fades.
+      exit={{ opacity: 0, transition: { duration: 0.15, ease: EASE.EXIT } }}
       transition={{ duration: 0.25, ease: EASE.ENTER }}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}

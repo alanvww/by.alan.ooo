@@ -152,6 +152,10 @@ function setupWebGL(canvas: HTMLCanvasElement): WebGLResources | null {
       }
 
       color /= depthSum;
+      // Bake the compositor dim (formerly CSS opacity: 0.6 over the opaque
+      // #14141f underlay) into the shader so the canvas presents as a single
+      // opaque layer: final = 0.6 * color + 0.4 * rgb(20, 20, 31).
+      color = color * 0.6 + vec3(0.078, 0.078, 0.122) * 0.4;
       fragColor = vec4(color, 1.0);
     }
 

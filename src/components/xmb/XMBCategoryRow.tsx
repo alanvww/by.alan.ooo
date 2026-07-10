@@ -2,7 +2,7 @@
 'use client';
 
 import React from 'react';
-import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import type { XMBCategory } from '@/lib/xmb-types';
 import XMBIcon from './XMBIcon';
 import { XMB_LAYOUT, XMB_ANIMATION, EASE } from '@/lib/xmb-constants';
@@ -14,19 +14,21 @@ interface XMBCategoryRowProps {
   onCategorySelect: (index: number) => void;
 }
 
-const XMBCategoryRow = React.memo(({ 
-  categories, 
-  categoryIndex, 
+const XMBCategoryRow = React.memo(({
+  categories,
+  categoryIndex,
   itemIndex,
   onCategorySelect,
 }: XMBCategoryRowProps) => {
   // Calculate the container offset to center the active category
   const containerOffset = -categoryIndex * XMB_LAYOUT.CATEGORY_WIDTH;
-  const reduceMotion = useReducedMotion();
 
   return (
-    <motion.div
-      className="relative z-10 h-16 md:h-20 overflow-visible"
+    // Idle vertical drift lives in CSS (xmb-row-sway) so the 8s ambient loop
+    // runs on the compositor instead of motion's rAF loop — and so the sway
+    // transform can't fight the strip's motion-driven x spring below.
+    <div
+      className="relative z-10 h-16 md:h-20 overflow-visible xmb-row-sway"
       role="tablist"
       aria-label="XMB Categories"
       // One cell wide, so centering wrappers (paged layout) center the
@@ -34,10 +36,24 @@ const XMBCategoryRow = React.memo(({
       // give this element zero width, landing the active icon ~half a
       // cell right of screen center.
       style={{ width: XMB_LAYOUT.CATEGORY_WIDTH }}
-      // Idle vertical drift — gentle ambient sway so the row feels alive at rest
-      animate={reduceMotion ? { y: 0 } : { y: [-2, 2, -2] }}
-      transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
     >
+      {/* Glow behind the active category. The active cell always lands at this
+          wrapper's own box (the strip translates beneath it), so one persistent
+          element here replaces the per-cell layoutId FLIP — no layout
+          measurement inside the transform-animating strip on switch. h-12
+          matches the active icon's 48px cell content box. */}
+      <div
+        aria-hidden
+        className="absolute inset-x-0 top-1/2 h-12 -translate-y-1/2 rounded-full pointer-events-none"
+      >
+        {/* Breathing pulse as a CSS keyframe animation (opacity/scale only)
+            so it stays on the compositor; reduced-motion gating in globals.css */}
+        <div
+          className="absolute inset-0 rounded-full xmb-glow-pulse"
+          style={{ background: 'radial-gradient(circle, color-mix(in srgb, var(--color-xmb-fg) 18%, transparent), transparent 55%)' }}
+        />
+      </div>
+
       {/* Sliding container - only ONE animation instead of N */}
       <motion.div
         className="absolute left-0 top-0 flex items-center h-full"
@@ -48,7 +64,7 @@ const XMBCategoryRow = React.memo(({
         {categories.map((category, idx) => {
           const isActive = idx === categoryIndex;
           const distance = Math.abs(idx - categoryIndex);
-          
+
           return (
             <div
               key={category.id}
@@ -57,10 +73,7 @@ const XMBCategoryRow = React.memo(({
               aria-label={category.title}
               tabIndex={isActive ? 0 : -1}
               className="flex flex-col items-center gap-2 cursor-pointer relative focus-visible:outline-none"
-              style={{ 
-                width: `${XMB_LAYOUT.CATEGORY_WIDTH}px`,
-                anchorName: isActive ? '--active-category' : undefined,
-              }}
+              style={{ width: `${XMB_LAYOUT.CATEGORY_WIDTH}px` }}
               onClick={() => {
                 // Sound is owned by handleCategorySelect (navigate on switch,
                 // confirm when entering the active category's list).
@@ -72,37 +85,17 @@ const XMBCategoryRow = React.memo(({
                 }
               }}
             >
-              {/* Glow effect for active category — outer carries FLIP between categories,
-                  inner carries the slow breathing pulse so neither animation fights the other */}
-              <AnimatePresence>
-                {isActive && (
-                  <motion.div
-                    layoutId="category-glow"
-                    className="absolute inset-0 rounded-full pointer-events-none"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.2, ease: EASE.SOFT }}
-                  >
-                    <motion.div
-                      className="absolute inset-0 rounded-full"
-                      style={{ background: 'radial-gradient(circle, color-mix(in srgb, var(--color-xmb-fg) 18%, transparent), transparent 55%)' }}
-                      animate={reduceMotion ? { scale: 1, opacity: 1 } : { scale: [1, 1.15, 1], opacity: [1, 0.65, 1] }}
-                      transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-                    />
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* Icon with individual scale animation */}
+              {/* Icon with individual scale animation. transition-[filter]
+                  fades the active drop-shadow in/out (filter interpolates
+                  from none via zeroed drop-shadow values) instead of popping
+                  it discretely on the switch frame. */}
               <motion.div
-                animate={{ 
+                animate={{
                   scale: isActive ? 1.2 : 0.8,
                   opacity: isActive ? 1 : Math.max(0.3, 1 - distance * 0.3)
                 }}
                 transition={XMB_ANIMATION.ICON_SPRING}
-                className={`relative z-10 transition-shadow duration-150 ${isActive ? 'drop-shadow-[0_0_15px_var(--color-xmb-glow)]' : ''}`}
-                style={{ willChange: 'transform, opacity' }}
+                className={`relative z-10 transition-[filter] duration-150 ${isActive ? 'drop-shadow-[0_0_15px_var(--color-xmb-glow)]' : ''}`}
               >
                 <XMBIcon
                   name={category.iconName}
@@ -129,7 +122,7 @@ const XMBCategoryRow = React.memo(({
           );
         })}
       </motion.div>
-    </motion.div>
+    </div>
   );
 });
 

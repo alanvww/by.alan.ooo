@@ -482,6 +482,44 @@ code[data-theme] span {
   }
 }
 
+/* XMB category row ambient animations (XMBCategoryRow.tsx) — CSS keyframes
+   instead of motion's rAF loop so the infinite loops stay on the compositor
+   and never contend with the JS thread during category-switch springs. */
+@keyframes xmb-row-sway {
+  0%, 100% {
+    transform: translateY(-2px);
+  }
+  50% {
+    transform: translateY(2px);
+  }
+}
+
+.xmb-row-sway {
+  animation: xmb-row-sway 8s ease-in-out infinite;
+}
+
+@keyframes xmb-glow-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.65;
+    transform: scale(1.15);
+  }
+}
+
+.xmb-glow-pulse {
+  animation: xmb-glow-pulse 3s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xmb-row-sway,
+  .xmb-glow-pulse {
+    animation: none;
+  }
+}
+
 /* '#' anchor appended to headings — invisible until the heading is hovered */
 .heading-anchor {
   margin-left: 0.4em;

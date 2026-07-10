@@ -6,6 +6,13 @@ import { useXMBDerivedContext, useXMBLoadingContext, useXMBSelectionContext } fr
 import { useKeyAudioFx, playConfirm, playCancel, playNavigate } from '@/hooks/useKeyAudioFx';
 import { activateItem } from '@/lib/xmb-navigation';
 
+// Holding ArrowLeft/Right auto-repeats at the OS rate (~30ms), which queues
+// category switches (and their exit animations) faster than they can render.
+// Repeat events are throttled to one switch per this interval so hold-to-scroll
+// still works but the animation pipeline never backs up. Up/Down row moves are
+// cheap and stay unthrottled.
+const HORIZONTAL_REPEAT_INTERVAL_MS = 150;
+
 /**
  * The six XMB navigation primitives, shared verbatim between the keyboard
  * dispatcher and the touch controls (command bar buttons, swipes, pans).
@@ -174,14 +181,27 @@ export function useXMBNavigation(categories: XMBCategory[]): XMBNavigationResult
     back,
   }), [back, confirm, moveDown, moveLeft, moveRight, moveUp]);
 
+  // Timestamp of the last accepted Left/Right press, for repeat throttling.
+  const lastHorizontalMoveRef = useRef(0);
+
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     switch (e.key) {
       case 'ArrowLeft':
-        moveLeft();
+      case 'ArrowRight': {
+        const now = performance.now();
+        // First (non-repeat) press is always instant; only OS auto-repeat is
+        // rate-limited.
+        if (e.repeat && now - lastHorizontalMoveRef.current < HORIZONTAL_REPEAT_INTERVAL_MS) {
+          return;
+        }
+        lastHorizontalMoveRef.current = now;
+        if (e.key === 'ArrowLeft') {
+          moveLeft();
+        } else {
+          moveRight();
+        }
         break;
-      case 'ArrowRight':
-        moveRight();
-        break;
+      }
       case 'ArrowUp':
         moveUp();
         break;

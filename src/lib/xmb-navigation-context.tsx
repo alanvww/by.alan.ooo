@@ -60,6 +60,7 @@ export const XMBNavigationProvider = ({
     const [categoryIndex, setCategoryIndex] = useState(() =>
         Math.min(Math.max(initialCategoryIndex, 0), Math.max(categories.length - 1, 0)),
     );
+
     const [itemIndex, setItemIndex] = useState(-1);
     const [navigationPath, setNavigationPath] = useState<number[]>([]);
     const [isNavigating, setIsNavigating] = useState(false);
@@ -101,7 +102,7 @@ export const XMBNavigationProvider = ({
         setCategoryIndex,
         setItemIndex,
         setNavigationPath,
-    }), [categoryIndex, itemIndex, navigationPath]);
+    }), [categoryIndex, itemIndex, navigationPath, setCategoryIndex]);
 
     const derivedValue = useMemo<XMBDerivedContextType>(() => {
         const activeCategory = categories[categoryIndex] ?? null;

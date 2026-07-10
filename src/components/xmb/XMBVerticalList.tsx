@@ -3,7 +3,7 @@
 
 import React, { useState, useCallback, useEffect, useLayoutEffect, useRef, forwardRef } from "react";
 import Image from 'next/image';
-import { motion, AnimatePresence, useReducedMotion } from "motion/react";
+import { motion, AnimatePresence, animate, useMotionValue, useReducedMotion } from "motion/react";
 import { useRouter } from "next/navigation";
 import { useXMBLoadingContext } from "@/lib/xmb-navigation-context";
 import type { XMBCategory, XMBItem } from "@/lib/xmb-types";
@@ -19,7 +19,9 @@ interface XMBVerticalListProps {
     activeCategory: XMBCategory;
     currentItems: XMBItem[]; // Use the current items from navigation hook
     itemIndex: number;
-    categoryIndex: number; // Add this for fallback positioning
+    // No longer read here (the list is pinned at the wrapper origin), but
+    // kept so callers that still thread it keep compiling.
+    categoryIndex?: number;
     navigationPath: number[]; // Add path for breadcrumb/context
     isContextView?: boolean; // Show as context sidebar when inside folder
     onItemSelect: (index: number) => void;
@@ -94,7 +96,6 @@ const XMBListItem = React.memo(forwardRef<HTMLDivElement, XMBListItemProps>(
                     }`}
                     animate={{ y: -aboveRowLift, opacity }}
                     transition={XMB_ANIMATION.LIST_SPRING}
-                    style={{ willChange: "transform, opacity" }}
                 >
                     {/* Thumbnail */}
                     <div
@@ -107,6 +108,10 @@ const XMBListItem = React.memo(forwardRef<HTMLDivElement, XMBListItemProps>(
                         {isFolder ? (
                             <div className="flex items-center justify-center w-full h-full">
                                 <XMBIcon name="Folder" size={24} />
+                            </div>
+                        ) : item.icon ? (
+                            <div className="flex items-center justify-center w-full h-full">
+                                <XMBIcon name={item.icon} size={24} />
                             </div>
                         ) : item.image && !imgError ? (
                             <div className="relative w-full h-full">
@@ -143,9 +148,13 @@ const XMBListItem = React.memo(forwardRef<HTMLDivElement, XMBListItemProps>(
                                 </motion.div>
                             )}
                         </div>
+                        {/* initial={false}: entering at full size avoids the
+                            height 0→auto tween, which forces a column reflow on
+                            every animation frame right when the list mounts
+                            with row 0 selected. */}
                         {isItemSelected && item.description && (
                             <motion.p
-                                initial={{ opacity: 0, height: 0 }}
+                                initial={false}
                                 animate={{ opacity: 0.6, height: "auto" }}
                                 exit={{ opacity: 0, height: 0 }}
                                 className="text-xs md:text-sm text-xmb-fg/60 mt-1 line-clamp-2"
@@ -206,7 +215,6 @@ const XMBVerticalList = React.memo(
         activeCategory,
         currentItems,
         itemIndex,
-        categoryIndex,
         navigationPath,
         isContextView = false,
         onItemSelect,
@@ -241,9 +249,13 @@ const XMBVerticalList = React.memo(
 
         const displayIndex = itemIndex === -1 ? 0 : itemIndex;
 
-        // Row DOM nodes, keyed by render index. Written only from callback
-        // refs (React Compiler safe).
-        const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
+        // Row DOM nodes, keyed by item.id. Index keys would alias across
+        // content swaps (category switches replace the item set in place),
+        // letting a measurement read a stale node from the previous list.
+        // Written only from callback refs (React Compiler safe); entries are
+        // deleted on the null cleanup call so the map never holds unmounted
+        // nodes.
+        const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map());
         const columnRef = useRef<HTMLDivElement | null>(null);
 
         // Measured slide offset for the column. Row pitch is content-driven
@@ -255,19 +267,22 @@ const XMBVerticalList = React.memo(
         const [containerOffset, setContainerOffset] = useState(0);
 
         const measureOffset = useCallback(() => {
-            const first = rowRefs.current[0];
-            const selected = rowRefs.current[displayIndex];
+            const firstId = currentItems[0]?.id;
+            const selectedId = currentItems[displayIndex]?.id;
+            const first = firstId ? rowRefs.current.get(firstId) : undefined;
+            const selected = selectedId ? rowRefs.current.get(selectedId) : undefined;
             if (!first || !selected) {
                 return;
             }
             // Diff of offsetTops: exact regardless of offsetParent.
             setContainerOffset(-(selected.offsetTop - first.offsetTop));
-        }, [displayIndex]);
+        }, [currentItems, displayIndex]);
 
-        // Re-measure before paint whenever selection or the item set changes.
+        // Re-measure before paint whenever selection or the item set changes
+        // (both are inputs of measureOffset, so its identity tracks them).
         useLayoutEffect(() => {
             measureOffset();
-        }, [measureOffset, currentItems]);
+        }, [measureOffset]);
 
         // Re-measure whenever the column's size changes: breakpoint/viewport
         // resizes AND the previous selection's description collapse (its
@@ -292,128 +307,162 @@ const XMBVerticalList = React.memo(
             ? onHeaderClick
             : undefined;
 
+        // The wrapper stays mounted across category switches — remounting it
+        // (the old keyed-AnimatePresence approach) rebuilt the whole list and
+        // kept an exiting clone alive for the transition, a main-thread +
+        // raster spike on every switch. Instead the rows reconcile against
+        // their globally unique `item.id` keys in one commit, and we replay a
+        // light slide-in on category change. The pose is driven by explicit
+        // motion values, NOT animate-prop retargeting: motion applies
+        // retargeted props from its rAF loop after paint, so a state-driven
+        // hidden pose flashes the swapped rows at rest for one frame (and can
+        // even resolve the fade's origin before the reset lands, skipping the
+        // entrance entirely). jump() resets the values synchronously with the
+        // commit. Drilling into / out of folders updates `currentItems` but
+        // not `activeCategory.id`, so it never retriggers the entrance. No
+        // exit animation — the PS3 XMB cuts hard.
+        const prevCategoryIdRef = useRef<string | null>(null);
+        const entranceOpacity = useMotionValue(0);
+        const entranceX = useMotionValue(-20);
+        // 'snap' for the commit that swaps categories: the column's y then
+        // retargets with duration 0 instead of springing the previous
+        // category's scroll offset into the incoming list.
+        const [columnPhase, setColumnPhase] = useState<'snap' | 'settled'>('snap');
 
-        // Re-mount the list (and replay the slide-in) only when the category
-        // changes. Drilling into / out of folders updates `currentItems` but
-        // the wrapper stays mounted, so items just reconcile against their
-        // own `item.id` keys without retriggering the entrance animation.
-        const listKey = activeCategory.id;
+        useLayoutEffect(() => {
+            if (prevCategoryIdRef.current === activeCategory.id) {
+                return;
+            }
+            prevCategoryIdRef.current = activeCategory.id;
+            entranceOpacity.jump(0);
+            entranceX.jump(-20);
+            animate(entranceOpacity, 1, { duration: 0.15, ease: EASE.MOVE });
+            animate(entranceX, 0, { duration: 0.15, ease: EASE.MOVE });
+            setColumnPhase('snap');
+        }, [activeCategory.id, entranceOpacity, entranceX]);
+
+        // Follow-up commit restores the column's selection-move spring.
+        useEffect(() => {
+            if (columnPhase === 'snap') {
+                setColumnPhase('settled');
+            }
+        }, [columnPhase]);
 
         return (
-            <AnimatePresence mode="popLayout">
-
-                <motion.div
-                    key={listKey}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{
-                        opacity: 1,
-                        x: 0,
-                    }}
-                    exit={{ opacity: 0, x: 20 }}
-                    transition={{ duration: 0.15, ease: EASE.MOVE }}
-                    className="absolute overflow-visible"
-                    style={{
-                        ...(layoutMode === 'paged'
-                            ? {
-                                  position: 'relative',
-                                  top: 'auto',
-                                  left: 'auto',
-                                  transform: 'none',
-                                  marginTop: 0,
-                                  pointerEvents: 'auto',
-                              }
-                            : {
-                                  // CSS Anchor positioning with inline fallbacks
-                                  // (progressive enhancement — browsers without
-                                  // anchor support ignore anchor() and use the
-                                  // fallback value, which matches the old explicit
-                                  // top / left we had before).
-                                  positionAnchor: "--active-category",
-                                  top: `anchor(bottom, ${XMB_LAYOUT.VERTICAL_LIST_TOP})`,
-                                  right: "auto",
-                                  bottom: "auto",
-                                  left: isContextView ? '-50px' : `anchor(left, ${categoryIndex * XMB_LAYOUT.CATEGORY_WIDTH}px)`,
-                                  transform: isContextView ? 'translateX(0)' : 'translateX(-50%)',
-                                  // 2rem base gap + 2rem reserving the line the old
-                                  // "Press ESC to go back" hint occupied, so the list
-                                  // keeps the same vertical rhythm below the big icons.
-                                  marginTop: "4rem",
-                                  pointerEvents: isContextView ? 'none' : 'auto',
-                              }),
-                    }}
+            <motion.div
+                className="absolute overflow-visible"
+                style={{
+                    opacity: entranceOpacity,
+                    x: entranceX,
+                    ...(layoutMode === 'paged'
+                        ? {
+                              position: 'relative',
+                              top: 'auto',
+                              left: 'auto',
+                              marginTop: 0,
+                              pointerEvents: 'auto',
+                          }
+                        : {
+                              // Plain coordinates, not anchor(): the active
+                              // category icon always sits at this wrapper's
+                              // origin (the strip translates beneath it), so
+                              // there is nothing to anchor to that left: 0
+                              // doesn't already express — and anchor() was
+                              // dropped wholesale by Safari/Firefox, leaving
+                              // the list unpositioned there.
+                              // Same origin in and out of folders: the context
+                              // view only dims/disables the list (the carousel
+                              // overlays the folder contents), so any offset
+                              // here would read as the list jumping on drill.
+                              top: '4rem',
+                              left: 0,
+                              // 2rem base gap + 2rem reserving the line the old
+                              // "Press ESC to go back" hint occupied, so the list
+                              // keeps the same vertical rhythm below the big icons.
+                              // Combined with top: 4rem the list sits 8rem below
+                              // the wrapper top.
+                              marginTop: "4rem",
+                              pointerEvents: isContextView ? 'none' : 'auto',
+                          }),
+                }}
+            >
+                <div
+                    className={`relative h-[40dvh] md:h-[50dvh] overflow-visible ${listClassName ?? ''}`}
                 >
-                    <div
-                        className={`relative h-[40dvh] md:h-[50dvh] overflow-visible ${listClassName ?? ''}`}
-                    >
-                        {/* Header + back pill sit above the sliding rows (z-20 vs
-                            z-0) so rows that translate up past them can never
-                            swallow their taps — a touch user scrolled down a
-                            list must always be able to reach "back". */}
-                        <div className="relative z-20">
-                            {showHeader && (
-                                <motion.button
-                                    type="button"
-                                    onClick={onHeaderClick}
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 1 }}
-                                    className="mb-4 text-lg md:text-xl font-light tracking-wide text-xmb-fg/80 focus-visible:outline-none"
-                                >
-                                    {activeCategory.title}
-                                </motion.button>
-                            )}
-                            {/* Back pill above the item list. In a folder it exits
-                                one level; at the top level (paged mode) it returns
-                                to the categories stage. The full layout keeps the
-                                pill folder-only — the carousel owns it there. */}
-                            {backPillAction && !isContextView && (
-                                <motion.div
-                                    initial={{ opacity: 0, y: -10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    className="mb-4"
-                                >
-                                    <XMBBackPill onBack={backPillAction} />
-                                </motion.div>
-                            )}
-                        </div>
-                        <div
-                            role="listbox"
-                            aria-label={`Items in ${activeCategory.title}`}
-                            className="relative z-0"
-                        >
-
-                        {/* Sliding container - Flexbox layout.
-                            Width is pinned here so every row in the column is the
-                            same width regardless of which one is selected. */}
-                        <motion.div
-                            ref={columnRef}
-                            className="flex flex-col"
-                            style={{
-                                width: layoutMode === 'paged' ? '100%' : `${XMB_LAYOUT.LIST_FULL_WIDTH_PX}px`,
-                                willChange: "transform",
-                            }}
-                            animate={{ y: containerOffset }}
-                            transition={XMB_ANIMATION.LIST_SPRING}
-                        >
-                            {currentItems.map((item, idx) => {
-                                const isItemSelected = idx === itemIndex;
-
-                                return (
-                                    <XMBListItem
-                                        key={item.id}
-                                        ref={(node) => { rowRefs.current[idx] = node; }}
-                                        index={idx}
-                                        item={item}
-                                        selectedIndex={itemIndex}
-                                        isItemSelected={isItemSelected}
-                                        onItemSelect={handleItemClick}
-                                    />
-                                );
-                            })}
-                        </motion.div>
-                        </div>
+                    {/* Header + back pill sit above the sliding rows (z-20 vs
+                        z-0) so rows that translate up past them can never
+                        swallow their taps — a touch user scrolled down a
+                        list must always be able to reach "back". */}
+                    <div className="relative z-20">
+                        {showHeader && (
+                            <motion.button
+                                type="button"
+                                onClick={onHeaderClick}
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                className="mb-4 text-lg md:text-xl font-light tracking-wide text-xmb-fg/80 focus-visible:outline-none"
+                            >
+                                {activeCategory.title}
+                            </motion.button>
+                        )}
+                        {/* Back pill above the item list. In a folder it exits
+                            one level; at the top level (paged mode) it returns
+                            to the categories stage. The full layout keeps the
+                            pill folder-only — the carousel owns it there. */}
+                        {backPillAction && !isContextView && (
+                            <motion.div
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="mb-4"
+                            >
+                                <XMBBackPill onBack={backPillAction} />
+                            </motion.div>
+                        )}
                     </div>
-                </motion.div>
-            </AnimatePresence>
+                    <div
+                        role="listbox"
+                        aria-label={`Items in ${activeCategory.title}`}
+                        className="relative z-0"
+                    >
+
+                    {/* Sliding container - Flexbox layout.
+                        Width is pinned here so every row in the column is the
+                        same width regardless of which one is selected. */}
+                    <motion.div
+                        ref={columnRef}
+                        className="flex flex-col"
+                        style={{
+                            width: layoutMode === 'paged' ? '100%' : `${XMB_LAYOUT.LIST_FULL_WIDTH_PX}px`,
+                            willChange: "transform",
+                        }}
+                        animate={{ y: containerOffset }}
+                        transition={columnPhase === 'snap' ? { duration: 0 } : XMB_ANIMATION.LIST_SPRING}
+                    >
+                        {currentItems.map((item, idx) => {
+                            const isItemSelected = idx === itemIndex;
+
+                            return (
+                                <XMBListItem
+                                    key={item.id}
+                                    ref={(node) => {
+                                        if (node) {
+                                            rowRefs.current.set(item.id, node);
+                                        } else {
+                                            rowRefs.current.delete(item.id);
+                                        }
+                                    }}
+                                    index={idx}
+                                    item={item}
+                                    selectedIndex={itemIndex}
+                                    isItemSelected={isItemSelected}
+                                    onItemSelect={handleItemClick}
+                                />
+                            );
+                        })}
+                    </motion.div>
+                    </div>
+                </div>
+            </motion.div>
         );
     },
 );
