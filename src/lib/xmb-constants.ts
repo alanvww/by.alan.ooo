@@ -111,6 +111,16 @@ export const XMB_ICON_NAMES = [
   'CaretRight',
   'ArrowLeft',
   'Question',
+  'GithubLogo',
+  'InstagramLogo',
+  'LinkedinLogo',
+  'MastodonLogo',
+  'XLogo',
+  'Butterfly',
+  'ReadCvLogo',
+  'FilePdf',
+  'ShareNetwork',
+  'DownloadSimple',
 ] as const;
 
 export type XMBIconName = (typeof XMB_ICON_NAMES)[number];

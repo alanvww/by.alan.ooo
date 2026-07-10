@@ -132,63 +132,123 @@ function groupItemsIntoFolders(
 }
 
 /**
- * Build the profile category items
+ * Build the About me category items
  */
-function buildProfileItems(): XMBItem[] {
+function buildAboutMeItems(): XMBItem[] {
   return [
     {
-      id: 'profile-github',
-      title: 'GitHub',
-      description: 'Open source projects and experiments.',
-      link: siteConfig.links.github,
+      id: 'about-resume',
+      title: 'Resume',
+      description: 'Latest resume (PDF)',
+      link: siteConfig.links.resume,
       type: 'link',
+      icon: 'ReadCvLogo',
+      hidePreview: true,
     },
     {
-      id: 'profile-email',
-      title: 'Email',
-      description: siteConfig.contact.email,
-      link: siteConfig.links.email,
+      id: 'about-cv',
+      title: 'CV',
+      description: 'Curriculum vitae with PDF download',
+      link: '/cv',
       type: 'link',
+      icon: 'FilePdf',
+      hidePreview: true,
     }
   ];
 }
 
 /**
- * Build the contact category items
+ * Build the Socials category items
  */
-function buildContactItems(): XMBItem[] {
+function buildSocialsItems(): XMBItem[] {
   return [
     {
-      id: 'contact-email',
+      id: 'social-instagram',
+      title: 'Instagram',
+      description: '@alan.k.y',
+      link: siteConfig.links.instagram,
+      type: 'link',
+      icon: 'InstagramLogo',
+      hidePreview: true,
+    },
+    {
+      id: 'social-github',
+      title: 'GitHub',
+      description: 'alanvww',
+      link: siteConfig.links.github,
+      type: 'link',
+      icon: 'GithubLogo',
+      hidePreview: true,
+    },
+    {
+      id: 'social-mastodon',
+      title: 'Mastodon',
+      description: '@alanvww@mas.to',
+      link: siteConfig.links.mastodon,
+      type: 'link',
+      icon: 'MastodonLogo',
+      hidePreview: true,
+    },
+    {
+      id: 'social-bluesky',
+      title: 'Bluesky',
+      description: '@alan.ooo',
+      link: siteConfig.links.bluesky,
+      type: 'link',
+      icon: 'Butterfly',
+      hidePreview: true,
+    },
+    {
+      id: 'social-linkedin',
+      title: 'LinkedIn',
+      description: 'in/alanyam',
+      link: siteConfig.links.linkedin,
+      type: 'link',
+      icon: 'LinkedinLogo',
+      hidePreview: true,
+    },
+    {
+      id: 'social-x',
+      title: 'X',
+      description: '@alanvww',
+      link: siteConfig.links.x,
+      type: 'link',
+      icon: 'XLogo',
+      hidePreview: true,
+    },
+    {
+      id: 'social-email',
       title: 'Email',
-      description: 'Send me an email.',
-      link: `mailto:${siteConfig.contact.email}`,
-      type: 'link'
+      description: siteConfig.contact.email,
+      link: siteConfig.links.email,
+      type: 'link',
+      icon: 'EnvelopeSimple',
+      hidePreview: true,
     }
   ];
 }
 
 /**
  * Get XMB data with dynamic content categories
- * Categories are ordered: Settings (0), Profile (5), content types (10+), Contact (100)
+ * Categories are ordered: Settings (0), About me (5), content types (10+), Socials (100)
  */
 export const getXMBData = cache(async (): Promise<XMBCategory[]> => {
   // Fixed categories at the start
   const fixedStartCategories: XMBCategory[] = [
     {
       id: 'profile',
-      title: 'Profile',
+      title: 'About me',
       iconName: 'User',
-      items: buildProfileItems()
+      items: buildAboutMeItems()
     }
   ];
 
   // Fixed category at the end
   const fixedEndCategory: XMBCategory = {
     id: 'contact',
-    title: 'Contact',
-    iconName: 'EnvelopeSimple',
-    items: buildContactItems()
+    title: 'Socials',
+    iconName: 'ShareNetwork',
+    items: buildSocialsItems()
   };
 
   // Dynamically discover and build content categories

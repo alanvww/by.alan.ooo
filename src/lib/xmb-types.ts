@@ -27,6 +27,10 @@ export interface XMBItem {
   image?: string;
   link?: string;
   type: XMBItemType;
+  /** Menu icon rendered in the row thumbnail slot instead of an image/blank block. */
+  icon?: XMBIconName;
+  /** Suppresses the right-side XMBPreview panel for simple link chips. */
+  hidePreview?: boolean;
   action?: () => void;
   meta?: XMBItemMeta;
   items?: XMBItem[]; // Nested items for folders

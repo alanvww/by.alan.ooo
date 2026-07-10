@@ -14,6 +14,16 @@ import {
   CaretRight,
   ArrowLeft,
   Question,
+  GithubLogo,
+  InstagramLogo,
+  LinkedinLogo,
+  MastodonLogo,
+  XLogo,
+  Butterfly,
+  ReadCvLogo,
+  FilePdf,
+  ShareNetwork,
+  DownloadSimple,
 } from '@phosphor-icons/react';
 import type { XMBIconName } from '@/lib/xmb-constants';
 
@@ -28,6 +38,16 @@ const iconRegistry = {
   CaretRight,
   ArrowLeft,
   Question,
+  GithubLogo,
+  InstagramLogo,
+  LinkedinLogo,
+  MastodonLogo,
+  XLogo,
+  Butterfly,
+  ReadCvLogo,
+  FilePdf,
+  ShareNetwork,
+  DownloadSimple,
 } as const;
 
 interface XMBIconProps {
