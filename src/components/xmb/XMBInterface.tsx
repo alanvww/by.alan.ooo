@@ -37,7 +37,7 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
     setItemIndex,
     setNavigationPath,
     finishNavigation
-  } = useXMBNavigation(categories);
+  } = useXMBNavigation(categories, layoutMode);
 
   useEffect(() => {
     finishNavigation();

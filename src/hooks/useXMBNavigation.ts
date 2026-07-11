@@ -24,7 +24,7 @@ export interface XMBCommands {
   moveLeft: () => void;
   /** ArrowRight: next category (wraps) at root; activate (links only) inside a folder. */
   moveRight: () => void;
-  /** ArrowUp: selection up one row; floor at -1 (deselected). */
+  /** ArrowUp: selection up one row; floors at the first item inside a folder or in the paged list, at -1 (deselected) at the full layout's root. */
   moveUp: () => void;
   /** ArrowDown: selection down one row; clamps at the last item. */
   moveDown: () => void;
@@ -50,7 +50,7 @@ interface XMBNavigationResult {
   setNavigationPath: (path: number[]) => void;
 }
 
-export function useXMBNavigation(categories: XMBCategory[]): XMBNavigationResult {
+export function useXMBNavigation(categories: XMBCategory[], layoutMode: 'full' | 'paged' = 'full'): XMBNavigationResult {
   const {
     categoryIndex,
     setCategoryIndex,
@@ -84,6 +84,7 @@ export function useXMBNavigation(categories: XMBCategory[]): XMBNavigationResult
   const currentItemsRef = useRef(currentItems);
   const routerRef = useRef(router);
   const startNavigationRef = useRef(startNavigation);
+  const layoutModeRef = useRef(layoutMode);
 
   useEffect(() => {
     categoriesRef.current = categories;
@@ -95,7 +96,8 @@ export function useXMBNavigation(categories: XMBCategory[]): XMBNavigationResult
     currentItemsRef.current = currentItems;
     routerRef.current = router;
     startNavigationRef.current = startNavigation;
-  }, [categories, categoryIndex, itemIndex, navigationPath, activeCategory, activeItem, currentItems, router, startNavigation]);
+    layoutModeRef.current = layoutMode;
+  }, [categories, categoryIndex, itemIndex, navigationPath, activeCategory, activeItem, currentItems, router, startNavigation, layoutMode]);
 
   const moveLeft = useCallback(() => {
     playNavigate();
@@ -134,7 +136,14 @@ export function useXMBNavigation(categories: XMBCategory[]): XMBNavigationResult
 
   const moveUp = useCallback(() => {
     playNavigate();
-    setItemIndex((itemIndexRef.current > -1 ? itemIndexRef.current - 1 : -1));
+    // The first item is the floor inside folders, and also at the root of
+    // the paged layout while the list is showing — deselecting to -1 there
+    // would pop the stage back to categories, so exiting stays on the BACK
+    // and header controls. At the full layout's root, moving past item 0
+    // deselects to the category row (-1).
+    const inPagedList = layoutModeRef.current === 'paged' && itemIndexRef.current >= 0;
+    const floor = navigationPathRef.current.length > 0 || inPagedList ? 0 : -1;
+    setItemIndex(Math.max(itemIndexRef.current - 1, floor));
   }, [setItemIndex]);
 
   const moveDown = useCallback(() => {

@@ -66,7 +66,6 @@ const XMBCommandBar = ({ commands }: XMBCommandBarProps) => {
   const { activeItem } = useXMBDerivedContext();
 
   const onCategoryRow = itemIndex === -1 && navigationPath.length === 0;
-  const insideFolder = navigationPath.length > 0;
 
   const hints: Hint[] = [];
   const controls: TouchControl[] = [];
@@ -126,17 +125,7 @@ const XMBCommandBar = ({ commands }: XMBCommandBarProps) => {
     controls.push({
       id: 'navigate',
       buttons: [
-        {
-          label: '▲',
-          ariaLabel: 'Previous item',
-          // Touch deliberately clamps at the first row inside folders instead
-          // of reproducing the keyboard's drive-to--1-in-carousel quirk.
-          onCommand: () => {
-            if (insideFolder && itemIndex <= 0) return;
-            commands.moveUp();
-          },
-          holdRepeat: true,
-        },
+        { label: '▲', ariaLabel: 'Previous item', onCommand: commands.moveUp, holdRepeat: true },
         { label: '▼', ariaLabel: 'Next item', onCommand: commands.moveDown, holdRepeat: true },
       ],
       action: 'Navigate',
