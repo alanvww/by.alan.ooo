@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from 'react';
 
 const XMBClock = () => {
-    const [time, setTime] = useState(new Date());
+    const [time, setTime] = useState(() => new Date());
     
     useEffect(() => {
         const timer = setInterval(() => setTime(new Date()), 1000);
@@ -25,9 +25,12 @@ const XMBClock = () => {
 
     return (
         <div className="flex items-center gap-3">
-            <span className="whitespace-nowrap">{timeString}</span>
+            {/* Server render and hydration can straddle a minute rollover
+                (or a DST switch for the tz badge) — the text is expected to
+                differ, and the 1s interval corrects it immediately. */}
+            <span className="whitespace-nowrap" suppressHydrationWarning>{timeString}</span>
             <div className="flex items-center gap-2 text-base">
-                 <span className="bg-xmb-fg/20 px-1.5 py-0.5 rounded text-xs font-medium tracking-wider">{tzName}</span>
+                 <span className="bg-xmb-fg/20 px-1.5 py-0.5 rounded text-xs font-medium tracking-wider" suppressHydrationWarning>{tzName}</span>
                  {/* Hidden on ultra-narrow screens (<336px) where the clock
                      can't fit beside the title without clipping. */}
                  <span className="opacity-60 text-sm max-[335px]:hidden">@ NYC</span>
