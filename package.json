@@ -39,7 +39,7 @@
     "@types/react-dom": "^19.2.3",
     "@webgpu/types": "^0.1.71",
     "babel-plugin-react-compiler": "^1.0.0",
-    "eslint": "^9.39.4",
+    "eslint": "^9.39.5",
     "eslint-config-next": "^16.2.10",
     "playwright": "^1.61.1",
     "tailwindcss": "^4.3.2",
