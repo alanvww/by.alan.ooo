@@ -2,8 +2,18 @@
 import { getAllContent, getContentTypes, getFeatured, BaseFrontmatter } from './mdx';
 import { getContentTypeConfig, type ContentTypeConfig } from './content-config';
 import type { XMBItem, XMBCategory } from './xmb-types';
+import type { XMBIconName } from './xmb-constants';
 import { siteConfig } from './site-config';
 import { cache } from 'react';
+
+/** Unique thumbnails for known tag folders, keyed by folder slug;
+ *  unmapped categories fall back to the generic Folder icon. */
+const TAG_FOLDER_ICONS: Partial<Record<string, XMBIconName>> = {
+  'creative-coding': 'Code',
+  'design-engineering': 'CompassTool',
+  'installation': 'Cube',
+  'virtual-reality': 'VirtualReality',
+};
 
 /**
  * Generic function to group content items into XMB folders
@@ -70,12 +80,14 @@ function groupItemsIntoFolders(
     tagFolders.forEach((categoryItems, categoryName) => {
       // Skip if only one item in category (don't create single-item folders)
       if (categoryItems.length < 2) return;
-      
+
+      const slug = categoryName.toLowerCase().replace(/\s+/g, '-');
       folders.push({
-        id: `folder-${categoryName.toLowerCase().replace(/\s+/g, '-')}`,
+        id: `folder-${slug}`,
         title: categoryName,
         description: `${categoryItems.length} ${categoryItems.length === 1 ? singular : type}`,
         type: 'folder',
+        icon: TAG_FOLDER_ICONS[slug],
         items: categoryItems.map((item) => ({
           id: `${type}-${item.slug}`,
           title: item.title,

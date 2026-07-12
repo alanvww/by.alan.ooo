@@ -24,6 +24,10 @@ import {
   FilePdf,
   ShareNetwork,
   DownloadSimple,
+  Code,
+  CompassTool,
+  Cube,
+  VirtualReality,
 } from '@phosphor-icons/react';
 import type { XMBIconName } from '@/lib/xmb-constants';
 
@@ -48,6 +52,10 @@ const iconRegistry = {
   FilePdf,
   ShareNetwork,
   DownloadSimple,
+  Code,
+  CompassTool,
+  Cube,
+  VirtualReality,
 } as const;
 
 interface XMBIconProps {

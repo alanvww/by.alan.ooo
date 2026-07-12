@@ -121,6 +121,10 @@ export const XMB_ICON_NAMES = [
   'FilePdf',
   'ShareNetwork',
   'DownloadSimple',
+  'Code',
+  'CompassTool',
+  'Cube',
+  'VirtualReality',
 ] as const;
 
 export type XMBIconName = (typeof XMB_ICON_NAMES)[number];
