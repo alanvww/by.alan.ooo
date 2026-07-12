@@ -154,7 +154,7 @@ function buildAboutMeItems(): XMBItem[] {
       description: 'Latest resume (PDF)',
       link: siteConfig.links.resume,
       type: 'link',
-      icon: 'ReadCvLogo',
+      icon: 'FilePdf',
       hidePreview: true,
     },
     {
@@ -163,7 +163,7 @@ function buildAboutMeItems(): XMBItem[] {
       description: 'Curriculum vitae with PDF download',
       link: '/cv',
       type: 'link',
-      icon: 'FilePdf',
+      icon: 'ReadCvLogo',
       hidePreview: true,
     }
   ];
