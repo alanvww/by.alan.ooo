@@ -7,6 +7,7 @@ import { EASE, XMB_OVERLAY } from '@/lib/xmb-constants';
 import { useKeyPressed } from '@/hooks/usePressedKeys';
 import { useCoarsePointer } from '@/hooks/useCoarsePointer';
 import { playCancel } from '@/hooks/useKeyAudioFx';
+import { focusSilently } from '@/lib/focus';
 import XMBIcon from './XMBIcon';
 import XMBKeycap from './XMBKeycap';
 
@@ -27,13 +28,26 @@ const XMBPostFrame = ({ children }: { children: React.ReactNode }): React.ReactE
     // context still enters the overlay instead of staying on <body>. Static
     // children (the CV page) are already in the DOM here, so their scroll
     // region is preferred — that's what native arrow/page-key scrolling acts
-    // on. Suspense-streamed posts land on the frame root instead, and the
-    // viewer claims focus from it when it mounts (child effects run first,
-    // so a viewer that already focused its region makes this a no-op).
+    // on. The viewer's region is excluded (data-xmb-viewer-region): its own
+    // mount effect claims focus, and stamping it here on SSR loads — before
+    // its Suspense subtree hydrates — would trip React's hydration-mismatch
+    // warning. Streamed posts land on the frame root instead, and the viewer
+    // claims focus from it when it mounts (child effects run first, so a
+    // viewer that already focused its region makes this a no-op).
+    // focusSilently keeps the :focus-visible ring hidden for this
+    // programmatic focus — the ring stays reserved for real Tab visits.
     useEffect(() => {
-        if (document.activeElement !== document.body) return;
-        const region = frameRef.current?.querySelector<HTMLElement>('[role="region"][tabindex]');
-        (region ?? frameRef.current)?.focus({ preventScroll: true });
+        const region = frameRef.current?.querySelector<HTMLElement>(
+            '[role="region"][tabindex]:not([data-xmb-viewer-region])',
+        );
+        const target = region ?? frameRef.current;
+        if (!target) return;
+        const current = document.activeElement;
+        // `current === target` re-arms the silent-focus mark on StrictMode's
+        // dev replay (the first pass already focused the target and its
+        // cleanup unmarked it).
+        if (current !== document.body && current !== target) return;
+        return focusSilently(target);
     }, []);
 
     // Escape/Backspace → back to the menu. Lives on the frame rather than the
@@ -77,7 +91,11 @@ const XMBPostFrame = ({ children }: { children: React.ReactNode }): React.ReactE
                         router.push('/');
                     }}
                     aria-label="Back to menu"
-                    className="group flex items-center gap-3 text-xmb-fg/50 hover:text-xmb-fg transition-colors duration-300 focus-visible:outline-none focus-visible:text-xmb-fg touch-manipulation"
+                    // The pill's own focus treatment (border/bg/label reveal
+                    // below) is the indicator — the global ring would double
+                    // up, so suppress it (ring-0 alone leaves the 2px offset
+                    // halo).
+                    className="group flex items-center gap-3 text-xmb-fg/50 hover:text-xmb-fg transition-colors duration-300 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:text-xmb-fg touch-manipulation"
                 >
                     <div className="flex items-center gap-2 min-h-11 rounded-full border border-xmb-fg/10 bg-xmb-fg/5 px-3 py-2 transition-all group-hover:border-xmb-fg/30 group-hover:bg-xmb-fg/10 group-focus-visible:border-xmb-fg/40 group-focus-visible:bg-xmb-fg/10 group-active:border-xmb-fg/40 group-active:bg-xmb-fg/15">
                         <XMBIcon name="ArrowLeft" size={18} />

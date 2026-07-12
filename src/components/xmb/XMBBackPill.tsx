@@ -30,7 +30,10 @@ const XMBBackPill = ({ onBack, label = 'Back' }: XMBBackPillProps) => {
         playCancel();
         onBack();
       }}
-      className="group flex items-center gap-3 text-xmb-fg/50 hover:text-xmb-fg transition-colors duration-300 focus-visible:outline-none focus-visible:text-xmb-fg touch-manipulation"
+      // The pill's own focus treatment (border/bg/label reveal below) is the
+      // indicator — the global ring would double up, so suppress it (ring-0
+      // alone leaves the 2px offset halo).
+      className="group flex items-center gap-3 text-xmb-fg/50 hover:text-xmb-fg transition-colors duration-300 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:text-xmb-fg touch-manipulation"
       aria-label={label}
     >
       <div className="flex items-center gap-2 min-h-11 rounded-full border border-xmb-fg/10 bg-xmb-fg/5 px-3 py-2 transition-all group-hover:border-xmb-fg/30 group-hover:bg-xmb-fg/10 group-focus-visible:border-xmb-fg/40 group-active:border-xmb-fg/40 group-active:bg-xmb-fg/15">

@@ -7,6 +7,7 @@ import type { XMBCategory, XMBItem } from '@/lib/xmb-types';
 import { useXMBNavigation } from '@/hooks/useXMBNavigation';
 import { useIndexPan } from '@/hooks/useIndexPan';
 import { playConfirm, playNavigate, playCancel } from '@/hooks/useKeyAudioFx';
+import { focusSilently } from '@/lib/focus';
 import { EASE, XMB_GESTURE } from '@/lib/xmb-constants';
 import XMBCategoryRow from './XMBCategoryRow';
 import XMBVerticalList from './XMBVerticalList';
@@ -194,7 +195,13 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
           ? document.getElementById(`carousel-item-${itemIndex}`)
           : document.getElementById(`xmb-item-${itemIndex}`);
     if (target && target !== current) {
-      target.focus({ preventScroll: true });
+      // App-driven cursor move — the selection styling is the indicator, so
+      // the focus ring stays silent; it paints only for real Tab traversal.
+      // Cleanup is deliberately NOT returned: the `target !== current` guard
+      // skips StrictMode's replay, so an unmark here would strand a focused,
+      // unmarked element (ring flash in dev). The once-blur listener owns
+      // clearing the mark.
+      focusSilently(target);
     }
     // navigationPath is a deliberate extra dep: folder drills can swap the
     // row set without changing itemIndex, and the re-run reclaims focus
@@ -204,14 +211,21 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
   // Focus restore on return from the post overlay (WCAG 2.4.3): Escape in
   // XMBPostFrame pushes '/', this remounts, and the provider (root layout)
   // still holds the selection — put focus back on the exact row/card. Fresh
-  // loads arrive with itemIndex === -1 and no-op.
+  // loads arrive with itemIndex === -1 and no-op. The restore is silent:
+  // the selection styling already marks the position, so no focus ring.
   useEffect(() => {
-    if (itemIndex < 0 || document.activeElement !== document.body) return;
+    if (itemIndex < 0) return;
     const target =
       showCarousel && layoutMode === 'full'
         ? document.getElementById(`carousel-item-${itemIndex}`)
         : document.getElementById(`xmb-item-${itemIndex}`);
-    target?.focus({ preventScroll: true });
+    if (!target) return;
+    const current = document.activeElement;
+    // `current === target` re-arms the silent-focus mark on StrictMode's
+    // dev replay (the first pass already focused the target and its
+    // cleanup unmarked it).
+    if (current !== document.body && current !== target) return;
+    return focusSilently(target);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only focus restore; later cursor moves are owned by the index→focus sync above
   }, []);
 

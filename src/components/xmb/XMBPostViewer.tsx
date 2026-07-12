@@ -10,6 +10,7 @@ import { useReducedMotion } from 'motion/react';
 import { useKeyPressed } from '@/hooks/usePressedKeys';
 import { useCoarsePointer } from '@/hooks/useCoarsePointer';
 import { playNavigate } from '@/hooks/useKeyAudioFx';
+import { focusSilently } from '@/lib/focus';
 import XMBIcon from './XMBIcon';
 import XMBKeycap from './XMBKeycap';
 import type { PostFrontmatter, ProjectFrontmatter } from '@/lib/mdx';
@@ -53,12 +54,18 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
     // Suspense-streamed loads the frame's fallback effect fires while the
     // skeleton is up, parking focus there before this viewer exists. Never
     // steals focus a user placed elsewhere (e.g. the frame's back button).
+    // focusSilently keeps the :focus-visible ring hidden for this
+    // programmatic focus — the ring stays reserved for real Tab visits.
     useEffect(() => {
+        const region = scrollContainerRef.current;
+        if (!region) return;
         const current = document.activeElement;
         const onFrameFallback = current instanceof HTMLElement && current.dataset.xmbFrame !== undefined;
-        if (current === document.body || onFrameFallback) {
-            scrollContainerRef.current?.focus({ preventScroll: true });
-        }
+        // `current === region` re-arms the silent-focus mark on StrictMode's
+        // dev replay (the first pass already focused the region and its
+        // cleanup unmarked it).
+        if (current !== document.body && !onFrameFallback && current !== region) return;
+        return focusSilently(region);
     }, []);
 
     // Handle keyboard navigation
@@ -161,14 +168,20 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
 
             {/* Scrollable Content — a real tab stop (2.1.1): keyboard users
                 can focus the scroll region directly, and it receives reading
-                focus on mount. The inset ring keeps the indicator inside the
-                viewport instead of offset off-screen. */}
+                focus on mount. Its Tab-focus hairline lives in globals.css
+                (the [role="region"][tabindex] rule) so the silent-focus gate
+                can suppress it — utilities here would out-cascade the gate. */}
             <div
                 ref={scrollContainerRef}
                 tabIndex={0}
                 role="region"
                 aria-label="Article content"
-                className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pt-32 pb-48 px-6 md:px-0 scroll-smooth motion-reduce:scroll-auto select-text focus-visible:ring-inset focus-visible:ring-offset-0"
+                // Tells the frame's focus fallback to leave this region to
+                // the viewer's own mount effect — the frame stamping it on
+                // SSR loads, before this Suspense subtree hydrates, would
+                // trip React's hydration-mismatch warning.
+                data-xmb-viewer-region=""
+                className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pt-32 pb-48 px-6 md:px-0 scroll-smooth motion-reduce:scroll-auto select-text"
             >
                 <div className="max-w-4xl mx-auto">
                     {/* Header Section */}

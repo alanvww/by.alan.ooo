@@ -39,7 +39,7 @@
   --color-muted-foreground: oklch(0.45 0.02 265);
   --color-border: oklch(0.85 0.02 265);
   --color-input: oklch(0.85 0.02 265);
-  --color-ring: oklch(0.70 0.15 180);
+  --color-ring: oklch(0.70 0.15 180); /* accessibility-only Tab indicator — cyan accent, never painted for app-driven focus */
   --color-background: oklch(0.98 0.00 265);
   --color-foreground: oklch(0.10 0.02 265);
   --color-card: oklch(0.99 0.00 265);
@@ -126,9 +126,27 @@
     @apply bg-primary/20 text-foreground;
   }
 
-  /* Focus styles */
+  /* Focus styles — the ring paints only for real (user-initiated) focus.
+     Programmatic reading-focus (XMBPostFrame / XMBPostViewer mount effects)
+     sets data-autofocused before .focus() via focusSilently() and the mark
+     clears on the element's first blur, so any later Tab visit shows the
+     ring. outline-hidden (not outline-none) keeps a system-drawn indicator
+     in forced-colors mode. */
   :focus-visible {
-    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+    @apply outline-hidden;
+  }
+
+  :focus-visible:not([data-autofocused]) {
+    @apply ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* Reading scroll regions (post viewer + CV) — the same selector the
+     frame's focus fallback queries. Thin inset hairline instead of the
+     offset ring: a 2px offset ring around a viewport-sized box reads as
+     page chrome. Lives here, not in the class lists, because utilities
+     would out-cascade the data-autofocused gate above. */
+  [role='region'][tabindex]:focus-visible:not([data-autofocused]) {
+    @apply ring-1 ring-inset ring-ring ring-offset-0;
   }
 
   /* Smooth scrolling */
@@ -414,7 +432,7 @@
     --color-input: oklch(0.22 0.03 265);
     
     /* Focus ring */
-    --color-ring: oklch(0.75 0.20 180);
+    --color-ring: oklch(0.75 0.20 180); /* accessibility-only Tab indicator — cyan accent, never painted for app-driven focus */
     
     /* Semantic colors */
     --color-destructive: oklch(0.65 0.25 25);
