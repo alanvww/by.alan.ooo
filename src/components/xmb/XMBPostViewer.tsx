@@ -42,9 +42,32 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
         if (node?.complete && node.naturalWidth > 0) setCoverLoaded(true);
     }, []);
 
+    // Reading context enters the article whenever this viewer mounts — first
+    // open and every prev/next sibling swap (the old viewer unmounts and
+    // focus falls to body). Also claims focus from the frame root: on
+    // Suspense-streamed loads the frame's fallback effect fires while the
+    // skeleton is up, parking focus there before this viewer exists. Never
+    // steals focus a user placed elsewhere (e.g. the frame's back button).
+    useEffect(() => {
+        const current = document.activeElement;
+        const onFrameFallback = current instanceof HTMLElement && current.dataset.xmbFrame !== undefined;
+        if (current === document.body || onFrameFallback) {
+            scrollContainerRef.current?.focus({ preventScroll: true });
+        }
+    }, []);
+
     // Handle keyboard navigation
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
+            // Modified keys are browser affordances (Alt+Left = history back,
+            // Shift+arrows = text selection, Cmd/Ctrl combos = shortcuts) —
+            // never hijack them. Same for keys typed into editable UI.
+            if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+            const target = e.target;
+            if (target instanceof Element && target.closest('input, textarea, select, [contenteditable="true"]')) {
+                return;
+            }
+
             const container = scrollContainerRef.current;
             const SCROLL_AMOUNT = 150;
             const PAGE_SCROLL_AMOUNT = 500;
@@ -131,10 +154,16 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
                 </div>
             )}
 
-            {/* Scrollable Content */}
+            {/* Scrollable Content — a real tab stop (2.1.1): keyboard users
+                can focus the scroll region directly, and it receives reading
+                focus on mount. The inset ring keeps the indicator inside the
+                viewport instead of offset off-screen. */}
             <div
                 ref={scrollContainerRef}
-                className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pt-32 pb-48 px-6 md:px-0 scroll-smooth select-text"
+                tabIndex={0}
+                role="region"
+                aria-label="Article content"
+                className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pt-32 pb-48 px-6 md:px-0 scroll-smooth select-text focus-visible:ring-inset focus-visible:ring-offset-0"
             >
                 <div className="max-w-4xl mx-auto">
                     {/* Header Section */}
@@ -221,9 +250,9 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
                                     playNavigate();
                                     router.push(`/${type}/${siblings.prev!.slug}`);
                                 }}
-                                className="group pointer-events-auto touch-manipulation min-h-11 flex flex-col items-start justify-center gap-1 text-xmb-fg/40 hover:text-xmb-fg transition-all"
+                                className="group pointer-events-auto touch-manipulation min-h-11 flex flex-col items-start justify-center gap-1 text-xmb-fg/70 hover:text-xmb-fg transition-all"
                             >
-                                <span className="text-[10px] font-mono uppercase tracking-widest opacity-50">Previous</span>
+                                <span className="text-[10px] font-mono uppercase tracking-widest">Previous</span>
                                 <span className="text-sm font-light tracking-wide flex items-center gap-2">
                                     <XMBIcon name="ArrowLeft" size={12} className="group-hover:-translate-x-1 transition-transform" />
                                     {!isCoarse && <XMBKeycap label="←" hoverable pressed={prevPressed} />}
@@ -241,9 +270,9 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
                                     playNavigate();
                                     router.push(`/${type}/${siblings.next!.slug}`);
                                 }}
-                                className="group pointer-events-auto touch-manipulation min-h-11 flex flex-col items-end justify-center gap-1 text-xmb-fg/40 hover:text-xmb-fg transition-all"
+                                className="group pointer-events-auto touch-manipulation min-h-11 flex flex-col items-end justify-center gap-1 text-xmb-fg/70 hover:text-xmb-fg transition-all"
                             >
-                                <span className="text-[10px] font-mono uppercase tracking-widest opacity-50">Next</span>
+                                <span className="text-[10px] font-mono uppercase tracking-widest">Next</span>
                                 <span className="text-sm font-light tracking-wide flex items-center gap-2">
                                     <span className="max-w-[32vw] truncate">{siblings.next.title}</span>
                                     {!isCoarse && <XMBKeycap label="→" hoverable pressed={nextPressed} />}

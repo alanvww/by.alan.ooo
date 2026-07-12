@@ -32,8 +32,15 @@ export default function CVPage(): React.ReactElement {
     <XMBContentLayout>
       <XMBPostFrame>
         <div className="absolute inset-0 flex flex-col overflow-hidden">
-          {/* Scrollable Content */}
-          <div className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pt-32 pb-48 px-6 md:px-0 scroll-smooth select-text">
+          {/* Scrollable Content — a real tab stop (2.1.1): there is no keydown
+              handler on this page, so a focusable scroll region is the ONLY
+              way keyboard users can scroll the CV (native arrow/page keys). */}
+          <div
+            tabIndex={0}
+            role="region"
+            aria-label="Curriculum vitae content"
+            className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pt-32 pb-48 px-6 md:px-0 scroll-smooth select-text focus-visible:ring-inset focus-visible:ring-offset-0"
+          >
             <div className="max-w-4xl mx-auto">
               {/* Header Section */}
               <header className="mb-16 text-center">

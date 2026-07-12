@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
 import { useRouter } from 'next/navigation';
 import { EASE, XMB_OVERLAY } from '@/lib/xmb-constants';
@@ -21,6 +21,20 @@ const XMBPostFrame = ({ children }: { children: React.ReactNode }): React.ReactE
     const router = useRouter();
     const isCoarse = useCoarsePointer();
     const escapePressed = useKeyPressed('Escape');
+    const frameRef = useRef<HTMLDivElement | null>(null);
+
+    // Focus fallback when no frame child claims focus on mount: reading
+    // context still enters the overlay instead of staying on <body>. Static
+    // children (the CV page) are already in the DOM here, so their scroll
+    // region is preferred — that's what native arrow/page-key scrolling acts
+    // on. Suspense-streamed posts land on the frame root instead, and the
+    // viewer claims focus from it when it mounts (child effects run first,
+    // so a viewer that already focused its region makes this a no-op).
+    useEffect(() => {
+        if (document.activeElement !== document.body) return;
+        const region = frameRef.current?.querySelector<HTMLElement>('[role="region"][tabindex]');
+        (region ?? frameRef.current)?.focus({ preventScroll: true });
+    }, []);
 
     // Escape/Backspace → back to the menu. Lives on the frame rather than the
     // per-post content so it keeps working while the next post streams in.
@@ -43,23 +57,29 @@ const XMBPostFrame = ({ children }: { children: React.ReactNode }): React.ReactE
 
     return (
         <motion.div
+            ref={frameRef}
+            tabIndex={-1}
+            data-xmb-frame=""
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.2, ease: EASE.ENTER }}
-            className={`fixed inset-0 z-50 ${XMB_OVERLAY.FULLSCREEN} text-xmb-fg overflow-hidden`}
+            // The frame is the whole viewport — a focus ring on it is noise,
+            // so suppress the global :focus-visible ring here only.
+            className={`fixed inset-0 z-50 ${XMB_OVERLAY.FULLSCREEN} text-xmb-fg overflow-hidden outline-none focus-visible:ring-0 focus-visible:ring-offset-0`}
         >
-            {children}
-
-            {/* Close Button / Back (Top Left) */}
+            {/* Close Button / Back (Top Left) — before {children} so it is the
+                overlay's first tab stop; absolute positioning keeps the visual
+                placement identical. */}
             <div className="absolute top-[max(2rem,env(safe-area-inset-top))] left-6 md:left-12 z-50">
                 <button
                     onClick={() => {
                         playCancel();
                         router.push('/');
                     }}
-                    className="group flex items-center gap-3 text-xmb-fg/50 hover:text-xmb-fg transition-colors duration-300 focus:outline-none touch-manipulation"
+                    aria-label="Back to menu"
+                    className="group flex items-center gap-3 text-xmb-fg/50 hover:text-xmb-fg transition-colors duration-300 focus-visible:outline-none focus-visible:text-xmb-fg touch-manipulation"
                 >
-                    <div className="flex items-center gap-2 min-h-11 rounded-full border border-xmb-fg/10 bg-xmb-fg/5 px-3 py-2 transition-all group-hover:border-xmb-fg/30 group-hover:bg-xmb-fg/10 group-active:border-xmb-fg/40 group-active:bg-xmb-fg/15">
+                    <div className="flex items-center gap-2 min-h-11 rounded-full border border-xmb-fg/10 bg-xmb-fg/5 px-3 py-2 transition-all group-hover:border-xmb-fg/30 group-hover:bg-xmb-fg/10 group-focus-visible:border-xmb-fg/40 group-focus-visible:bg-xmb-fg/10 group-active:border-xmb-fg/40 group-active:bg-xmb-fg/15">
                         <XMBIcon name="ArrowLeft" size={18} />
                         {!isCoarse && (
                             <XMBKeycap
@@ -74,13 +94,15 @@ const XMBPostFrame = ({ children }: { children: React.ReactNode }): React.ReactE
                         className={`text-xs font-mono uppercase tracking-[0.2em] transition-all duration-300 ${
                             isCoarse
                                 ? 'opacity-100 translate-x-0'
-                                : 'opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0'
+                                : 'opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 group-focus-visible:opacity-100 group-focus-visible:translate-x-0'
                         }`}
                     >
                         Back to Menu
                     </span>
                 </button>
             </div>
+
+            {children}
         </motion.div>
     );
 };
