@@ -14,6 +14,23 @@ import { activateItem } from '@/lib/xmb-navigation';
 const HORIZONTAL_REPEAT_INTERVAL_MS = 150;
 
 /**
+ * True when the keydown's target natively activates on Enter/Space (links,
+ * buttons, form fields). The dispatcher must stand down there: the browser
+ * synthesizes a click on the focused element, and that click path is the
+ * single activation — dispatching confirm() too would run two activations
+ * from one keypress (e.g. the same external link opening in two tabs). The
+ * dispatcher owns Enter/Space only when focus rests on <body> or a
+ * non-interactive element (the arrows-only console mode).
+ */
+function isNativeActivationTarget(e: KeyboardEvent): boolean {
+  const target = e.target;
+  if (!(target instanceof Element) || target === document.body) {
+    return false;
+  }
+  return target.closest('a[href], button, input, textarea, select, summary, [contenteditable="true"]') !== null;
+}
+
+/**
  * The six XMB navigation primitives, shared verbatim between the keyboard
  * dispatcher and the touch controls (command bar buttons, swipes, pans).
  * Each command owns its own sound, so keyboard/touch parity — state
@@ -218,6 +235,15 @@ export function useXMBNavigation(categories: XMBCategory[], layoutMode: 'full' |
         moveDown();
         break;
       case 'Enter':
+      case ' ':
+        if (isNativeActivationTarget(e)) {
+          return;
+        }
+        // Consume the key outright: confirm() moves the selection, the focus
+        // sync moves DOM focus with it, and without preventDefault the same
+        // keypress's default action would synthesize a click on the NEWLY
+        // focused control — one Enter selecting item 0 and drilling into it.
+        e.preventDefault();
         confirm();
         break;
       case 'Escape':

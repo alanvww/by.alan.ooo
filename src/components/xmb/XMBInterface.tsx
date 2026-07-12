@@ -142,6 +142,79 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
   const isInsideFolder = navigationPath.length > 0;
   const showCarousel = isInsideFolder && currentItems.length > 0;
 
+  // ——— DOM focus mirrors the index-state cursor (roving tabindex) ———
+  // focusWithinRef tracks whether focus is inside the menu: mouse/touch users
+  // who never focused it must never have focus yanked by selection changes.
+  const focusWithinRef = useRef(false);
+  // True for the microtask window around a pointer press: Chrome focuses
+  // links/buttons on mousedown, and that focus event must not drive selection
+  // (the two-click model owns pointer selection via onClick).
+  const pointerDownRef = useRef(false);
+
+  const isPointerEvent = useCallback(() => pointerDownRef.current, []);
+
+  const handlePointerDownCapture = useCallback(() => {
+    pointerDownRef.current = true;
+    window.setTimeout(() => {
+      pointerDownRef.current = false;
+    }, 0);
+  }, []);
+
+  const handleFocusCapture = useCallback(() => {
+    focusWithinRef.current = true;
+  }, []);
+
+  const handleBlurCapture = useCallback((event: React.FocusEvent) => {
+    // relatedTarget null means focus fell to body (an AnimatePresence unmount
+    // or a window blur) — keep the flag armed so the sync effect below can
+    // reclaim focus for the current selection.
+    const next = event.relatedTarget;
+    if (next instanceof Node && !containerRef.current?.contains(next)) {
+      focusWithinRef.current = false;
+    }
+  }, []);
+
+  // Index → focus: whenever the cursor moves while the menu owns focus, move
+  // DOM focus to the element the cursor points at. preventScroll is mandatory
+  // everywhere — rows/tabs/cards live inside transform-animated columns in
+  // overflow-hidden containers, and native scroll-on-focus would desync the
+  // measured centering.
+  useEffect(() => {
+    if (!focusWithinRef.current) return;
+    const container = containerRef.current;
+    if (!container) return;
+    const current = document.activeElement;
+    // Focus parked outside the menu (browser UI, another widget) is not ours
+    // to steal; body means an unmount dropped it and we reclaim.
+    if (current !== document.body && !container.contains(current)) return;
+    const target =
+      itemIndex === -1
+        ? document.getElementById(`xmb-category-${categoryIndex}`)
+        : showCarousel && layoutMode === 'full'
+          ? document.getElementById(`carousel-item-${itemIndex}`)
+          : document.getElementById(`xmb-item-${itemIndex}`);
+    if (target && target !== current) {
+      target.focus({ preventScroll: true });
+    }
+    // navigationPath is a deliberate extra dep: folder drills can swap the
+    // row set without changing itemIndex, and the re-run reclaims focus
+    // after those unmounts drop it to body.
+  }, [categoryIndex, itemIndex, navigationPath, showCarousel, layoutMode]);
+
+  // Focus restore on return from the post overlay (WCAG 2.4.3): Escape in
+  // XMBPostFrame pushes '/', this remounts, and the provider (root layout)
+  // still holds the selection — put focus back on the exact row/card. Fresh
+  // loads arrive with itemIndex === -1 and no-op.
+  useEffect(() => {
+    if (itemIndex < 0 || document.activeElement !== document.body) return;
+    const target =
+      showCarousel && layoutMode === 'full'
+        ? document.getElementById(`carousel-item-${itemIndex}`)
+        : document.getElementById(`xmb-item-${itemIndex}`);
+    target?.focus({ preventScroll: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only focus restore; later cursor moves are owned by the index→focus sync above
+  }, []);
+
   // Calculate parent context for vertical list when inside a folder
   const { parentItems, parentIndex } = useMemo(() => {
     if (!isInsideFolder || !activeCategory) {
@@ -212,6 +285,9 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
       style={{ contain: 'layout style' }}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
+      onFocusCapture={handleFocusCapture}
+      onBlurCapture={handleBlurCapture}
+      onPointerDownCapture={handlePointerDownCapture}
     >
       {/* Screen Reader Live Region */}
       <div aria-live="polite" className="sr-only">
@@ -227,6 +303,7 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
             categoryIndex={categoryIndex}
             itemIndex={itemIndex}
             onCategorySelect={handleCategorySelect}
+            isPointerEvent={isPointerEvent}
           />
 
           <XMBVerticalList
@@ -238,6 +315,7 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
             isContextView={isInsideFolder}
             onItemSelect={setItemIndex}
             onFolderDrill={handleFolderDrill}
+            isPointerEvent={isPointerEvent}
           />
         </div>
       )}
@@ -258,6 +336,7 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
               categoryIndex={categoryIndex}
               itemIndex={itemIndex}
               onCategorySelect={handleCategorySelect}
+              isPointerEvent={isPointerEvent}
             />
           </motion.div>
         )}
@@ -286,6 +365,7 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
               onItemSelect={setItemIndex}
               onFolderDrill={handleFolderDrill}
               onBack={handleFolderBack}
+              isPointerEvent={isPointerEvent}
               listClassName="w-[88vw] max-w-2xl"
               showHeader
               onHeaderClick={() => {
@@ -310,6 +390,7 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
             activeIndex={itemIndex >= 0 ? itemIndex : 0}
             onSelect={setItemIndex}
             onBack={handleFolderBack}
+            isPointerEvent={isPointerEvent}
           />
         )}
       </AnimatePresence>

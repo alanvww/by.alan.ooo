@@ -12,6 +12,8 @@ interface XMBCategoryRowProps {
   categoryIndex: number;
   itemIndex: number;
   onCategorySelect: (index: number) => void;
+  /** True during a pointer press: focus events it causes must not drive selection. */
+  isPointerEvent?: () => boolean;
 }
 
 const XMBCategoryRow = React.memo(({
@@ -19,6 +21,7 @@ const XMBCategoryRow = React.memo(({
   categoryIndex,
   itemIndex,
   onCategorySelect,
+  isPointerEvent,
 }: XMBCategoryRowProps) => {
   // Calculate the container offset to center the active category
   const containerOffset = -categoryIndex * XMB_LAYOUT.CATEGORY_WIDTH;
@@ -71,6 +74,7 @@ const XMBCategoryRow = React.memo(({
               role="tab"
               aria-selected={isActive}
               aria-label={category.title}
+              id={`xmb-category-${idx}`}
               tabIndex={isActive ? 0 : -1}
               className="flex flex-col items-center gap-2 cursor-pointer relative focus-visible:outline-none"
               style={{ width: `${XMB_LAYOUT.CATEGORY_WIDTH}px` }}
@@ -79,10 +83,15 @@ const XMBCategoryRow = React.memo(({
                 // confirm when entering the active category's list).
                 onCategorySelect(idx);
               }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  onCategorySelect(idx);
-                }
+              // No element-level Enter/Space handler: the window dispatcher in
+              // useXMBNavigation owns those keys (this div is not a native
+              // activation target, so its guard lets them through).
+              onFocus={() => {
+                // Pointer-driven focus (Chrome focuses on mousedown) defers to
+                // onClick, which owns sounds and the enter-list behavior on
+                // the active tab; keyboard/AT focus syncs the selection.
+                if (isPointerEvent?.()) return;
+                if (idx !== categoryIndex) onCategorySelect(idx);
               }}
             >
               {/* Icon with individual scale animation. transition-[filter]

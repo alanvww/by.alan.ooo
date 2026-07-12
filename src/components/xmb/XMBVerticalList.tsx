@@ -3,6 +3,7 @@
 
 import React, { useState, useCallback, useEffect, useLayoutEffect, useRef, forwardRef } from "react";
 import Image from 'next/image';
+import Link from 'next/link';
 import { motion, AnimatePresence, animate, useMotionValue, useReducedMotion } from "motion/react";
 import { useRouter } from "next/navigation";
 import { useXMBLoadingContext } from "@/lib/xmb-navigation-context";
@@ -10,7 +11,7 @@ import type { XMBCategory, XMBItem } from "@/lib/xmb-types";
 import XMBIcon from "./XMBIcon";
 import XMBBackPill from "./XMBBackPill";
 import { XMB_LAYOUT, XMB_ANIMATION, EASE } from "@/lib/xmb-constants";
-import { activateItem, getEnterActionLabel } from "@/lib/xmb-navigation";
+import { activateItem, getEnterActionLabel, isExternalLink } from "@/lib/xmb-navigation";
 import { playNavigate, playConfirm } from "@/hooks/useKeyAudioFx";
 import { useCoarsePointer } from "@/hooks/useCoarsePointer";
 import XMBKeycap from "./XMBKeycap";
@@ -31,6 +32,8 @@ interface XMBVerticalListProps {
     showHeader?: boolean;
     onHeaderClick?: () => void;
     layoutMode?: 'full' | 'paged';
+    /** True during a pointer press: focus events it causes must not drive selection. */
+    isPointerEvent?: () => boolean;
 }
 
 interface XMBListItemProps {
@@ -38,15 +41,67 @@ interface XMBListItemProps {
     index: number;
     selectedIndex: number; // global selected index for distance-based fade
     isItemSelected: boolean;
-    onItemSelect: (index: number) => void;
+    /** In-folder context sidebar: rows are inert and unfocusable. */
+    isContextView: boolean;
+    /** First click / keyboard focus: move the cursor to this row. */
+    onRowSelect: (index: number) => void;
+    /** Second click on the selected row (folders/actions): activate it. */
+    onRowActivate: (index: number) => void;
+    /** Keyboard/AT focus landed on this row: sync the selection cursor. */
+    onRowFocus: (index: number) => void;
+    /** Shows the loading skeleton ahead of internal link navigation. */
+    startNavigation: () => void;
 }
 
-const XMBListItem = React.memo(forwardRef<HTMLDivElement, XMBListItemProps>(
-    ({ item, index, selectedIndex, isItemSelected, onItemSelect }, ref) => {
+const XMBListItem = React.memo(forwardRef<HTMLElement, XMBListItemProps>(
+    ({ item, index, selectedIndex, isItemSelected, isContextView, onRowSelect, onRowActivate, onRowFocus, startNavigation }, ref) => {
         const [imgError, setImgError] = useState(false);
         const isCoarse = useCoarsePointer();
         const reduceMotion = useReducedMotion();
         const isFolder = item.type === 'folder';
+
+        // Rows that navigate render as real links (SPA <Link> internally,
+        // <a target=_blank> externally) so middle-click, context menus, and
+        // assistive tech all get genuine link semantics; folders and action
+        // items render as <button>.
+        const isLinkRow = !!item.link && !item.action && !isFolder;
+        const isExternal = isLinkRow && isExternalLink(item.link!);
+
+        // Roving tabindex: the selected row is the list's one tab stop; with
+        // nothing selected yet, row 0 is the Tab entry point (focusing it
+        // selects it via onRowFocus). Context-view rows are never tabbable.
+        const tabIndex = isContextView
+            ? -1
+            : isItemSelected || (selectedIndex === -1 && index === 0)
+            ? 0
+            : -1;
+
+        const handleClick = (e: React.MouseEvent<HTMLElement>): void => {
+            // Modified clicks on links (cmd/ctrl/shift/middle) are pure
+            // browser affordances — no selection change, no preventDefault.
+            if (isLinkRow && (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0)) {
+                return;
+            }
+            if (!isItemSelected) {
+                // First click moves the cursor, never activates.
+                e.preventDefault();
+                onRowSelect(index);
+                return;
+            }
+            playConfirm();
+            if (isLinkRow) {
+                // The anchor performs the navigation natively: <Link> pushes
+                // the route, external <a> opens its tab. No preventDefault.
+                if (!isExternal) {
+                    startNavigation();
+                }
+                return;
+            }
+            e.preventDefault();
+            onRowActivate(index);
+        };
+
+        const handleFocus = (): void => onRowFocus(index);
 
         // Distance from selected item (negative = above, positive = below).
         // Opacity falloff carries the depth cue; we deliberately skip per-item
@@ -71,22 +126,23 @@ const XMBListItem = React.memo(forwardRef<HTMLDivElement, XMBListItemProps>(
             ? Math.max(0.1, 0.42 * Math.pow(0.62, distance - 1))
             : Math.max(0.25, 0.7 - distance * 0.1);
 
-        return (
-            <div
-                ref={ref}
-                role="option"
-                aria-selected={isItemSelected}
-                id={`xmb-item-${index}`}
-                className="relative w-full cursor-pointer mb-6 md:mb-8 focus-visible:outline-none overflow-visible"
-                style={{ contain: 'layout style' }}
-                onClick={() => onItemSelect(index)}
-                onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                        onItemSelect(index);
-                    }
-                }}
-                tabIndex={isItemSelected ? 0 : -1}
-            >
+        // No element-level Enter/Space handler: links and buttons activate
+        // natively (the window dispatcher's guard stands down for them), so
+        // exactly one activation fires per keypress.
+        const rowClassName = 'relative block w-full cursor-pointer mb-6 md:mb-8 focus-visible:outline-none overflow-visible';
+        const sharedProps: React.HTMLAttributes<HTMLElement> = {
+            role: 'option',
+            'aria-selected': isItemSelected,
+            id: `xmb-item-${index}`,
+            className: rowClassName,
+            style: { contain: 'layout style' },
+            onClick: handleClick,
+            onFocus: handleFocus,
+            tabIndex,
+        };
+
+        const content = (
+            <>
                 {/* Item visual scale/offset animation with highlight */}
                 <motion.div
                     className={`flex items-center gap-3 md:gap-4 w-full py-3 md:py-4 px-3 md:px-4 rounded-lg transition-[background-color,box-shadow,border-color] duration-150 ${
@@ -165,8 +221,11 @@ const XMBListItem = React.memo(forwardRef<HTMLDivElement, XMBListItemProps>(
                     </div>
 
                     {/* Floating ENTER hint — telegraphs the action at the focus
-                        point. On coarse pointers the hint IS the control: a
-                        tappable chip running the same activate path. */}
+                        point. Purely visual (aria-hidden, duplicates the row's
+                        action): on coarse pointers a tap on the chip lands on
+                        the row itself, which IS the link/button now — role=
+                        "option" children are presentational, so no nested
+                        interactive element is allowed here anyway. */}
                     <AnimatePresence>
                         {isItemSelected && (
                             <motion.div
@@ -176,21 +235,14 @@ const XMBListItem = React.memo(forwardRef<HTMLDivElement, XMBListItemProps>(
                                 exit={{ opacity: 0, x: -8 }}
                                 transition={{ duration: 0.18, ease: EASE.ENTER }}
                                 className="flex items-center gap-2 shrink-0 pr-1"
-                                aria-hidden={isCoarse ? undefined : 'true'}
+                                aria-hidden="true"
                             >
                                 {isCoarse ? (
-                                    <button
-                                        type="button"
-                                        onClick={(e) => {
-                                            // The row's own onClick would activate too —
-                                            // one tap, one activation.
-                                            e.stopPropagation();
-                                            onItemSelect(index);
-                                        }}
-                                        className="min-h-11 px-4 rounded-full border border-xmb-fg/25 bg-xmb-fg/10 text-[10px] font-mono uppercase tracking-[0.18em] text-xmb-fg/80 touch-manipulation select-none active:bg-xmb-fg active:text-background transition-colors duration-150"
+                                    <span
+                                        className="inline-flex items-center min-h-11 px-4 rounded-full border border-xmb-fg/25 bg-xmb-fg/10 text-[10px] font-mono uppercase tracking-[0.18em] text-xmb-fg/80 select-none"
                                     >
                                         {getEnterActionLabel(item)}
-                                    </button>
+                                    </span>
                                 ) : (
                                     <>
                                         <XMBKeycap label="ENTER" pressed={false} className="px-1.5 w-auto" />
@@ -203,7 +255,28 @@ const XMBListItem = React.memo(forwardRef<HTMLDivElement, XMBListItemProps>(
                         )}
                     </AnimatePresence>
                 </motion.div>
-            </div>
+            </>
+        );
+
+        if (isLinkRow && !isExternal) {
+            return (
+                <Link href={item.link!} prefetch={false} ref={ref as React.Ref<HTMLAnchorElement>} {...sharedProps}>
+                    {content}
+                </Link>
+            );
+        }
+        if (isLinkRow) {
+            return (
+                <a href={item.link} target="_blank" rel="noopener noreferrer" ref={ref as React.Ref<HTMLAnchorElement>} {...sharedProps}>
+                    {content}
+                    <span className="sr-only"> (opens in new tab)</span>
+                </a>
+            );
+        }
+        return (
+            <button type="button" ref={ref as React.Ref<HTMLButtonElement>} {...sharedProps} className={`${rowClassName} text-left`}>
+                {content}
+            </button>
         );
     },
 ));
@@ -224,28 +297,37 @@ const XMBVerticalList = React.memo(
         showHeader = false,
         onHeaderClick,
         layoutMode = 'full',
+        isPointerEvent,
     }: XMBVerticalListProps) => {
         const router = useRouter();
         const { startNavigation } = useXMBLoadingContext();
 
-        const handleItemClick = useCallback((idx: number) => {
+        // First click on a different row = move the cursor.
+        const handleRowSelect = useCallback((idx: number) => {
+            playNavigate();
+            onItemSelect(idx);
+        }, [onItemSelect]);
+
+        // Second click on the selected row, folders/actions only — link rows
+        // navigate natively through their own anchor. Sound is owned by the
+        // row's onClick (playConfirm) so both paths stay in step.
+        const handleRowActivate = useCallback((idx: number) => {
             const item = currentItems[idx];
             if (!item) return;
+            activateItem(item, idx, {
+                router,
+                startNavigation,
+                drillIntoFolder: onFolderDrill,
+            });
+        }, [currentItems, onFolderDrill, router, startNavigation]);
 
-            if (idx === itemIndex) {
-                // Second click on the already-selected row = open/activate
-                playConfirm();
-                activateItem(item, idx, {
-                    router,
-                    startNavigation,
-                    drillIntoFolder: onFolderDrill,
-                });
-            } else {
-                // First click on a different row = move the cursor
-                playNavigate();
-                onItemSelect(idx);
-            }
-        }, [currentItems, itemIndex, onFolderDrill, onItemSelect, router, startNavigation]);
+        // Keyboard/AT focus landed on a row: sync the selection cursor.
+        // Pointer-driven focus defers to onClick (the two-click model); the
+        // idempotence check keeps the index→focus sync from echoing back.
+        const handleRowFocus = useCallback((idx: number) => {
+            if (isPointerEvent?.()) return;
+            if (idx !== itemIndex) onItemSelect(idx);
+        }, [isPointerEvent, itemIndex, onItemSelect]);
 
         const displayIndex = itemIndex === -1 ? 0 : itemIndex;
 
@@ -255,7 +337,7 @@ const XMBVerticalList = React.memo(
         // Written only from callback refs (React Compiler safe); entries are
         // deleted on the null cleanup call so the map never holds unmounted
         // nodes.
-        const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+        const rowRefs = useRef<Map<string, HTMLElement>>(new Map());
         const columnRef = useRef<HTMLDivElement | null>(null);
 
         // Measured slide offset for the column. Row pitch is content-driven
@@ -351,6 +433,12 @@ const XMBVerticalList = React.memo(
         return (
             <motion.div
                 className="absolute overflow-visible"
+                // In the folder context view the carousel is the live listbox;
+                // this parent list is background chrome — hidden from AT and
+                // inert so its rows can't be focused or clicked, leaving
+                // exactly one listbox exposed at a time.
+                aria-hidden={isContextView || undefined}
+                inert={isContextView || undefined}
                 style={{
                     opacity: entranceOpacity,
                     x: entranceX,
@@ -455,7 +543,11 @@ const XMBVerticalList = React.memo(
                                     item={item}
                                     selectedIndex={itemIndex}
                                     isItemSelected={isItemSelected}
-                                    onItemSelect={handleItemClick}
+                                    isContextView={isContextView}
+                                    onRowSelect={handleRowSelect}
+                                    onRowActivate={handleRowActivate}
+                                    onRowFocus={handleRowFocus}
+                                    startNavigation={startNavigation}
                                 />
                             );
                         })}

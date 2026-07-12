@@ -3,15 +3,19 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import Image from 'next/image';
+import Link from 'next/link';
 import { motion, AnimatePresence } from "motion/react";
-import { useRouter } from "next/navigation";
 import { useXMBLoadingContext } from "@/lib/xmb-navigation-context";
-import { navigateToLink } from "@/lib/xmb-navigation";
+import { isExternalLink } from "@/lib/xmb-navigation";
 import type { XMBItem } from "@/lib/xmb-types";
 import XMBIcon from "./XMBIcon";
 import XMBBackPill from "./XMBBackPill";
 import { XMB_CAROUSEL, XMB_ANIMATION, EASE } from "@/lib/xmb-constants";
 import { playNavigate, playConfirm } from "@/hooks/useKeyAudioFx";
+
+// motion-wrapped next/link so internal link cards keep SPA navigation while
+// being genuine anchors (middle-click, context menu, AT link semantics).
+const MotionLink = motion.create(Link);
 
 interface XMBCarouselProps {
   items: XMBItem[];
@@ -19,17 +23,23 @@ interface XMBCarouselProps {
   onSelect: (index: number) => void;
   /** Exit the folder (mouse/touch equivalent of Escape). */
   onBack?: () => void;
+  /** True during a pointer press: focus events it causes must not drive selection. */
+  isPointerEvent?: () => boolean;
 }
 
 interface XMBCarouselCardProps {
   item: XMBItem;
   index: number;
+  /** Total item count — aria-setsize keeps "n of N" correct despite culling. */
+  setSize: number;
   scrollOffset: number;
   onSelect: (index: number) => void;
-  onNavigate: (link: string) => void;
+  /** Shows the loading skeleton ahead of internal link navigation. */
+  startNavigation: () => void;
+  isPointerEvent?: () => boolean;
 }
 
-const XMBCarouselCard = React.memo(({ item, index, scrollOffset, onSelect, onNavigate }: XMBCarouselCardProps) => {
+const XMBCarouselCard = React.memo(({ item, index, setSize, scrollOffset, onSelect, startNavigation, isPointerEvent }: XMBCarouselCardProps) => {
   const distance = index - scrollOffset;
   const absDistance = Math.abs(distance);
   const isActive = Math.round(scrollOffset) === index;
@@ -47,42 +57,77 @@ const XMBCarouselCard = React.memo(({ item, index, scrollOffset, onSelect, onNav
   const xShift = 24 * (1 - near);
   const zIndex = 100 - Math.floor(absDistance);
 
-  return (
-    <motion.div
-      role="option"
-      aria-selected={isActive}
-      id={`carousel-item-${index}`}
-      className="absolute left-0 w-full cursor-pointer focus-visible:outline-none"
-      style={{
-        top: '50%',
-        zIndex,
-        pointerEvents: isVisible ? 'auto' : 'none',
-      }}
-      // Cards entering the visibility window (after being culled by
-      // `visibleEntries`) would otherwise mount at identity (center,
-      // full scale, full opacity) and animate to their real position —
-      // a brief "ghost in the center" before they fly out. `initial=false`
-      // paints them at the computed target on first render instead.
-      initial={false}
-      animate={{
-        y: yOffset,
-        opacity,
-        x: xShift,
-        scale,
-      }}
-      transition={XMB_ANIMATION.SPRING_CONFIG}
-      onClick={() => {
-        if (isActive) {
-          if (item.link) {
-            playConfirm();
-            onNavigate(item.link);
-          }
-        } else {
-          playNavigate();
-          onSelect(index);
-        }
-      }}
-    >
+  // Link cards render as real anchors (SPA <Link> internally, <a target=
+  // _blank> externally); folders/actions stay divs so the window dispatcher
+  // owns their Enter (a native button click would swallow the drill).
+  const isLinkCard = !!item.link && !item.action && item.type !== 'folder';
+  const isExternal = isLinkCard && isExternalLink(item.link!);
+
+  const handleClick = (e: React.MouseEvent<HTMLElement>): void => {
+    // Modified clicks on links (cmd/ctrl/shift/middle) are pure browser
+    // affordances — no selection change, no preventDefault.
+    if (isLinkCard && (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0)) {
+      return;
+    }
+    if (!isActive) {
+      // First click centers the card, never activates.
+      e.preventDefault();
+      playNavigate();
+      onSelect(index);
+      return;
+    }
+    if (isLinkCard) {
+      // The anchor navigates natively; skeleton for internal routes only.
+      playConfirm();
+      if (!isExternal) {
+        startNavigation();
+      }
+    }
+    // Non-link cards (nested folders / actions): Enter drills via the window
+    // dispatcher; clicking the active card keeps its status-quo no-op.
+  };
+
+  const handleFocus = (): void => {
+    // Keyboard/AT focus centers the card; pointer focus defers to onClick.
+    if (isPointerEvent?.()) return;
+    if (!isActive) {
+      onSelect(index);
+    }
+  };
+
+  const sharedProps = {
+    role: 'option',
+    'aria-selected': isActive,
+    // Culling mounts only cards near the scroll offset; setsize/posinset keep
+    // screen readers announcing the true "n of N" position regardless.
+    'aria-setsize': setSize,
+    'aria-posinset': index + 1,
+    id: `carousel-item-${index}`,
+    tabIndex: isActive ? 0 : -1,
+    className: "absolute left-0 block w-full cursor-pointer focus-visible:outline-none",
+    style: {
+      top: '50%',
+      zIndex,
+      pointerEvents: isVisible ? 'auto' : 'none',
+    } as React.CSSProperties,
+    // Cards entering the visibility window (after being culled by
+    // `visibleEntries`) would otherwise mount at identity (center,
+    // full scale, full opacity) and animate to their real position —
+    // a brief "ghost in the center" before they fly out. `initial=false`
+    // paints them at the computed target on first render instead.
+    initial: false,
+    animate: {
+      y: yOffset,
+      opacity,
+      x: xShift,
+      scale,
+    },
+    transition: XMB_ANIMATION.SPRING_CONFIG,
+    onClick: handleClick,
+    onFocus: handleFocus,
+  };
+
+  const cardContent = (
       <div
         className="flex flex-col md:flex-row items-center gap-6 md:gap-12 px-4 md:px-6"
         style={{ transform: 'translateY(-50%)' }}
@@ -144,14 +189,29 @@ const XMBCarouselCard = React.memo(({ item, index, scrollOffset, onSelect, onNav
           )}
         </div>
       </div>
-    </motion.div>
   );
+
+  if (isLinkCard && !isExternal) {
+    return (
+      <MotionLink href={item.link!} prefetch={false} {...sharedProps}>
+        {cardContent}
+      </MotionLink>
+    );
+  }
+  if (isLinkCard) {
+    return (
+      <motion.a href={item.link} target="_blank" rel="noopener noreferrer" {...sharedProps}>
+        {cardContent}
+        <span className="sr-only"> (opens in new tab)</span>
+      </motion.a>
+    );
+  }
+  return <motion.div {...sharedProps}>{cardContent}</motion.div>;
 });
 
 XMBCarouselCard.displayName = 'XMBCarouselCard';
 
-const XMBCarousel = ({ items, activeIndex, onSelect, onBack }: XMBCarouselProps) => {
-  const router = useRouter();
+const XMBCarousel = ({ items, activeIndex, onSelect, onBack, isPointerEvent }: XMBCarouselProps) => {
   const { startNavigation } = useXMBLoadingContext();
   const containerRef = useRef<HTMLDivElement>(null);
   const touchStartY = useRef<number>(0);
@@ -320,10 +380,6 @@ const XMBCarousel = ({ items, activeIndex, onSelect, onBack }: XMBCarouselProps)
     touchStartY.current = 0;
   }, []);
 
-  const handleNavigate = useCallback((link: string) => {
-    navigateToLink(link, router, startNavigation);
-  }, [router, startNavigation]);
-  
   // Attach wheel event listener
   useEffect(() => {
     const container = containerRef.current;
@@ -386,9 +442,11 @@ const XMBCarousel = ({ items, activeIndex, onSelect, onBack }: XMBCarouselProps)
                 key={item.id}
                 item={item}
                 index={index}
+                setSize={items.length}
                 scrollOffset={scrollOffset}
                 onSelect={onSelect}
-                onNavigate={handleNavigate}
+                startNavigation={startNavigation}
+                isPointerEvent={isPointerEvent}
               />
             );
           })}

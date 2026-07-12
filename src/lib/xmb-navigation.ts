@@ -37,7 +37,7 @@ export function navigateToLink(
   startNavigation: () => void,
 ): void {
   if (isExternalLink(link)) {
-    window.open(link, '_blank');
+    window.open(link, '_blank', 'noopener,noreferrer');
   } else {
     startNavigation();
     router.push(link);
