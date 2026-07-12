@@ -22,9 +22,15 @@ export default function NotFound() {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [router]);
 
+    // Client boundary can't export metadata — set the title (2.4.2) directly
+    // so the tab and AT don't keep announcing the previous page's name.
+    useEffect(() => {
+        document.title = 'Page Not Found | Alan';
+    }, []);
+
     return (
         <div className={`fixed inset-0 z-50 flex flex-col items-center justify-center ${XMB_OVERLAY.FULLSCREEN} text-xmb-fg`}>
-            <div className="text-center max-w-lg px-6">
+            <main className="text-center max-w-lg px-6">
                 <h1 className="text-8xl md:text-9xl font-extralight mb-4 text-xmb-fg/90">404</h1>
                 <h2 className="text-2xl md:text-3xl font-light mb-8 text-xmb-fg/80">Page Not Found</h2>
                 <p className="text-lg text-xmb-fg/50 mb-12 font-light leading-relaxed">
@@ -37,7 +43,7 @@ export default function NotFound() {
                     <span className="px-1.5 h-5 rounded border border-xmb-fg/20 bg-xmb-fg/5 text-[10px] font-mono">ESC</span>
                     Return to Menu
                 </Link>
-            </div>
+            </main>
         </div>
     );
 }

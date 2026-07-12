@@ -17,10 +17,14 @@ const LINK_CLASS = 'text-xmb-fg/90 underline underline-offset-4 decoration-xmb-f
 
 // XMB-styled MDX components (theme-aware: xmb-fg token works in both light and dark mode)
 export const mdxComponents: MDXComponents = {
+    // Rendered as an h2 (same visual treatment): the frontmatter title in the
+    // page header is the document's single h1, so a body `#` heading would
+    // otherwise create a second one. rehype-slug ids pass through in props,
+    // keeping heading anchors working.
     h1: ({ children, ...props }) => (
-        <h1 className="text-3xl md:text-4xl font-extralight text-xmb-fg mb-8 mt-12 first:mt-0 tracking-tight leading-tight" {...props}>
+        <h2 className="text-3xl md:text-4xl font-extralight text-xmb-fg mb-8 mt-12 first:mt-0 tracking-tight leading-tight" {...props}>
             {children}
-        </h1>
+        </h2>
     ),
     h2: ({ children, ...props }) => (
         <h2 className="text-2xl md:text-3xl font-light text-xmb-fg/90 mb-6 mt-10 first:mt-0 tracking-tight" {...props}>

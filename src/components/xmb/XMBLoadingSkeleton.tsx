@@ -6,7 +6,8 @@ import { XMB_OVERLAY } from '@/lib/xmb-constants';
 import XMBIcon from './XMBIcon';
 
 const ShimmerBar = ({ className }: { className?: string }) => (
-    <motion.div 
+    <motion.div
+        aria-hidden="true"
         className={`relative overflow-hidden bg-xmb-fg/5 rounded-lg ${className}`}
     >
         <motion.div
@@ -36,10 +37,13 @@ const XMBLoadingSkeleton = ({ variant = 'fullscreen' }: XMBLoadingSkeletonProps)
 
     return (
         <div
+            role="status"
+            aria-label="Loading"
             className={`${
                 isFullscreen ? `fixed inset-0 z-50 ${XMB_OVERLAY.FULLSCREEN}` : 'absolute inset-0'
             } flex flex-col text-xmb-fg overflow-hidden`}
         >
+            <span className="sr-only">Loading</span>
             {/* Header / Back (Top Left) */}
             {isFullscreen && (
                 <div className="absolute top-8 left-12 z-50">

@@ -19,6 +19,10 @@ const XMBPreview = ({ item }: XMBPreviewProps) => {
       // out concurrently with a category switch's own springs causes jank.
       exit={{ opacity: 0, transition: { duration: 0.13, ease: EASE.EXIT } }}
       transition={XMB_ANIMATION.SPRING_CONFIG}
+      // Visual echo of the already-announced selected item: hiding it from AT
+      // removes the duplicate reading AND the stale ghost that lingers in the
+      // tree during the AnimatePresence exit animation.
+      aria-hidden="true"
       className="absolute inset-0 z-10 pointer-events-none"
       style={{ willChange: 'transform, opacity' }}
     >

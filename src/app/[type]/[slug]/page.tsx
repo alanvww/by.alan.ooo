@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import type { Metadata } from 'next';
 import { getFileData, getContentManifest, getContentTypes, getWikilinkIndex } from '@/lib/mdx';
 import { getContentSiblings } from '@/lib/get-content-siblings';
 import { remarkWikilinks } from '@/lib/remark-wikilinks';
@@ -22,6 +23,30 @@ export async function generateStaticParams(): Promise<PageParams[]> {
   return Object.entries(manifest).flatMap(([type, entries]) => {
     return entries.map((entry) => ({ type, slug: entry.slug }));
   });
+}
+
+// Per-post document titles (WCAG 2.4.2): without this, every post shares the
+// root default and prev/next swaps are invisible in the tab title and to AT.
+export async function generateMetadata({ params }: { params: Promise<PageParams> }): Promise<Metadata> {
+  const { type, slug } = await params;
+  if (!getContentTypes().includes(type)) {
+    return {};
+  }
+  try {
+    const { frontmatter } = await getFileData(type, slug);
+    return {
+      title: frontmatter.title,
+      description: frontmatter.excerpt,
+      openGraph: {
+        title: frontmatter.title,
+        description: frontmatter.excerpt,
+        images: frontmatter.coverImage ? [frontmatter.coverImage] : undefined,
+      },
+    };
+  } catch {
+    // The page itself resolves this to notFound() with full logging.
+    return {};
+  }
 }
 
 export default async function ContentPage({ params }: { params: Promise<PageParams> }) {
@@ -79,7 +104,18 @@ export default async function ContentPage({ params }: { params: Promise<PagePara
       ],
       [
         rehypeExternalLinks,
-        { target: '_blank', rel: ['noopener', 'noreferrer'] },
+        {
+          target: '_blank',
+          rel: ['noopener', 'noreferrer'],
+          // Screen readers get told about the new tab (3.2.5); visually
+          // hidden so prose styling is untouched.
+          content: {
+            type: 'element',
+            tagName: 'span',
+            properties: { className: ['sr-only'] },
+            children: [{ type: 'text', value: ' (opens in new tab)' }],
+          },
+        },
       ],
     ],
   };

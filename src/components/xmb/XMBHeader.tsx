@@ -4,7 +4,7 @@ import XMBProgressIndicator from './XMBProgressIndicator';
 
 const XMBHeader = () => {
   return (
-    <div className="absolute top-[max(2rem,env(safe-area-inset-top))] inset-x-0 px-6 md:px-12 z-20 pointer-events-auto">
+    <header className="absolute top-[max(2rem,env(safe-area-inset-top))] inset-x-0 px-6 md:px-12 z-20 pointer-events-auto">
       {/* Clock and progress are direct flex children (no wrapper group) so
           each wraps independently: a wrapper's min-content width (the fixed
           ~233px progress bar) would reserve space on the title's row even
@@ -18,7 +18,7 @@ const XMBHeader = () => {
         <XMBClock />
         <XMBProgressIndicator />
       </div>
-    </div>
+    </header>
   );
 };
 

@@ -236,6 +236,34 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
     return { parentItems, parentIndex };
   }, [isInsideFolder, currentItems, itemIndex, activeCategory, navigationPath]);
 
+  // Screen-reader announcements for index-state transitions (4.1.3), spoken
+  // ONLY while DOM focus is outside the menu (arrows-on-body console mode).
+  // Once focus roves with the selection, the focused row/tab/card announces
+  // itself — speaking here too would read everything twice.
+  const [announcement, setAnnouncement] = useState('');
+  const prevAnnouncedRef = useRef<{ categoryIndex: number; itemIndex: number; pathLength: number } | null>(null);
+
+  useEffect(() => {
+    const prev = prevAnnouncedRef.current;
+    prevAnnouncedRef.current = { categoryIndex, itemIndex, pathLength: navigationPath.length };
+    if (!prev || !activeCategory || focusWithinRef.current) return;
+
+    let next = '';
+    if (navigationPath.length > prev.pathLength) {
+      const folderTitle = parentItems[parentIndex]?.title ?? activeCategory.title;
+      next = `Entered folder ${folderTitle}, ${currentItems.length} items`;
+    } else if (navigationPath.length < prev.pathLength) {
+      next = 'Exited folder';
+    } else if (categoryIndex !== prev.categoryIndex || (itemIndex === -1 && prev.itemIndex !== -1)) {
+      next = `Category: ${activeCategory.title}, ${currentItems.length} items`;
+    } else if (itemIndex !== prev.itemIndex && activeItem) {
+      next = `${activeItem.title}, ${itemIndex + 1} of ${currentItems.length}`;
+    }
+    if (next) {
+      setAnnouncement(next);
+    }
+  }, [categoryIndex, itemIndex, navigationPath, activeCategory, activeItem, currentItems, parentItems, parentIndex]);
+
   // No paged-specific Escape handler: with the derived stage, the shared
   // `back` command (window keydown in useXMBNavigation) already lands on the
   // right stage — at the root it deselects (itemIndex -1 → 'categories'), and
@@ -281,6 +309,8 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
   return (
     <div
       ref={containerRef}
+      role="navigation"
+      aria-label="Site menu"
       className="fixed inset-0 text-xmb-fg overflow-hidden font-sans select-none"
       style={{ contain: 'layout style' }}
       onTouchStart={handleTouchStart}
@@ -289,9 +319,10 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
       onBlurCapture={handleBlurCapture}
       onPointerDownCapture={handlePointerDownCapture}
     >
-      {/* Screen Reader Live Region */}
-      <div aria-live="polite" className="sr-only">
-        {activeItem ? `Selected item: ${activeItem.title}` : `Selected category: ${activeCategory.title}`}
+      {/* Screen Reader Live Region — transition announcements while focus is
+          outside the menu; empty (silent) once real focus takes over. */}
+      <div aria-live="polite" role="status" className="sr-only">
+        {announcement}
       </div>
 
       <XMBHeader />
