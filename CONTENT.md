@@ -69,6 +69,17 @@ One caveat for `.md`: raw HTML fragments (including accidental `<word>` in
 prose) are dropped silently rather than rendered. Escape as `\<word\>` or wrap
 in backticks when you mean the literal characters.
 
+One caveat for `.mdx`: next-mdx-remote v6 blocks JavaScript expressions by
+default (`blockJS: true`). On the dynamic content pages
+(`src/app/[type]/[slug]/page.tsx`) any JSX attribute expression —
+`<Tabs items={[...]}>`, inline `{expressions}` — is silently stripped at
+compile time: string attributes like `title="..."` survive, expression
+attributes arrive as `undefined`. In posts and projects, stick to string
+attributes for custom components. A page rendering trusted content can opt
+out the way the standalone CV page does: `src/app/cv/page.tsx` passes
+`options={{ mdxOptions, blockJS: false }}` because `src/content/cv.mdx` uses
+`<CVEntry links={[...]} />` (see the comment there).
+
 ---
 
 ## Wikilinks (topic links)
