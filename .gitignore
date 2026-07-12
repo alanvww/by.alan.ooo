@@ -43,3 +43,6 @@ debug_snapshot.json
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# claude code (local session config)
+.claude/
