@@ -109,6 +109,7 @@ export const XMB_ICON_NAMES = [
   'Folder',
   'File',
   'CaretRight',
+  'Link',
   'ArrowLeft',
   'Question',
   'GithubLogo',

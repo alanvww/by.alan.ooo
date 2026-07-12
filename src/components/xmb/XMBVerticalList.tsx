@@ -204,7 +204,14 @@ const XMBListItem = React.memo(forwardRef<HTMLElement, XMBListItemProps>(
                             <span className="text-lg md:text-xl font-light whitespace-nowrap truncate">
                                 {item.title}
                             </span>
-                            {isFolder && !isItemSelected && (
+                            {/* External rows carry a chain-link badge; the
+                                caret matches the folder affordance (in the
+                                title line while unselected, parked on the
+                                card edge while selected). The sr-only span
+                                on the anchor announces "opens in new tab" —
+                                these are decorative. */}
+                            {isExternal && <XMBIcon name="Link" size={18} />}
+                            {(isFolder || isExternal) && !isItemSelected && (
                                 <XMBIcon name="CaretRight" size={18} />
                             )}
                         </div>
@@ -227,11 +234,12 @@ const XMBListItem = React.memo(forwardRef<HTMLElement, XMBListItemProps>(
                         )}
                     </div>
 
-                    {/* Selected folders park the disclosure caret on the card's
-                        right edge (it leaves the title line while selected so
-                        the title keeps the width). */}
+                    {/* Selected folders and external links park the
+                        disclosure caret on the card's right edge (it leaves
+                        the title line while selected so the title keeps the
+                        width). */}
                     <AnimatePresence>
-                        {isItemSelected && isFolder && (
+                        {isItemSelected && (isFolder || isExternal) && (
                             <motion.div
                                 key="drill-caret"
                                 initial={{ opacity: 0, x: -8 }}
