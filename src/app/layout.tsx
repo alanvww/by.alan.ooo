@@ -5,6 +5,7 @@ import { XMBNavigationProvider } from "@/lib/xmb-navigation-context";
 import { getXMBData } from "@/lib/xmb-data";
 import { getContentTypes } from "@/lib/mdx";
 import WebGLBackground from "@/components/WebGLBackground";
+import MotionProvider from "@/components/MotionProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -60,9 +61,11 @@ export default async function RootLayout({
         {/* Mounted once for the whole app: the GL context and shader clock
             survive route changes instead of rebuilding on every navigation. */}
         <WebGLBackground />
-        <XMBNavigationProvider categories={categories} initialCategoryIndex={initialCategoryIndex}>
-          {children}
-        </XMBNavigationProvider>
+        <MotionProvider>
+          <XMBNavigationProvider categories={categories} initialCategoryIndex={initialCategoryIndex}>
+            {children}
+          </XMBNavigationProvider>
+        </MotionProvider>
       </body>
     </html>
   );

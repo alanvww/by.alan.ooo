@@ -57,7 +57,7 @@ const XMBLoadingSkeleton = ({ variant = 'fullscreen' }: XMBLoadingSkeletonProps)
             )}
 
             {/* Scrollable Content */}
-            <div className="flex-1 overflow-y-auto pt-32 pb-48 px-6 md:px-0 scroll-smooth">
+            <div className="flex-1 overflow-y-auto pt-32 pb-48 px-6 md:px-0 scroll-smooth motion-reduce:scroll-auto">
                 <div className="max-w-4xl mx-auto">
                     {/* Header Section Skeleton */}
                     <div className="mb-16 text-center flex flex-col items-center">

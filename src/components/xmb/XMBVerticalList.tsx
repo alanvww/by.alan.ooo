@@ -211,9 +211,12 @@ const XMBListItem = React.memo(forwardRef<HTMLElement, XMBListItemProps>(
                         {isItemSelected && item.description && (
                             <motion.p
                                 initial={false}
-                                animate={{ opacity: 0.6, height: "auto" }}
+                                // Full element opacity: stacking 0.6 on the /60
+                                // color token landed at ~0.36 effective (~3.2:1,
+                                // a WCAG AA failure); /70 alone is ~9.7:1.
+                                animate={{ opacity: 1, height: "auto" }}
                                 exit={{ opacity: 0, height: 0 }}
-                                className="text-xs md:text-sm text-xmb-fg/60 mt-1 line-clamp-2"
+                                className="text-xs md:text-sm text-xmb-fg/70 mt-1 line-clamp-2"
                             >
                                 {item.description}
                             </motion.p>
@@ -406,6 +409,9 @@ const XMBVerticalList = React.memo(
         const prevCategoryIdRef = useRef<string | null>(null);
         const entranceOpacity = useMotionValue(0);
         const entranceX = useMotionValue(-20);
+        // Imperative animate() on motion values bypasses MotionConfig's
+        // reducedMotion, so the entrance gates itself.
+        const reduceMotion = useReducedMotion();
         // 'snap' for the commit that swaps categories: the column's y then
         // retargets with duration 0 instead of springing the previous
         // category's scroll offset into the incoming list.
@@ -416,12 +422,17 @@ const XMBVerticalList = React.memo(
                 return;
             }
             prevCategoryIdRef.current = activeCategory.id;
-            entranceOpacity.jump(0);
-            entranceX.jump(-20);
-            animate(entranceOpacity, 1, { duration: 0.15, ease: EASE.MOVE });
-            animate(entranceX, 0, { duration: 0.15, ease: EASE.MOVE });
+            if (reduceMotion) {
+                entranceOpacity.jump(1);
+                entranceX.jump(0);
+            } else {
+                entranceOpacity.jump(0);
+                entranceX.jump(-20);
+                animate(entranceOpacity, 1, { duration: 0.15, ease: EASE.MOVE });
+                animate(entranceX, 0, { duration: 0.15, ease: EASE.MOVE });
+            }
             setColumnPhase('snap');
-        }, [activeCategory.id, entranceOpacity, entranceX]);
+        }, [activeCategory.id, entranceOpacity, entranceX, reduceMotion]);
 
         // Follow-up commit restores the column's selection-move spring.
         useEffect(() => {

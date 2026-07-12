@@ -6,6 +6,7 @@ import { DotWavePlaceholder } from '@/components/mdx/DotWavePlaceholder';
 import { motion } from 'motion/react';
 import { useRouter } from 'next/navigation';
 import { XMB_ANIMATION, EASE, XMB_OVERLAY } from '@/lib/xmb-constants';
+import { useReducedMotion } from 'motion/react';
 import { useKeyPressed } from '@/hooks/usePressedKeys';
 import { useCoarsePointer } from '@/hooks/useCoarsePointer';
 import { playNavigate } from '@/hooks/useKeyAudioFx';
@@ -28,6 +29,10 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
     const prevPressed = useKeyPressed('ArrowLeft');
     const nextPressed = useKeyPressed('ArrowRight');
     const isCoarse = useCoarsePointer();
+    const reduceMotion = useReducedMotion();
+    // JS-initiated scrolling honors prefers-reduced-motion (2.3.3); the CSS
+    // scroll-behavior is gated separately in globals.css.
+    const scrollBehavior: ScrollBehavior = reduceMotion ? 'auto' : 'smooth';
 
     // Warm the sibling routes so ←/→ swaps render instantly instead of
     // dropping to the loading skeleton (router.push alone never prefetches).
@@ -88,37 +93,37 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
                 case 'ArrowUp':
                     e.preventDefault();
                     if (container) {
-                        container.scrollBy({ top: -SCROLL_AMOUNT, behavior: 'smooth' });
+                        container.scrollBy({ top: -SCROLL_AMOUNT, behavior: scrollBehavior });
                     }
                     break;
                 case 'ArrowDown':
                     e.preventDefault();
                     if (container) {
-                        container.scrollBy({ top: SCROLL_AMOUNT, behavior: 'smooth' });
+                        container.scrollBy({ top: SCROLL_AMOUNT, behavior: scrollBehavior });
                     }
                     break;
                 case 'PageUp':
                     e.preventDefault();
                     if (container) {
-                        container.scrollBy({ top: -PAGE_SCROLL_AMOUNT, behavior: 'smooth' });
+                        container.scrollBy({ top: -PAGE_SCROLL_AMOUNT, behavior: scrollBehavior });
                     }
                     break;
                 case 'PageDown':
                     e.preventDefault();
                     if (container) {
-                        container.scrollBy({ top: PAGE_SCROLL_AMOUNT, behavior: 'smooth' });
+                        container.scrollBy({ top: PAGE_SCROLL_AMOUNT, behavior: scrollBehavior });
                     }
                     break;
                 case 'Home':
                     e.preventDefault();
                     if (container) {
-                        container.scrollTo({ top: 0, behavior: 'smooth' });
+                        container.scrollTo({ top: 0, behavior: scrollBehavior });
                     }
                     break;
                 case 'End':
                     e.preventDefault();
                     if (container) {
-                        container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+                        container.scrollTo({ top: container.scrollHeight, behavior: scrollBehavior });
                     }
                     break;
             }
@@ -128,7 +133,7 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
         return () => {
             window.removeEventListener('keydown', handleKeyDown);
         };
-    }, [router, siblings, type]);
+    }, [router, siblings, type, scrollBehavior]);
 
     // The frosted backdrop and back button live in XMBPostFrame (the [type]
     // layout), which persists across sibling navigation — this root only
@@ -163,7 +168,7 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
                 tabIndex={0}
                 role="region"
                 aria-label="Article content"
-                className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pt-32 pb-48 px-6 md:px-0 scroll-smooth select-text focus-visible:ring-inset focus-visible:ring-offset-0"
+                className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pt-32 pb-48 px-6 md:px-0 scroll-smooth motion-reduce:scroll-auto select-text focus-visible:ring-inset focus-visible:ring-offset-0"
             >
                 <div className="max-w-4xl mx-auto">
                     {/* Header Section */}
@@ -294,7 +299,7 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
                     <button
                         type="button"
                         aria-label="Scroll to top"
-                        onClick={() => scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
+                        onClick={() => scrollContainerRef.current?.scrollTo({ top: 0, behavior: scrollBehavior })}
                         className="pointer-events-auto min-w-11 min-h-11 flex items-center justify-center touch-manipulation text-xmb-fg/70 active:text-xmb-fg"
                     >
                         ↑
@@ -307,7 +312,7 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
                         aria-label="Scroll to bottom"
                         onClick={() => {
                             const container = scrollContainerRef.current;
-                            container?.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+                            container?.scrollTo({ top: container.scrollHeight, behavior: scrollBehavior });
                         }}
                         className="pointer-events-auto min-w-11 min-h-11 flex items-center justify-center touch-manipulation text-xmb-fg/70 active:text-xmb-fg"
                     >

@@ -39,7 +39,7 @@ export default function CVPage(): React.ReactElement {
             tabIndex={0}
             role="region"
             aria-label="Curriculum vitae content"
-            className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pt-32 pb-48 px-6 md:px-0 scroll-smooth select-text focus-visible:ring-inset focus-visible:ring-offset-0"
+            className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pt-32 pb-48 px-6 md:px-0 scroll-smooth motion-reduce:scroll-auto select-text focus-visible:ring-inset focus-visible:ring-offset-0"
           >
             <div className="max-w-4xl mx-auto">
               {/* Header Section */}
