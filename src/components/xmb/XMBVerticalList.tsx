@@ -11,10 +11,8 @@ import type { XMBCategory, XMBItem } from "@/lib/xmb-types";
 import XMBIcon from "./XMBIcon";
 import XMBBackPill from "./XMBBackPill";
 import { XMB_LAYOUT, XMB_ANIMATION, EASE } from "@/lib/xmb-constants";
-import { activateItem, getEnterActionLabel, isExternalLink } from "@/lib/xmb-navigation";
+import { activateItem, isExternalLink } from "@/lib/xmb-navigation";
 import { playNavigate, playConfirm } from "@/hooks/useKeyAudioFx";
-import { useCoarsePointer } from "@/hooks/useCoarsePointer";
-import XMBKeycap from "./XMBKeycap";
 
 interface XMBVerticalListProps {
     activeCategory: XMBCategory;
@@ -56,7 +54,6 @@ interface XMBListItemProps {
 const XMBListItem = React.memo(forwardRef<HTMLElement, XMBListItemProps>(
     ({ item, index, selectedIndex, isItemSelected, isContextView, onRowSelect, onRowActivate, onRowFocus, startNavigation }, ref) => {
         const [imgError, setImgError] = useState(false);
-        const isCoarse = useCoarsePointer();
         const reduceMotion = useReducedMotion();
         const isFolder = item.type === 'folder';
 
@@ -163,7 +160,7 @@ const XMBListItem = React.memo(forwardRef<HTMLElement, XMBListItemProps>(
                     >
                         {isFolder ? (
                             <div className="flex items-center justify-center w-full h-full">
-                                <XMBIcon name="Folder" size={24} />
+                                <XMBIcon name={item.icon ?? "Folder"} size={24} />
                             </div>
                         ) : item.icon ? (
                             <div className="flex items-center justify-center w-full h-full">
@@ -191,17 +188,8 @@ const XMBListItem = React.memo(forwardRef<HTMLElement, XMBListItemProps>(
                             <span className="text-lg md:text-xl font-light whitespace-nowrap truncate">
                                 {item.title}
                             </span>
-                            {isFolder && (
-                                <motion.div
-                                    animate={{ x: isItemSelected && !reduceMotion ? [0, 5, 0] : 0 }}
-                                    transition={{
-                                        repeat: isItemSelected && !reduceMotion ? Infinity : 0,
-                                        duration: 1.5,
-                                        ease: "easeInOut"
-                                    }}
-                                >
-                                    <XMBIcon name="CaretRight" size={18} />
-                                </motion.div>
+                            {isFolder && !isItemSelected && (
+                                <XMBIcon name="CaretRight" size={18} />
                             )}
                         </div>
                         {/* initial={false}: entering at full size avoids the
@@ -223,37 +211,30 @@ const XMBListItem = React.memo(forwardRef<HTMLElement, XMBListItemProps>(
                         )}
                     </div>
 
-                    {/* Floating ENTER hint — telegraphs the action at the focus
-                        point. Purely visual (aria-hidden, duplicates the row's
-                        action): on coarse pointers a tap on the chip lands on
-                        the row itself, which IS the link/button now — role=
-                        "option" children are presentational, so no nested
-                        interactive element is allowed here anyway. */}
+                    {/* Selected folders park the disclosure caret on the card's
+                        right edge (it leaves the title line while selected so
+                        the title keeps the width). */}
                     <AnimatePresence>
-                        {isItemSelected && (
+                        {isItemSelected && isFolder && (
                             <motion.div
-                                key="enter-hint"
+                                key="drill-caret"
                                 initial={{ opacity: 0, x: -8 }}
                                 animate={{ opacity: 1, x: 0 }}
                                 exit={{ opacity: 0, x: -8 }}
                                 transition={{ duration: 0.18, ease: EASE.ENTER }}
-                                className="flex items-center gap-2 shrink-0 pr-1"
+                                className="shrink-0 pr-1"
                                 aria-hidden="true"
                             >
-                                {isCoarse ? (
-                                    <span
-                                        className="inline-flex items-center min-h-11 px-4 rounded-full border border-xmb-fg/25 bg-xmb-fg/10 text-[10px] font-mono uppercase tracking-[0.18em] text-xmb-fg/80 select-none"
-                                    >
-                                        {getEnterActionLabel(item)}
-                                    </span>
-                                ) : (
-                                    <>
-                                        <XMBKeycap label="ENTER" pressed={false} className="px-1.5 w-auto" />
-                                        <span className="text-[10px] font-mono uppercase tracking-[0.18em] text-xmb-fg/55">
-                                            {getEnterActionLabel(item)}
-                                        </span>
-                                    </>
-                                )}
+                                <motion.div
+                                    animate={{ x: reduceMotion ? 0 : [0, 5, 0] }}
+                                    transition={{
+                                        repeat: reduceMotion ? 0 : Infinity,
+                                        duration: 1.5,
+                                        ease: "easeInOut"
+                                    }}
+                                >
+                                    <XMBIcon name="CaretRight" size={18} />
+                                </motion.div>
                             </motion.div>
                         )}
                     </AnimatePresence>
