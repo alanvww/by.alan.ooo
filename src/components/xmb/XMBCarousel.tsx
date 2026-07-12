@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { motion, AnimatePresence } from "motion/react";
 import { useXMBLoadingContext } from "@/lib/xmb-navigation-context";
 import { isExternalLink } from "@/lib/xmb-navigation";
+import { focusListSibling } from "@/lib/focus";
 import type { XMBItem } from "@/lib/xmb-types";
 import XMBIcon from "./XMBIcon";
 import XMBBackPill from "./XMBBackPill";
@@ -95,6 +96,20 @@ const XMBCarouselCard = React.memo(({ item, index, setSize, scrollOffset, onSele
     }
   };
 
+  // Tab walks the carousel: the adjacent card takes focus loudly (ring
+  // shows — browser-style traversal) and selection follows via onFocus; at
+  // either end the default action exits the list so keyboard users are
+  // never trapped (2.1.2). Adjacent cards are always mounted (culling only
+  // drops cards beyond the visibility window), so the sibling lookup only
+  // fails at the true boundaries.
+  const handleTabKeyDown = (e: React.KeyboardEvent<HTMLElement>): void => {
+    if (e.key !== 'Tab') return;
+    if (focusListSibling('carousel-item-', index, e.shiftKey ? -1 : 1)) {
+      e.preventDefault();
+      playNavigate();
+    }
+  };
+
   const sharedProps = {
     role: 'option',
     'aria-selected': isActive,
@@ -130,6 +145,7 @@ const XMBCarouselCard = React.memo(({ item, index, setSize, scrollOffset, onSele
     transition: XMB_ANIMATION.SPRING_CONFIG,
     onClick: handleClick,
     onFocus: handleFocus,
+    onKeyDown: handleTabKeyDown,
   };
 
   const cardContent = (

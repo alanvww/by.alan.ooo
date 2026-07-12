@@ -12,6 +12,7 @@ import XMBIcon from "./XMBIcon";
 import XMBBackPill from "./XMBBackPill";
 import { XMB_LAYOUT, XMB_ANIMATION, EASE } from "@/lib/xmb-constants";
 import { activateItem, isExternalLink } from "@/lib/xmb-navigation";
+import { focusListSibling } from "@/lib/focus";
 import { playNavigate, playConfirm } from "@/hooks/useKeyAudioFx";
 
 interface XMBVerticalListProps {
@@ -100,6 +101,19 @@ const XMBListItem = React.memo(forwardRef<HTMLElement, XMBListItemProps>(
 
         const handleFocus = (): void => onRowFocus(index);
 
+        // Tab walks the list: the adjacent row takes focus loudly (ring
+        // shows — browser-style traversal) and selection follows via
+        // onFocus; at either end the default action exits the list so
+        // keyboard users are never trapped (2.1.2). Arrows remain the
+        // silent, selection-styled path.
+        const handleTabKeyDown = (e: React.KeyboardEvent<HTMLElement>): void => {
+            if (e.key !== 'Tab') return;
+            if (focusListSibling('xmb-item-', index, e.shiftKey ? -1 : 1)) {
+                e.preventDefault();
+                playNavigate();
+            }
+        };
+
         // Distance from selected item (negative = above, positive = below).
         // Opacity falloff carries the depth cue; we deliberately skip per-item
         // scale / x-shift so the only motion between selections is the
@@ -123,9 +137,10 @@ const XMBListItem = React.memo(forwardRef<HTMLElement, XMBListItemProps>(
             ? Math.max(0.1, 0.42 * Math.pow(0.62, distance - 1))
             : Math.max(0.25, 0.7 - distance * 0.1);
 
-        // No element-level Enter/Space handler: links and buttons activate
-        // natively (the window dispatcher's guard stands down for them), so
-        // exactly one activation fires per keypress.
+        // Tab (above) is the one element-level key handler. No Enter/Space
+        // handler: links and buttons activate natively (the window
+        // dispatcher's guard stands down for them), so exactly one
+        // activation fires per keypress.
         const rowClassName = 'relative block w-full cursor-pointer mb-6 md:mb-8 focus-visible:outline-none overflow-visible';
         const sharedProps: React.HTMLAttributes<HTMLElement> = {
             role: 'option',
@@ -135,6 +150,7 @@ const XMBListItem = React.memo(forwardRef<HTMLElement, XMBListItemProps>(
             style: { contain: 'layout style' },
             onClick: handleClick,
             onFocus: handleFocus,
+            onKeyDown: handleTabKeyDown,
             tabIndex,
         };
 
