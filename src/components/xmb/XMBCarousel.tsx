@@ -104,7 +104,12 @@ const XMBCarouselCard = React.memo(({ item, index, setSize, scrollOffset, onSele
     'aria-posinset': index + 1,
     id: `carousel-item-${index}`,
     tabIndex: isActive ? 0 : -1,
-    className: "absolute left-0 block w-full cursor-pointer focus-visible:outline-none",
+    // This element is a full-width positioning strip anchored at top:50%;
+    // the visible card is a child pulled up with translateY(-50%). A focus
+    // ring here outlines the strip's untransformed box (offset below and far
+    // wider than the card), so the ring is suppressed and re-drawn on the
+    // card box itself via group-focus-visible.
+    className: "group absolute left-0 block w-full cursor-pointer outline-none focus-visible:ring-0 focus-visible:ring-offset-0",
     style: {
       top: '50%',
       zIndex,
@@ -136,6 +141,7 @@ const XMBCarouselCard = React.memo(({ item, index, setSize, scrollOffset, onSele
           className={`
             w-64 h-36 sm:w-[24rem] sm:h-[14rem] md:w-[28rem] md:h-[16rem] shrink-0 rounded-xl overflow-hidden border shadow-2xl dark:bg-black/85 bg-white/90
             transition-[border-color,box-shadow,transform] duration-200
+            group-focus-visible:ring-2 group-focus-visible:ring-ring
             ${isActive
               ? 'border-xmb-fg/80 ring-1 ring-xmb-fg/50 shadow-[0_0_35px_var(--color-xmb-shadow-glow)] hover:scale-[1.02] hover:shadow-[0_0_50px_var(--color-xmb-shadow-glow)]'
               : 'border-xmb-fg/20'
