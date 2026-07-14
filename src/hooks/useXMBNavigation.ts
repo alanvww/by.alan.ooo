@@ -3,7 +3,7 @@ import { useEffect, useCallback, useMemo, useRef } from 'react';
 import type { XMBCategory, XMBItem } from '@/lib/xmb-types';
 import { useRouter } from 'next/navigation';
 import { useXMBDerivedContext, useXMBLoadingContext, useXMBSelectionContext } from '@/lib/xmb-navigation-context';
-import { useKeyAudioFx, playConfirm, playCancel, playNavigate } from '@/hooks/useKeyAudioFx';
+import { playConfirm, playCancel, playNavigate } from '@/hooks/useKeyAudioFx';
 import { activateItem } from '@/lib/xmb-navigation';
 
 // Holding ArrowLeft/Right auto-repeats at the OS rate (~30ms), which queues
@@ -87,8 +87,6 @@ export function useXMBNavigation(categories: XMBCategory[], layoutMode: 'full' |
     finishNavigation
   } = useXMBLoadingContext();
 
-  // Ensure the shared audio context is initialised; sound functions are module-level singletons
-  useKeyAudioFx();
   const router = useRouter();
 
   // Use refs to prevent handler recreation
