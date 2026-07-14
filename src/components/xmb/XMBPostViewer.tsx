@@ -68,7 +68,11 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
         return focusSilently(region);
     }, []);
 
-    // Handle keyboard navigation
+    // Handle keyboard navigation. Only ←/→ sibling swaps are intercepted —
+    // vertical scrolling (↑/↓, PageUp/Down, Home/End, Space) is left to the
+    // browser's native handling of the focused scroll region, same as the CV
+    // page: native key-repeat scrolls continuously, where a per-keydown
+    // scrollBy restarts its smooth animation on every repeat and crawls.
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             // Modified keys are browser affordances (Alt+Left = history back,
@@ -79,10 +83,6 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
             if (target instanceof Element && target.closest('input, textarea, select, [contenteditable="true"]')) {
                 return;
             }
-
-            const container = scrollContainerRef.current;
-            const SCROLL_AMOUNT = 150;
-            const PAGE_SCROLL_AMOUNT = 500;
 
             switch (e.key) {
                 case 'ArrowLeft':
@@ -97,42 +97,6 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
                         router.push(`/${type}/${siblings.next.slug}`);
                     }
                     break;
-                case 'ArrowUp':
-                    e.preventDefault();
-                    if (container) {
-                        container.scrollBy({ top: -SCROLL_AMOUNT, behavior: scrollBehavior });
-                    }
-                    break;
-                case 'ArrowDown':
-                    e.preventDefault();
-                    if (container) {
-                        container.scrollBy({ top: SCROLL_AMOUNT, behavior: scrollBehavior });
-                    }
-                    break;
-                case 'PageUp':
-                    e.preventDefault();
-                    if (container) {
-                        container.scrollBy({ top: -PAGE_SCROLL_AMOUNT, behavior: scrollBehavior });
-                    }
-                    break;
-                case 'PageDown':
-                    e.preventDefault();
-                    if (container) {
-                        container.scrollBy({ top: PAGE_SCROLL_AMOUNT, behavior: scrollBehavior });
-                    }
-                    break;
-                case 'Home':
-                    e.preventDefault();
-                    if (container) {
-                        container.scrollTo({ top: 0, behavior: scrollBehavior });
-                    }
-                    break;
-                case 'End':
-                    e.preventDefault();
-                    if (container) {
-                        container.scrollTo({ top: container.scrollHeight, behavior: scrollBehavior });
-                    }
-                    break;
             }
         };
 
@@ -140,7 +104,7 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
         return () => {
             window.removeEventListener('keydown', handleKeyDown);
         };
-    }, [router, siblings, type, scrollBehavior]);
+    }, [router, siblings, type]);
 
     // The frosted backdrop and back button live in XMBPostFrame (the [type]
     // layout), which persists across sibling navigation — this root only
