@@ -158,7 +158,7 @@ const XMBListItem = React.memo(forwardRef<HTMLElement, XMBListItemProps>(
             <>
                 {/* Item visual scale/offset animation with highlight */}
                 <motion.div
-                    className={`flex items-center gap-3 md:gap-4 w-full py-3 md:py-4 px-3 md:px-4 rounded-lg transition-[background-color,box-shadow,border-color] duration-150 ${
+                    className={`flex items-center gap-3 md:gap-4 w-full py-3 md:py-4 px-3 md:px-4 rounded-lg xmb-row-chrome ${
                         isItemSelected
                             ? "bg-xmb-fg/20 ring-1 ring-xmb-fg/40 shadow-[0_0_20px_var(--color-xmb-shadow-glow)]"
                             : "hover:bg-xmb-fg/5"
