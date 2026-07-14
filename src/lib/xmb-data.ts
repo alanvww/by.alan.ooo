@@ -165,6 +165,15 @@ function buildAboutMeItems(): XMBItem[] {
       type: 'link',
       icon: 'ReadCvLogo',
       hidePreview: true,
+    },
+    {
+      id: 'about-stack-gear',
+      title: 'Stack & Gear',
+      description: 'Software stack and everyday gear',
+      link: '/stack-and-gear',
+      type: 'link',
+      icon: 'Backpack',
+      hidePreview: true,
     }
   ];
 }

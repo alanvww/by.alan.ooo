@@ -446,6 +446,32 @@ code[data-theme] span {
   }
 }
 
+/* Stack & Gear card entrance (StackCards.tsx) — CSS-only stagger so
+   /stack-and-gear stays a pure RSC. Delay tick echoes STAGGER_TICK_MS and
+   the easing is EASE.ENTER from xmb-constants; the min() cap keeps the tail
+   of a 21-card grid from arriving half a second late. */
+@keyframes stack-item-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.stack-reveal > li {
+  animation: stack-item-in 0.5s cubic-bezier(0.05, 0.7, 0.1, 1) both;
+  animation-delay: calc(min(var(--stagger-i, 0), 11) * 40ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stack-reveal > li {
+    animation: none;
+  }
+}
+
 /* Selected-row chrome crossfade (XMBVerticalList.tsx). The background settles
    on a soft spring (sampled into linear() — tuned live via transitions.dev
    Refine) while the ring/border snap in quicker. The curve lives in a custom

@@ -126,6 +126,7 @@ export const XMB_ICON_NAMES = [
   'CompassTool',
   'Cube',
   'VirtualReality',
+  'Backpack',
 ] as const;
 
 export type XMBIconName = (typeof XMB_ICON_NAMES)[number];

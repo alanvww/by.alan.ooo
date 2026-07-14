@@ -29,6 +29,7 @@ import {
   CompassTool,
   Cube,
   VirtualReality,
+  Backpack,
 } from '@phosphor-icons/react';
 import type { XMBIconName } from '@/lib/xmb-constants';
 
@@ -58,6 +59,7 @@ const iconRegistry = {
   CompassTool,
   Cube,
   VirtualReality,
+  Backpack,
 } as const;
 
 interface XMBIconProps {
