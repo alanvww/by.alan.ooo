@@ -33,7 +33,7 @@ const XMBBackPill = ({ onBack, label = 'Back' }: XMBBackPillProps) => {
       // The pill's own focus treatment (border/bg/label reveal below) is the
       // indicator — the global ring would double up, so suppress it (ring-0
       // alone leaves the 2px offset halo).
-      className="group flex items-center gap-3 text-xmb-fg/50 hover:text-xmb-fg transition-colors duration-300 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:text-xmb-fg touch-manipulation"
+      className="group flex items-center gap-3 text-xmb-fg/50 hover:text-xmb-fg transition-colors duration-150 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:text-xmb-fg touch-manipulation"
       aria-label={label}
     >
       <div className="flex items-center gap-2 min-h-11 rounded-full border border-xmb-fg/10 bg-xmb-fg/5 px-3 py-2 transition-all group-hover:border-xmb-fg/30 group-hover:bg-xmb-fg/10 group-focus-visible:border-xmb-fg/40 group-active:border-xmb-fg/40 group-active:bg-xmb-fg/15">
@@ -48,7 +48,7 @@ const XMBBackPill = ({ onBack, label = 'Back' }: XMBBackPillProps) => {
         )}
       </div>
       <span
-        className={`text-xs font-mono uppercase tracking-[0.2em] transition-all duration-300 ${
+        className={`text-xs font-mono uppercase tracking-[0.2em] transition-all duration-150 ${
           isCoarse
             ? 'opacity-100 translate-x-0'
             : 'opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 group-focus-visible:opacity-100 group-focus-visible:translate-x-0'

@@ -74,7 +74,7 @@ const XMBProgressIndicator = () => {
                             initial={{ opacity: 0, scale: 0.8 }}
                             animate={{ opacity: 1, scale: 1 }}
                             transition={{ delay: i * 0.02 }}
-                            className={`w-3 h-6 transition-all duration-300 ${
+                            className={`w-3 h-6 transition-all duration-150 ${
                                 isFilled 
                                     ? 'bg-xmb-fg shadow-[0_0_8px_var(--color-xmb-shadow-glow)]'
                                     : 'border border-xmb-fg/30'

@@ -333,7 +333,7 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
                     </button>
                 </div>
             ) : (
-                <div className="absolute right-12 top-1/2 -translate-y-1/2 flex flex-col items-center gap-4 z-40 opacity-30 hover:opacity-100 transition-opacity duration-500">
+                <div className="absolute right-12 top-1/2 -translate-y-1/2 flex flex-col items-center gap-4 z-40 opacity-30 hover:opacity-100 transition-opacity duration-250">
                     <div className="w-px h-32 bg-linear-to-b from-transparent via-xmb-fg/50 to-transparent" />
                     <span className="[writing-mode:vertical-rl] text-[10px] font-mono uppercase tracking-widest">Scroll</span>
                     <div className="w-px h-32 bg-linear-to-t from-transparent via-xmb-fg/50 to-transparent" />

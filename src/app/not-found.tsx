@@ -38,7 +38,7 @@ export default function NotFound() {
                 </p>
                 <Link
                     href="/"
-                    className="inline-flex items-center gap-3 px-6 py-3 rounded-full border border-xmb-fg/20 bg-xmb-fg/5 text-xmb-fg/70 hover:text-xmb-fg hover:border-xmb-fg/40 hover:bg-xmb-fg/10 transition-all duration-300 text-sm font-mono uppercase tracking-widest"
+                    className="inline-flex items-center gap-3 px-6 py-3 rounded-full border border-xmb-fg/20 bg-xmb-fg/5 text-xmb-fg/70 hover:text-xmb-fg hover:border-xmb-fg/40 hover:bg-xmb-fg/10 transition-all duration-150 text-sm font-mono uppercase tracking-widest"
                 >
                     <span className="px-1.5 h-5 rounded border border-xmb-fg/20 bg-xmb-fg/5 text-[10px] font-mono">ESC</span>
                     Return to Menu

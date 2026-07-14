@@ -13,7 +13,7 @@ import { Tabs, Tab } from '@/components/mdx/Tabs'
 import { MDXImage } from '@/components/mdx/MDXImage'
 import { getLocalImageDimensions } from '@/lib/content-assets'
 
-const LINK_CLASS = 'text-xmb-fg/90 underline underline-offset-4 decoration-xmb-fg/20 hover:decoration-xmb-fg/60 transition-all duration-300'
+const LINK_CLASS = 'text-xmb-fg/90 underline underline-offset-4 decoration-xmb-fg/20 hover:decoration-xmb-fg/60 transition-all duration-150'
 
 // XMB-styled MDX components (theme-aware: xmb-fg token works in both light and dark mode)
 export const mdxComponents: MDXComponents = {

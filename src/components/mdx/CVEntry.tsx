@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { CalendarBlank, MapPin, ArrowUpRight } from '@phosphor-icons/react/dist/ssr'
 
 const ENTRY_LINK_CLASS =
-  'inline-flex items-center gap-1.5 text-sm font-light text-xmb-fg/70 underline underline-offset-4 decoration-xmb-fg/20 hover:text-xmb-fg/90 hover:decoration-xmb-fg/60 transition-all duration-300'
+  'inline-flex items-center gap-1.5 text-sm font-light text-xmb-fg/70 underline underline-offset-4 decoration-xmb-fg/20 hover:text-xmb-fg/90 hover:decoration-xmb-fg/60 transition-all duration-150'
 
 export interface CVEntryLink {
   label: string
@@ -48,7 +48,7 @@ export function CVEntry({
                 href={orgHref}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="underline underline-offset-4 decoration-xmb-fg/20 hover:decoration-xmb-fg/60 transition-all duration-300"
+                className="underline underline-offset-4 decoration-xmb-fg/20 hover:decoration-xmb-fg/60 transition-all duration-150"
               >
                 {org}
               </a>

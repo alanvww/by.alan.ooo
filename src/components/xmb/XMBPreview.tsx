@@ -45,7 +45,7 @@ const XMBPreview = ({ item }: XMBPreviewProps) => {
         <motion.div
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            transition={{ delay: 0.05, ...XMB_ANIMATION.SPRING_CONFIG }}
+            transition={{ delay: 0.04, ...XMB_ANIMATION.SPRING_CONFIG }}
             className="w-full max-w-[450px] aspect-video bg-xmb-fg/5 rounded-lg overflow-hidden border-2 border-xmb-fg/20 shadow-[0_0_50px_var(--color-xmb-shadow-glow)]"
             style={{ willChange: 'transform, opacity' }}
         >
