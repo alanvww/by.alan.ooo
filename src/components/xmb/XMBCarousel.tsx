@@ -36,7 +36,7 @@ interface XMBCarouselCardProps {
   scrollOffset: number;
   onSelect: (index: number) => void;
   /** Shows the loading skeleton ahead of internal link navigation. */
-  startNavigation: () => void;
+  startNavigation: (href?: string) => void;
   isPointerEvent?: () => boolean;
 }
 
@@ -81,7 +81,7 @@ const XMBCarouselCard = React.memo(({ item, index, setSize, scrollOffset, onSele
       // The anchor navigates natively; skeleton for internal routes only.
       playConfirm();
       if (!isExternal) {
-        startNavigation();
+        startNavigation(item.link!);
       }
     }
     // Non-link cards (nested folders / actions): Enter drills via the window

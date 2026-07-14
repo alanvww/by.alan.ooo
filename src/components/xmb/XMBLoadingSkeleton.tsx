@@ -3,12 +3,13 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { XMB_OVERLAY } from '@/lib/xmb-constants';
+import { cn } from '@/lib/utils';
 import XMBIcon from './XMBIcon';
 
 const ShimmerBar = ({ className }: { className?: string }) => (
     <motion.div
         aria-hidden="true"
-        className={`relative overflow-hidden bg-xmb-fg/5 rounded-lg ${className}`}
+        className={cn('relative overflow-hidden bg-xmb-fg/5 rounded-lg', className)}
     >
         <motion.div
             initial={{ x: '-100%' }}
@@ -120,5 +121,176 @@ const XMBLoadingSkeleton = ({ variant = 'fullscreen' }: XMBLoadingSkeletonProps)
         </div>
     );
 };
+
+interface XMBStandaloneSkeletonShellProps {
+    /** Announced to screen readers, e.g. "Loading CV". */
+    label: string;
+    /** The page's scroll-region horizontal padding (e.g. 'px-6 md:px-0'). */
+    paddingClassName: string;
+    /** The page's column width (e.g. 'max-w-4xl'). */
+    columnClassName: string;
+    children: React.ReactNode;
+}
+
+/**
+ * Frame-shaped shell for the standalone document pages' loading states
+ * (/cv, /stack-and-gear). Draws XMBPostFrame's frosted backdrop plus a
+ * non-interactive back-pill stand-in at the frame's exact offsets, and the
+ * pages' shared scroll-region geometry (pt-32 pb-48, centered column), so
+ * the swap to the real page keeps every fixed element in place. The
+ * article-shaped skeleton above stays reserved for post routes.
+ */
+const XMBStandaloneSkeletonShell = ({
+    label,
+    paddingClassName,
+    columnClassName,
+    children,
+}: XMBStandaloneSkeletonShellProps) => (
+    <div
+        role="status"
+        aria-label={label}
+        className={`fixed inset-0 z-50 ${XMB_OVERLAY.FULLSCREEN} flex flex-col text-xmb-fg overflow-hidden`}
+    >
+        <span className="sr-only">{label}</span>
+
+        {/* Back pill placeholder — same top/left offsets and min-h-11 pill as
+            XMBPostFrame's button, so the real control lands on top of it. */}
+        <div className="absolute top-[max(2rem,env(safe-area-inset-top))] left-6 md:left-12 z-50">
+            <div className="flex min-h-11 items-center gap-2 rounded-full border border-xmb-fg/5 bg-xmb-fg/5 px-3 py-2 text-xmb-fg/20">
+                <XMBIcon name="ArrowLeft" size={18} />
+            </div>
+        </div>
+
+        {/* Scrollable Content */}
+        <div className={`flex-1 overflow-y-auto overflow-x-hidden pt-32 pb-48 ${paddingClassName}`}>
+            <div className={`${columnClassName} mx-auto`}>{children}</div>
+        </div>
+    </div>
+);
+
+/**
+ * CV-shaped skeleton mirroring /cv: centered badge + name header in the
+ * max-w-4xl column, then CVEntry-shaped blocks (left rule, title/org against
+ * date/location, bullet lines, links row). Used by both the /cv route's
+ * loading boundary and the menu-navigation overlay in LayoutWrapper.
+ */
+export const CVLoadingSkeleton = () => (
+    <XMBStandaloneSkeletonShell
+        label="Loading CV"
+        paddingClassName="px-6 md:px-0"
+        columnClassName="max-w-4xl"
+    >
+        {/* Header — badge pill, then the name (text-4xl md:text-7xl leading-tight).
+            No mb-8 on the name like the real h1: that margin collapses into the
+            header's mb-16 on the page, but this flex column would add it. */}
+        <div className="mb-16 flex flex-col items-center">
+            <div className="mb-8 flex items-center justify-center gap-4">
+                <ShimmerBar className="h-6 w-28" />
+            </div>
+            <ShimmerBar className="h-11 w-56 md:h-22 md:w-96" />
+        </div>
+
+        {/* Section heading (h2 text-2xl md:text-3xl) — mb-10 matches the
+            collapsed margin between the real h2 (mb-6) and first entry (mt-10). */}
+        <ShimmerBar className="mb-10 h-8 w-44 md:h-9" />
+
+        {/* CVEntry-shaped blocks. Titles wrap to two lines in the mobile
+            column (h-14 = 2 × 28px line boxes), one line at md. */}
+        <div className="space-y-10">
+            {[0, 1, 2].map((entry) => (
+                <div key={entry} className="border-l-2 border-xmb-fg/10 pl-6 md:pl-8">
+                    <div className="flex flex-col gap-2 md:flex-row md:items-baseline md:justify-between md:gap-6">
+                        <div className="min-w-0 flex-1">
+                            <ShimmerBar className="h-14 w-3/4 max-w-md md:h-8" />
+                            <ShimmerBar className="mt-1 h-6 w-40 md:h-7" />
+                        </div>
+                        <div className="flex shrink-0 flex-row flex-wrap gap-x-5 gap-y-1 md:flex-col md:items-end md:gap-1">
+                            <ShimmerBar className="h-4 w-36" />
+                            <ShimmerBar className="h-4 w-28" />
+                        </div>
+                    </div>
+                    <div className="mt-5 space-y-2">
+                        <ShimmerBar className="h-4 w-full" />
+                        <ShimmerBar className="h-4 w-11/12" />
+                        <ShimmerBar className="h-4 w-full" />
+                        <ShimmerBar className="h-4 w-4/5" />
+                        <ShimmerBar className="h-4 w-2/3" />
+                    </div>
+                    {/* Links row */}
+                    <div className="mt-4 flex items-center gap-x-5">
+                        <ShimmerBar className="h-3 w-10" />
+                        <ShimmerBar className="h-4 w-32" />
+                        <ShimmerBar className="h-4 w-40" />
+                    </div>
+                </div>
+            ))}
+        </div>
+    </XMBStandaloneSkeletonShell>
+);
+
+/** Per-section shape of the /stack-and-gear skeleton below. */
+const STACK_SKELETON_SECTIONS = [
+    // Intro heights track the real copy's wrapping: 3 lines on mobile for
+    // Stack (h-18 = 72px), 2 for Gear (h-12), one line at md (h-6).
+    { cards: 6, introClassName: 'h-18 md:h-6' },
+    { cards: 3, introClassName: 'h-12 md:h-6' },
+] as const;
+
+/**
+ * Card-grid-shaped skeleton mirroring /stack-and-gear: centered badge +
+ * title + tagline header in the page's wider max-w-6xl column, then
+ * per-section heading/intro rows and StackGrid's responsive card template.
+ * Used by both the route's loading boundary and the menu-navigation overlay.
+ */
+export const StackGearLoadingSkeleton = () => (
+    <XMBStandaloneSkeletonShell
+        label="Loading stack and gear"
+        paddingClassName="px-6"
+        columnClassName="max-w-6xl"
+    >
+        {/* Header — badge pill, title (text-4xl md:text-7xl), tagline. The
+            tagline wraps to two lines on mobile (h-14 = 2 × 28px line boxes). */}
+        <div className="mb-16 flex flex-col items-center">
+            <div className="mb-8 flex items-center justify-center gap-4">
+                <ShimmerBar className="h-6 w-24" />
+            </div>
+            <ShimmerBar className="mb-8 h-11 w-64 md:h-22 md:w-[26rem]" />
+            <ShimmerBar className="h-14 w-72 max-w-full md:h-7" />
+        </div>
+
+        {/* Stack, then Gear: section heading + intro + card grid. No section
+            top margin: on the real page both h2s are :first-child
+            (first:mt-0), so the inter-section gap is just the grid's my-8. */}
+        {STACK_SKELETON_SECTIONS.map((section, i) => (
+            <section key={i}>
+                <ShimmerBar className="mb-3 h-8 w-24 md:h-9" />
+                <ShimmerBar className={`w-full max-w-xl ${section.introClassName}`} />
+                <div className="my-8 grid grid-cols-1 gap-3 sm:grid-cols-2 md:gap-4 lg:grid-cols-3">
+                    {Array.from({ length: section.cards }, (_, card) => (
+                        <div
+                            key={card}
+                            className="flex items-start gap-4 rounded-xl border border-xmb-fg/10 bg-xmb-fg/5 p-4"
+                        >
+                            <ShimmerBar className="size-12 shrink-0 md:size-14" />
+                            <div className="min-w-0 flex-1">
+                                <ShimmerBar className="h-6 w-2/5" />
+                                {/* h-5 ≈ the comment's leading-relaxed line
+                                    boxes, so the card matches the real ~143px. */}
+                                <div className="mt-1 space-y-1.5">
+                                    <ShimmerBar className="h-5 w-full" />
+                                    <ShimmerBar className="h-5 w-3/4" />
+                                </div>
+                                <div className="mt-2.5 flex gap-1.5">
+                                    <ShimmerBar className="h-5 w-12 rounded" />
+                                    <ShimmerBar className="h-5 w-10 rounded" />
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </section>
+        ))}
+    </XMBStandaloneSkeletonShell>
+);
 
 export default XMBLoadingSkeleton;

@@ -49,7 +49,7 @@ interface XMBListItemProps {
     /** Keyboard/AT focus landed on this row: sync the selection cursor. */
     onRowFocus: (index: number) => void;
     /** Shows the loading skeleton ahead of internal link navigation. */
-    startNavigation: () => void;
+    startNavigation: (href?: string) => void;
 }
 
 const XMBListItem = React.memo(forwardRef<HTMLElement, XMBListItemProps>(
@@ -91,7 +91,7 @@ const XMBListItem = React.memo(forwardRef<HTMLElement, XMBListItemProps>(
                 // The anchor performs the navigation natively: <Link> pushes
                 // the route, external <a> opens its tab. No preventDefault.
                 if (!isExternal) {
-                    startNavigation();
+                    startNavigation(item.link!);
                 }
                 return;
             }

@@ -60,7 +60,7 @@ interface XMBNavigationResult {
   currentItems: XMBItem[];
   isNavigating: boolean;
   commands: XMBCommands;
-  startNavigation: () => void;
+  startNavigation: (href?: string) => void;
   finishNavigation: () => void;
   setCategoryIndex: (index: number) => void;
   setItemIndex: (index: number) => void;

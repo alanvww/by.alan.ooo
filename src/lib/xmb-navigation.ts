@@ -34,12 +34,13 @@ interface RouterLike {
 export function navigateToLink(
   link: string,
   router: RouterLike,
-  startNavigation: () => void,
+  startNavigation: (href?: string) => void,
 ): void {
   if (isExternalLink(link)) {
     window.open(link, '_blank', 'noopener,noreferrer');
   } else {
-    startNavigation();
+    // The href lets the loading overlay pick a route-shaped skeleton.
+    startNavigation(link);
     router.push(link);
   }
 }
@@ -59,7 +60,7 @@ export function getEnterActionLabel(item: XMBItem): EnterActionLabel {
 
 export interface ActivateItemContext {
   router: RouterLike;
-  startNavigation: () => void;
+  startNavigation: (href?: string) => void;
   /** Optional — when omitted, folders are ignored (used by ArrowRight). */
   drillIntoFolder?: (index: number) => void;
 }

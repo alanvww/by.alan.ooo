@@ -20,7 +20,13 @@ interface XMBDerivedContextType {
 
 interface XMBLoadingContextType {
     isNavigating: boolean;
-    startNavigation: () => void;
+    /**
+     * Destination of the in-flight navigation, when known. Lets the loading
+     * overlay pick a route-shaped skeleton (/cv, /stack-and-gear) instead of
+     * the article one; null falls back to the article shape.
+     */
+    pendingHref: string | null;
+    startNavigation: (href?: string) => void;
     finishNavigation: () => void;
 }
 
@@ -64,13 +70,15 @@ export const XMBNavigationProvider = ({
     const [itemIndex, setItemIndex] = useState(-1);
     const [navigationPath, setNavigationPath] = useState<number[]>([]);
     const [isNavigating, setIsNavigating] = useState(false);
+    const [pendingHref, setPendingHref] = useState<string | null>(null);
 
     const navTimerRef = useRef<NodeJS.Timeout | null>(null);
     const minDelayReachedRef = useRef(false);
     const finishPendingRef = useRef(false);
 
-    const startNavigation = useCallback(() => {
+    const startNavigation = useCallback((href?: string) => {
         setIsNavigating(true);
+        setPendingHref(href ?? null);
         minDelayReachedRef.current = false;
         finishPendingRef.current = false;
 
@@ -118,9 +126,10 @@ export const XMBNavigationProvider = ({
 
     const loadingValue = useMemo<XMBLoadingContextType>(() => ({
         isNavigating,
+        pendingHref,
         startNavigation,
         finishNavigation,
-    }), [finishNavigation, isNavigating, startNavigation]);
+    }), [finishNavigation, isNavigating, pendingHref, startNavigation]);
 
     return (
         <XMBLoadingContext.Provider value={loadingValue}>
