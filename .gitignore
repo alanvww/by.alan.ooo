@@ -46,3 +46,9 @@ next-env.d.ts
 
 # claude code (local session config)
 .claude/
+
+# transitions.dev Refine — agent skills + relay artifacts,
+# rescaffolded by every `npx transitions-refine live` run
+.agents/
+.refine-relay.json
+.refine-relay.log
