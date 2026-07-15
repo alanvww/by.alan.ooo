@@ -5,16 +5,20 @@ import XMBContentTransition from './xmb/XMBContentTransition';
 import XMBLoadingSkeleton, {
   CVLoadingSkeleton,
   StackGearLoadingSkeleton,
+  XMBMenuLoadingSkeleton,
 } from './xmb/XMBLoadingSkeleton';
 import XMBLaunchFlash from './xmb/XMBLaunchFlash';
 import { useXMBLoadingContext } from '@/lib/xmb-navigation-context';
 
 /**
  * The overlay paints over the destination route's own loading boundary until
- * finishNavigation, so it must match the destination's shape — the standalone
- * document pages get their own skeletons; everything else is article-shaped.
+ * finishNavigation, so it must match the destination's shape. Every internal
+ * href the menu can start a navigation for is the home menu, a standalone
+ * document page, or a /[type]/[slug] post — so the article fallback is
+ * correct by exhaustion, not a wrong-shape catch-all.
  */
 function skeletonForHref(pendingHref: string | null): React.ReactElement {
+  if (pendingHref === '/') return <XMBMenuLoadingSkeleton />;
   if (pendingHref === '/cv') return <CVLoadingSkeleton />;
   if (pendingHref === '/stack-and-gear') return <StackGearLoadingSkeleton />;
   return <XMBLoadingSkeleton />;

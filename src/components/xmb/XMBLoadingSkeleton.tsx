@@ -2,9 +2,10 @@
 
 import React from 'react';
 import { motion } from 'motion/react';
-import { XMB_OVERLAY } from '@/lib/xmb-constants';
+import { XMB_LAYOUT, XMB_OVERLAY } from '@/lib/xmb-constants';
 import { cn } from '@/lib/utils';
 import XMBIcon from './XMBIcon';
+import XMBHeader from './XMBHeader';
 
 const ShimmerBar = ({ className }: { className?: string }) => (
     <motion.div
@@ -291,6 +292,135 @@ export const StackGearLoadingSkeleton = () => (
             </section>
         ))}
     </XMBStandaloneSkeletonShell>
+);
+
+/** Boot-state constants for the menu skeleton, matching the live menu:
+    three categories (About me, Projects, Socials) with the first content
+    column active — mirroring initialCategoryIndex in the root layout — and
+    itemIndex -1 (no row selected, so the category label shows and the three
+    folder rows fade downward). Counts are representative; the real menu is
+    data-driven. */
+const MENU_SKELETON = {
+    CATEGORIES: 3,
+    ACTIVE_INDEX: 1,
+    ROWS: 3,
+} as const;
+
+const MenuSkeletonCategoryStrip = () => (
+    // One cell wide like XMBCategoryRow, so centering wrappers (paged
+    // layout) center the ACTIVE cell; the strip is absolute at
+    // -activeIndex cells, where the real row's containerOffset sits at boot.
+    <div className="relative h-16 md:h-20" style={{ width: XMB_LAYOUT.CATEGORY_WIDTH }}>
+        <div
+            className="absolute top-0 flex h-full items-center"
+            style={{ left: -MENU_SKELETON.ACTIVE_INDEX * XMB_LAYOUT.CATEGORY_WIDTH }}
+        >
+            {Array.from({ length: MENU_SKELETON.CATEGORIES }, (_, cell) => {
+                const isActive = cell === MENU_SKELETON.ACTIVE_INDEX;
+                const distance = Math.abs(cell - MENU_SKELETON.ACTIVE_INDEX);
+                return (
+                    <div
+                        key={cell}
+                        className="relative flex h-full flex-col items-center justify-center"
+                        style={{
+                            width: XMB_LAYOUT.CATEGORY_WIDTH,
+                            // Same distance falloff as the real row's inactive icons.
+                            opacity: isActive ? 1 : Math.max(0.3, 1 - distance * 0.3),
+                        }}
+                    >
+                        {/* Icon stand-ins at the rendered sizes: 48px icon at
+                            1.2 scale active (≈56px), 40px at 0.8 inactive (32px). */}
+                        <ShimmerBar
+                            className={
+                                isActive
+                                    ? 'size-14 rounded-2xl shadow-[0_0_20px_var(--color-xmb-shadow-glow)]'
+                                    : 'size-8 rounded-xl'
+                            }
+                        />
+                        {/* Label line under the active icon — visible at boot
+                            because itemIndex is -1. The real span sits top-14
+                            md:top-16 below its auto-height cell (a 48px icon
+                            box centered in the strip); this cell is h-full, so
+                            the offsets add the centering gap: 8px at base
+                            (h-16), 16px at md (h-20). */}
+                        {isActive && (
+                            <ShimmerBar className="absolute top-16 h-5 w-20 md:top-20" />
+                        )}
+                    </div>
+                );
+            })}
+        </div>
+    </div>
+);
+
+/**
+ * Menu-shaped skeleton mirroring the home XMB at boot: real header, category
+ * icon strip with the active cell enlarged + labeled, thumbnail/title rows
+ * fading downward (nothing selected), and the command-bar pill. No frosted
+ * backdrop and no XMBContentLayout gradient — the real menu sits directly on
+ * the WebGL background, so the skeleton must too or the swap flashes. Used
+ * by the root loading boundary and skeletonForHref('/') in LayoutWrapper.
+ */
+export const XMBMenuLoadingSkeleton = () => (
+    <div className="fixed inset-0 overflow-hidden font-sans text-xmb-fg">
+        {/* The real header, not a shimmer: XMBInterface renders this same
+            component at the same offsets, so the masthead never jumps. Kept
+            OUTSIDE the role=status region — the ticking clock would chatter
+            inside an atomic live region. */}
+        <XMBHeader />
+
+        <div role="status" aria-label="Loading menu">
+            <span className="sr-only">Loading menu</span>
+
+            {/* Full layout — XMBInterface flips layouts with a ResizeObserver
+                at 1024px; lg: matches that threshold statically. */}
+            <div className="absolute left-[15%] top-[30%] hidden overflow-visible lg:block">
+                <MenuSkeletonCategoryStrip />
+                {/* VERTICAL_LIST_TOP (8rem) = the real list's top 4rem +
+                    margin-top 4rem; width pinned like the real column. */}
+                <div
+                    className="absolute left-0"
+                    style={{ top: XMB_LAYOUT.VERTICAL_LIST_TOP, width: XMB_LAYOUT.LIST_FULL_WIDTH_PX }}
+                >
+                    {Array.from({ length: MENU_SKELETON.ROWS }, (_, row) => (
+                        <div
+                            key={row}
+                            className="mb-6 flex w-full items-center gap-3 rounded-lg px-3 py-3 md:mb-8 md:gap-4 md:px-4 md:py-4"
+                            // Same downward falloff as XMBListItem with nothing selected.
+                            style={{ opacity: Math.max(0.25, 0.7 - row * 0.1) }}
+                        >
+                            <ShimmerBar className="h-10 w-16 shrink-0 rounded border border-xmb-fg/10 md:h-14 md:w-24" />
+                            <ShimmerBar className="h-6 w-2/3 md:h-7" />
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            {/* Paged layout — boot state is the centered categories stage
+                (itemIndex -1, empty path), so no list here. */}
+            <div className="absolute inset-x-0 top-[30%] flex justify-center lg:hidden">
+                <MenuSkeletonCategoryStrip />
+            </div>
+
+            {/* Command-bar pill at XMBCommandBar's exact offsets and chrome;
+                two hint groups matching the boot hints (Switch / Enter). */}
+            <div className="absolute inset-x-0 bottom-[max(1.5rem,calc(env(safe-area-inset-bottom)+0.5rem))] z-30 flex justify-center">
+                <div className="flex items-center gap-5 rounded-full border border-xmb-fg/15 bg-xmb-fg/5 px-5 py-2.5 shadow-[0_8px_30px_var(--color-xmb-shadow-glow)] backdrop-blur-md">
+                    <div className="flex items-center gap-2">
+                        <div className="flex gap-1">
+                            <ShimmerBar className="size-6 rounded-md" />
+                            <ShimmerBar className="size-6 rounded-md" />
+                        </div>
+                        <ShimmerBar className="h-3 w-12" />
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <ShimmerBar className="size-6 rounded-md" />
+                        <ShimmerBar className="h-3 w-10" />
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 );
 
 export default XMBLoadingSkeleton;
