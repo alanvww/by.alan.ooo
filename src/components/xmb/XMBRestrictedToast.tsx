@@ -42,7 +42,7 @@ const XMBRestrictedToast = ({ ping }: XMBRestrictedToastProps) => {
   return (
     <div
       role="status"
-      className="absolute bottom-[max(5rem,calc(env(safe-area-inset-bottom)+4rem))] inset-x-0 z-40 pointer-events-none flex justify-center px-4"
+      className="absolute bottom-[22%] inset-x-0 z-40 pointer-events-none flex justify-center px-4"
     >
       <AnimatePresence>
         {visible && (
@@ -52,13 +52,13 @@ const XMBRestrictedToast = ({ ping }: XMBRestrictedToastProps) => {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.98, transition: { duration: 0.15, ease: EASE.EXIT } }}
             transition={{ duration: 0.25, ease: EASE.ENTER }}
-            className="flex items-center gap-2.5 rounded-full backdrop-blur-md bg-xmb-fg/10 border border-xmb-fg/20 px-4 py-2 shadow-[0_8px_30px_var(--color-xmb-shadow-glow)]"
+            className="flex items-center gap-3.5 rounded-full backdrop-blur-md bg-xmb-fg/10 border border-xmb-fg/20 px-6 py-3.5 shadow-[0_8px_30px_var(--color-xmb-shadow-glow)]"
           >
-            <XMBIcon name="Crab" size={18} />
+            <XMBIcon name="Crab" size={32} />
             {/* Keyed by nonce: a repeat deny while the toast is up swaps the
                 text node, so the role=status region re-announces to AT even
                 though nothing changes visually. */}
-            <span key={ping?.nonce} className="text-xs md:text-sm font-light tracking-wide text-xmb-fg/90">
+            <span key={ping?.nonce} className="text-base md:text-lg font-light tracking-wide text-xmb-fg/90">
               This work is under wraps — reach out to me for details.
             </span>
           </motion.div>
