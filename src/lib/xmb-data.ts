@@ -26,11 +26,15 @@ const PINNED_TAG_FOLDERS: {
   title: string;
   aboveSlug: string;
   extraItems?: XMBItem[];
+  /** Stamp every item in this folder `restricted` — activation shakes the
+   *  row and shows the "reach out" toast instead of opening anything. */
+  restrictItems?: boolean;
 }[] = [
   {
     slug: 'google-creative-lab',
     title: 'Google Creative Lab',
     aboveSlug: 'design-engineering',
+    restrictItems: true,
     extraItems: [
       {
         id: 'gcl-little-language-lessons',
@@ -129,7 +133,7 @@ function groupItemsIntoFolders(
       // pinned folders always render, even while empty
       if (categoryItems.length < 2 && !pinned) return;
 
-      const folderItems: XMBItem[] = [
+      let folderItems: XMBItem[] = [
         ...categoryItems.map((item) => ({
           id: `${type}-${item.slug}`,
           title: item.title,
@@ -141,6 +145,9 @@ function groupItemsIntoFolders(
         })),
         ...(pinned?.extraItems ?? []),
       ];
+      if (pinned?.restrictItems) {
+        folderItems = folderItems.map((item) => ({ ...item, restricted: true }));
+      }
 
       tagFolderItems.push({
         slug,

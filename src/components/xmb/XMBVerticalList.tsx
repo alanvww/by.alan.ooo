@@ -4,16 +4,17 @@
 import React, { useState, useCallback, useEffect, useLayoutEffect, useRef, forwardRef } from "react";
 import Image from 'next/image';
 import Link from 'next/link';
-import { motion, AnimatePresence, animate, useMotionValue, useReducedMotion } from "motion/react";
+import { motion, AnimatePresence, animate, useAnimationControls, useMotionValue, useReducedMotion } from "motion/react";
 import { useRouter } from "next/navigation";
 import { useXMBLoadingContext } from "@/lib/xmb-navigation-context";
 import type { XMBCategory, XMBItem } from "@/lib/xmb-types";
 import XMBIcon from "./XMBIcon";
 import XMBBackPill from "./XMBBackPill";
-import { XMB_LAYOUT, XMB_ANIMATION, EASE } from "@/lib/xmb-constants";
+import { XMB_LAYOUT, XMB_ANIMATION, EASE, XMB_SHAKE } from "@/lib/xmb-constants";
 import { activateItem, isExternalLink } from "@/lib/xmb-navigation";
 import { focusListSibling } from "@/lib/focus";
 import { playNavigate, playConfirm } from "@/hooks/useKeyAudioFx";
+import type { RestrictedPing } from "./XMBRestrictedToast";
 
 interface XMBVerticalListProps {
     activeCategory: XMBCategory;
@@ -27,6 +28,10 @@ interface XMBVerticalListProps {
     onItemSelect: (index: number) => void;
     onFolderDrill?: (index: number) => void;
     onBack?: () => void; // Exit the folder (mouse/touch equivalent of Escape)
+    /** Restricted item activated by click: shake + toast owner. */
+    onRestricted?: (item: XMBItem, index: number) => void;
+    /** Latest deny ping — the matching row runs the shake. */
+    restrictedPing?: RestrictedPing | null;
     listClassName?: string;
     showHeader?: boolean;
     onHeaderClick?: () => void;
@@ -48,12 +53,14 @@ interface XMBListItemProps {
     onRowActivate: (index: number) => void;
     /** Keyboard/AT focus landed on this row: sync the selection cursor. */
     onRowFocus: (index: number) => void;
+    /** 0 when this row isn't the deny target; bumps to re-run the shake. */
+    shakeNonce: number;
     /** Shows the loading skeleton ahead of internal link navigation. */
     startNavigation: (href?: string) => void;
 }
 
 const XMBListItem = React.memo(forwardRef<HTMLElement, XMBListItemProps>(
-    ({ item, index, selectedIndex, isItemSelected, isContextView, onRowSelect, onRowActivate, onRowFocus, startNavigation }, ref) => {
+    ({ item, index, selectedIndex, isItemSelected, isContextView, onRowSelect, onRowActivate, onRowFocus, shakeNonce, startNavigation }, ref) => {
         const [imgError, setImgError] = useState(false);
         const reduceMotion = useReducedMotion();
         const isFolder = item.type === 'folder';
@@ -61,9 +68,25 @@ const XMBListItem = React.memo(forwardRef<HTMLElement, XMBListItemProps>(
         // Rows that navigate render as real links (SPA <Link> internally,
         // <a target=_blank> externally) so middle-click, context menus, and
         // assistive tech all get genuine link semantics; folders and action
-        // items render as <button>.
-        const isLinkRow = !!item.link && !item.action && !isFolder;
+        // items render as <button>. Restricted rows must NOT be anchors —
+        // activation denies instead of navigating, and an anchor would
+        // follow its href natively.
+        const isLinkRow = !!item.link && !item.action && !isFolder && !item.restricted;
         const isExternal = isLinkRow && isExternalLink(item.link!);
+
+        // Deny shake: replays whenever the parent bumps this row's nonce.
+        // Edge-triggered — the ref starts at the mount value, so a row that
+        // remounts with a stale ping (folder exit/re-entry, layout switch)
+        // never replays a ghost shake.
+        const shakeControls = useAnimationControls();
+        const lastShakeNonceRef = useRef(shakeNonce);
+        useEffect(() => {
+            if (shakeNonce === lastShakeNonceRef.current) return;
+            lastShakeNonceRef.current = shakeNonce;
+            if (shakeNonce > 0 && !reduceMotion) {
+                shakeControls.start({ x: XMB_SHAKE.KEYFRAMES }, XMB_SHAKE.TRANSITION);
+            }
+        }, [shakeNonce, reduceMotion, shakeControls]);
 
         // Roving tabindex: the selected row is the list's one tab stop; with
         // nothing selected yet, row 0 is the Tab entry point (focusing it
@@ -84,6 +107,13 @@ const XMBListItem = React.memo(forwardRef<HTMLElement, XMBListItemProps>(
                 // First click moves the cursor, never activates.
                 e.preventDefault();
                 onRowSelect(index);
+                return;
+            }
+            if (item.restricted) {
+                // Deny: activateItem routes to the restricted handler, which
+                // owns the sound, shake, and toast — no confirm bloom.
+                e.preventDefault();
+                onRowActivate(index);
                 return;
             }
             playConfirm();
@@ -155,7 +185,7 @@ const XMBListItem = React.memo(forwardRef<HTMLElement, XMBListItemProps>(
         };
 
         const content = (
-            <>
+            <motion.div animate={shakeControls}>
                 {/* Item visual scale/offset animation with highlight */}
                 <motion.div
                     className={`flex items-center gap-3 md:gap-4 w-full py-3 md:py-4 px-3 md:px-4 rounded-lg xmb-row-chrome ${
@@ -204,6 +234,12 @@ const XMBListItem = React.memo(forwardRef<HTMLElement, XMBListItemProps>(
                             <span className="text-lg md:text-xl font-light whitespace-nowrap truncate">
                                 {item.title}
                             </span>
+                            {/* Pre-activation cue for AT: restricted rows
+                                otherwise announce identically to openable
+                                ones (WCAG 4.1.2 name/role clarity). */}
+                            {item.restricted && (
+                                <span className="sr-only"> — under wraps, activate for info</span>
+                            )}
                             {/* External rows carry a chain-link badge; the
                                 caret matches the folder affordance (in the
                                 title line while unselected, parked on the
@@ -263,7 +299,7 @@ const XMBListItem = React.memo(forwardRef<HTMLElement, XMBListItemProps>(
                         )}
                     </AnimatePresence>
                 </motion.div>
-            </>
+            </motion.div>
         );
 
         if (isLinkRow && !isExternal) {
@@ -301,6 +337,8 @@ const XMBVerticalList = React.memo(
         onItemSelect,
         onFolderDrill,
         onBack,
+        onRestricted,
+        restrictedPing,
         listClassName,
         showHeader = false,
         onHeaderClick,
@@ -326,8 +364,9 @@ const XMBVerticalList = React.memo(
                 router,
                 startNavigation,
                 drillIntoFolder: onFolderDrill,
+                onRestricted,
             });
-        }, [currentItems, onFolderDrill, router, startNavigation]);
+        }, [currentItems, onFolderDrill, onRestricted, router, startNavigation]);
 
         // Keyboard/AT focus landed on a row: sync the selection cursor.
         // Pointer-driven focus defers to onClick (the two-click model); the
@@ -563,6 +602,7 @@ const XMBVerticalList = React.memo(
                                     onRowSelect={handleRowSelect}
                                     onRowActivate={handleRowActivate}
                                     onRowFocus={handleRowFocus}
+                                    shakeNonce={restrictedPing?.id === item.id ? restrictedPing.nonce : 0}
                                     startNavigation={startNavigation}
                                 />
                             );
