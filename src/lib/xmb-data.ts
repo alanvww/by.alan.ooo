@@ -44,7 +44,7 @@ const PINNED_TAG_FOLDERS: {
         id: 'gcl-flow-tools',
         title: 'Google Flow Tools',
         description: "First-party tools in Flow's official gallery, and the tool builder agent",
-        image: '/assets/projects/google-creative-lab/google-flow-tools.jpg',
+        image: '/assets/projects/google-creative-lab/flow-tools-shader.jpg',
         link: 'https://blog.google/innovation-and-ai/models-and-research/google-labs/flow-updates/',
         type: 'link',
       },
