@@ -5,6 +5,7 @@ import { XMBNavigationProvider } from "@/lib/xmb-navigation-context";
 import { getXMBData } from "@/lib/xmb-data";
 import { getContentTypes } from "@/lib/mdx";
 import WebGLBackground from "@/components/WebGLBackground";
+import AnimatedFavicon from "@/components/AnimatedFavicon";
 import MotionProvider from "@/components/MotionProvider";
 
 const geistSans = Geist({
@@ -61,6 +62,9 @@ export default async function RootLayout({
         {/* Mounted once for the whole app: the GL context and shader clock
             survive route changes instead of rebuilding on every navigation. */}
         <WebGLBackground />
+        {/* Pulsing-dot favicon — also mounted once so the pulse clock
+            survives route changes. Renders nothing. */}
+        <AnimatedFavicon />
         <MotionProvider>
           <XMBNavigationProvider categories={categories} initialCategoryIndex={initialCategoryIndex}>
             {children}
