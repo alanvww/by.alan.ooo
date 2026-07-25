@@ -19,9 +19,37 @@ const TAG_FOLDER_ICONS: Partial<Record<string, XMBIconName>> = {
 /** Tag folders that must exist even before enough tagged projects land,
  *  each pinned directly above the folder named by `aboveSlug` (or to the
  *  top of the tag folders if that anchor is missing). Curate a pinned
- *  folder by tagging projects with its slug. */
-const PINNED_TAG_FOLDERS: { slug: string; title: string; aboveSlug: string }[] = [
-  { slug: 'google-creative-lab', title: 'Google Creative Lab', aboveSlug: 'design-engineering' },
+ *  folder by tagging projects with its slug, or via `extraItems` — hand-made
+ *  rows for work that lives elsewhere and has no MDX page of its own. */
+const PINNED_TAG_FOLDERS: {
+  slug: string;
+  title: string;
+  aboveSlug: string;
+  extraItems?: XMBItem[];
+}[] = [
+  {
+    slug: 'google-creative-lab',
+    title: 'Google Creative Lab',
+    aboveSlug: 'design-engineering',
+    extraItems: [
+      {
+        id: 'gcl-little-language-lessons',
+        title: 'Little Language Lessons',
+        description: 'Bite-sized language-learning experiments built with Gemini',
+        image: '/assets/projects/google-creative-lab/little-language-lessons.png',
+        link: 'https://labs.google/lll',
+        type: 'link',
+      },
+      {
+        id: 'gcl-flow',
+        title: 'Google Flow',
+        description: "AI filmmaking tools for Google's AI creative studio, powered by Veo",
+        image: '/assets/projects/google-creative-lab/flow.png',
+        link: 'https://labs.google/flow',
+        type: 'link',
+      },
+    ],
+  },
 ];
 
 /**
@@ -96,28 +124,33 @@ function groupItemsIntoFolders(
     const tagFolderItems: { slug: string; folder: XMBItem }[] = [];
     tagFolders.forEach((categoryItems, categoryName) => {
       const slug = categoryName.toLowerCase().replace(/\s+/g, '-');
-      const isPinned = PINNED_TAG_FOLDERS.some((p) => p.slug === slug);
+      const pinned = PINNED_TAG_FOLDERS.find((p) => p.slug === slug);
       // Skip if only one item in category (don't create single-item folders);
       // pinned folders always render, even while empty
-      if (categoryItems.length < 2 && !isPinned) return;
+      if (categoryItems.length < 2 && !pinned) return;
+
+      const folderItems: XMBItem[] = [
+        ...categoryItems.map((item) => ({
+          id: `${type}-${item.slug}`,
+          title: item.title,
+          description: item.excerpt || '',
+          image: item.coverImage,
+          link: `/${type}/${item.slug}`,
+          type: type.replace(/s$/, '') as 'project' | 'post',
+          meta: item
+        })),
+        ...(pinned?.extraItems ?? []),
+      ];
 
       tagFolderItems.push({
         slug,
         folder: {
           id: `folder-${slug}`,
           title: categoryName,
-          description: `${categoryItems.length} ${categoryItems.length === 1 ? singular : type}`,
+          description: `${folderItems.length} ${folderItems.length === 1 ? singular : type}`,
           type: 'folder',
           icon: TAG_FOLDER_ICONS[slug],
-          items: categoryItems.map((item) => ({
-            id: `${type}-${item.slug}`,
-            title: item.title,
-            description: item.excerpt || '',
-            image: item.coverImage,
-            link: `/${type}/${item.slug}`,
-            type: type.replace(/s$/, '') as 'project' | 'post',
-            meta: item
-          }))
+          items: folderItems
         }
       });
     });
