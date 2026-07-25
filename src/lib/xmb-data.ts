@@ -11,9 +11,18 @@ import { cache } from 'react';
 const TAG_FOLDER_ICONS: Partial<Record<string, XMBIconName>> = {
   'creative-coding': 'Code',
   'design-engineering': 'CompassTool',
+  'google-creative-lab': 'Crab',
   'installation': 'Cube',
   'virtual-reality': 'VirtualReality',
 };
+
+/** Tag folders that must exist even before enough tagged projects land,
+ *  each pinned directly above the folder named by `aboveSlug` (or to the
+ *  top of the tag folders if that anchor is missing). Curate a pinned
+ *  folder by tagging projects with its slug. */
+const PINNED_TAG_FOLDERS: { slug: string; title: string; aboveSlug: string }[] = [
+  { slug: 'google-creative-lab', title: 'Google Creative Lab', aboveSlug: 'design-engineering' },
+];
 
 /**
  * Generic function to group content items into XMB folders
@@ -76,29 +85,53 @@ function groupItemsIntoFolders(
       }
     });
 
-    // Create folder items for each category
-    tagFolders.forEach((categoryItems, categoryName) => {
-      // Skip if only one item in category (don't create single-item folders)
-      if (categoryItems.length < 2) return;
+    // Materialize pinned folders even when no item carries their tag yet
+    for (const pinned of PINNED_TAG_FOLDERS) {
+      if (!tagFolders.has(pinned.title)) {
+        tagFolders.set(pinned.title, []);
+      }
+    }
 
+    // Create folder items for each category
+    const tagFolderItems: { slug: string; folder: XMBItem }[] = [];
+    tagFolders.forEach((categoryItems, categoryName) => {
       const slug = categoryName.toLowerCase().replace(/\s+/g, '-');
-      folders.push({
-        id: `folder-${slug}`,
-        title: categoryName,
-        description: `${categoryItems.length} ${categoryItems.length === 1 ? singular : type}`,
-        type: 'folder',
-        icon: TAG_FOLDER_ICONS[slug],
-        items: categoryItems.map((item) => ({
-          id: `${type}-${item.slug}`,
-          title: item.title,
-          description: item.excerpt || '',
-          image: item.coverImage,
-          link: `/${type}/${item.slug}`,
-          type: type.replace(/s$/, '') as 'project' | 'post',
-          meta: item
-        }))
+      const isPinned = PINNED_TAG_FOLDERS.some((p) => p.slug === slug);
+      // Skip if only one item in category (don't create single-item folders);
+      // pinned folders always render, even while empty
+      if (categoryItems.length < 2 && !isPinned) return;
+
+      tagFolderItems.push({
+        slug,
+        folder: {
+          id: `folder-${slug}`,
+          title: categoryName,
+          description: `${categoryItems.length} ${categoryItems.length === 1 ? singular : type}`,
+          type: 'folder',
+          icon: TAG_FOLDER_ICONS[slug],
+          items: categoryItems.map((item) => ({
+            id: `${type}-${item.slug}`,
+            title: item.title,
+            description: item.excerpt || '',
+            image: item.coverImage,
+            link: `/${type}/${item.slug}`,
+            type: type.replace(/s$/, '') as 'project' | 'post',
+            meta: item
+          }))
+        }
       });
     });
+
+    // Move each pinned folder directly above its anchor folder
+    for (const pinned of PINNED_TAG_FOLDERS) {
+      const from = tagFolderItems.findIndex((f) => f.slug === pinned.slug);
+      if (from === -1) continue;
+      const [entry] = tagFolderItems.splice(from, 1);
+      const anchor = tagFolderItems.findIndex((f) => f.slug === pinned.aboveSlug);
+      tagFolderItems.splice(anchor === -1 ? 0 : anchor, 0, entry);
+    }
+
+    folders.push(...tagFolderItems.map((f) => f.folder));
   } else {
     // Simple grouping: Recent + All (like the old posts folders)
     const recentItems = items.slice(0, 5);
