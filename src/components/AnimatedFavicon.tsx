@@ -35,9 +35,9 @@ const AnimatedFavicon = (): null => {
 
     // A dedicated link node rather than mutating the metadata-emitted
     // <link rel="icon">: React owns those head tags and may recreate them on
-    // navigation, and per spec the last suitable icon link in tree order
-    // wins — so appending our own overrides the static ones without ever
-    // touching React-managed DOM.
+    // navigation. We only ever write *attributes* on React's links (demoting
+    // their rel) — never remove or reparent them, which would orphan React's
+    // bookkeeping and crash its next commit with a null-parent removeChild.
     const link = document.createElement('link');
     link.rel = 'icon';
     link.type = 'image/png';
@@ -46,6 +46,46 @@ const AnimatedFavicon = (): null => {
     link.setAttribute('sizes', 'any');
     link.setAttribute('data-animated-favicon', '');
     document.head.appendChild(link);
+
+    // Being last is not enough for Chrome: it scores icon candidates and a
+    // scalable icon.svg (sizes="any") always outranks a sizeless data-URL
+    // PNG, so the static links must be demoted while we animate.
+    const demoteRivals = (): void => {
+      document.head
+        .querySelectorAll('link[rel~="icon"]:not([data-animated-favicon])')
+        .forEach((rival) => rival.setAttribute('rel', 'disabled-icon'));
+    };
+
+    // Firefox picks the last equally-suitable icon, so ours must stay last
+    // among icon links. The icons-list check makes the common case a no-op —
+    // no head mutation, no observer churn.
+    const ensureLast = (): void => {
+      const icons = document.head.querySelectorAll('link[rel~="icon"]');
+      if (icons[icons.length - 1] !== link) {
+        document.head.appendChild(link);
+      }
+    };
+
+    demoteRivals();
+
+    // React re-inserts its metadata icon links on navigation; demote those
+    // as they appear instead of policing the head every frame. childList
+    // only — attribute observation would just echo our own demotions back.
+    // Loop-safe: our only childList mutation is appending our own link,
+    // which the `node !== link` identity check turns into a no-op.
+    const observer = new MutationObserver((records) => {
+      let sawRival = false;
+      for (const record of records) {
+        for (const node of record.addedNodes) {
+          if (node !== link && node instanceof HTMLLinkElement && node.relList.contains('icon')) {
+            node.setAttribute('rel', 'disabled-icon');
+            sawRival = true;
+          }
+        }
+      }
+      if (sawRival) ensureLast();
+    });
+    observer.observe(document.head, { childList: true });
 
     const darkMql = window.matchMedia('(prefers-color-scheme: dark)');
 
@@ -64,29 +104,8 @@ const AnimatedFavicon = (): null => {
       ctx.fill();
       ctx.shadowBlur = 0;
 
-      // Being last is not enough for Chrome: it scores icon candidates and a
-      // scalable icon.svg (sizes="any") always outranks a sizeless data-URL
-      // PNG, so the static links must be demoted while we animate. React may
-      // recreate them on navigation; doing this per frame self-heals that
-      // (and the ≤1-frame fallback flash shows the same dot anyway).
-      document.head
-        .querySelectorAll('link[rel~="icon"]:not([data-animated-favicon])')
-        .forEach((rival) => rival.setAttribute('rel', 'disabled-icon'));
-      // Demoting orphans a link from React's rel+href bookkeeping, so every
-      // remount inserts a fresh copy. Drop the extras, keep one per href to
-      // restore on unmount.
-      const seen = new Set<string>();
-      document.head
-        .querySelectorAll('link[rel="disabled-icon"]')
-        .forEach((rival) => {
-          if (seen.has(rival.getAttribute('href') ?? '')) rival.remove();
-          else seen.add(rival.getAttribute('href') ?? '');
-        });
-      // Keep ours last too — Firefox picks the last equally-suitable icon.
-      const icons = document.head.querySelectorAll('link[rel~="icon"]');
-      if (icons[icons.length - 1] !== link) {
-        document.head.appendChild(link);
-      }
+      // Per frame the only DOM write is our own link's href — rival
+      // demotion is event-driven via the MutationObserver above.
       link.href = canvas.toDataURL('image/png');
     };
 
@@ -136,10 +155,16 @@ const AnimatedFavicon = (): null => {
     darkMql.addEventListener('change', applyTheme);
 
     return () => {
+      // Disconnect first — it also discards queued records, so the
+      // restorations below can't re-fire the callback.
+      observer.disconnect();
       darkMql.removeEventListener('change', applyTheme);
       motionMql.removeEventListener('change', applyMotionPreference);
       stopTimer();
       // Reinstate the demoted static links, then fall back to them.
+      // Attribute-only: if a React remount ever left a demoted orphan behind,
+      // restoring it yields a duplicate rel="icon" link, which is spec-legal
+      // and harmless — deduping by removal is exactly the crash class.
       document.head
         .querySelectorAll('link[rel="disabled-icon"]')
         .forEach((rival) => rival.setAttribute('rel', 'icon'));

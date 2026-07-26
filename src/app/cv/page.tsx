@@ -11,7 +11,7 @@ import { CVEntry } from '@/components/mdx/CVEntry';
 
 export const metadata: Metadata = {
   title: 'CV',
-  description: 'Curriculum vitae of Alan Yam — frontend design engineer.',
+  description: 'Curriculum vitae of Alan Yam — creative technologist and design engineer.',
 };
 
 export default function CVPage(): React.ReactElement {

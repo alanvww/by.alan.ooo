@@ -2,8 +2,9 @@
 
 export const siteConfig = {
   name: 'alan.ooo',
-  author: 'Alan',
-  description: 'Design Engineer Portfolio',
+  url: 'https://alan.ooo',
+  author: 'Alan Yam',
+  description: 'Portfolio of Alan Yam — creative technologist and design engineer.',
   links: {
     github: 'https://github.com/alanvww',
     email: 'mailto:alan.j.ren@pm.me',
