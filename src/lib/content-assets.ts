@@ -9,12 +9,19 @@ import path from 'path';
 import { imageSize } from 'image-size';
 import { slugify } from './mdx';
 
-const contentRoot = path.join(process.cwd(), 'src', 'content');
-const publicRoot = path.join(process.cwd(), 'public');
+// turbopackIgnore: these paths are resolved at request time from URL
+// segments, so Turbopack's file tracer can't bound them statically — left
+// alone it falls back to tracing the whole project into every serverless
+// function (233MB of public/ media, 250MB Vercel limit blown). The files the
+// routes actually need at runtime ship via outputFileTracingIncludes
+// (src/content) in next.config.ts; public/ is served by the CDN, and the
+// dimension probe below degrades to a 16:9 fallback if a file is absent.
+const contentRoot = path.join(/* turbopackIgnore: true */ process.cwd(), 'src', 'content');
+const publicRoot = path.join(/* turbopackIgnore: true */ process.cwd(), 'public');
 
 function isFile(filePath: string): boolean {
   try {
-    return fs.statSync(filePath).isFile();
+    return fs.statSync(/* turbopackIgnore: true */ filePath).isFile();
   } catch {
     return false;
   }
@@ -38,7 +45,7 @@ export function resolveContentAssetFile(segments: string[]): string | null {
     const typeDir = path.join(contentRoot, type);
     try {
       const folder = fs
-        .readdirSync(typeDir, { withFileTypes: true })
+        .readdirSync(/* turbopackIgnore: true */ typeDir, { withFileTypes: true })
         .find((entry) => entry.isDirectory() && slugify(entry.name) === slugSegment);
       if (folder) {
         const resolved = path.join(typeDir, folder.name, ...rest);
@@ -86,7 +93,7 @@ export function getLocalImageDimensions(src: string): ImageDimensions | null {
 
   let cacheKey: string;
   try {
-    cacheKey = `${filePath}:${fs.statSync(filePath).mtimeMs}`;
+    cacheKey = `${filePath}:${fs.statSync(/* turbopackIgnore: true */ filePath).mtimeMs}`;
   } catch {
     return null;
   }
@@ -96,7 +103,7 @@ export function getLocalImageDimensions(src: string): ImageDimensions | null {
 
   let dimensions: ImageDimensions | null = null;
   try {
-    const { width, height } = imageSize(new Uint8Array(fs.readFileSync(filePath)));
+    const { width, height } = imageSize(new Uint8Array(fs.readFileSync(/* turbopackIgnore: true */ filePath)));
     if (width && height) dimensions = { width, height };
   } catch {
     dimensions = null;
