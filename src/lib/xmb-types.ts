@@ -31,6 +31,10 @@ export interface XMBItem {
   icon?: XMBIconName;
   /** Suppresses the right-side XMBPreview panel for simple link chips. */
   hidePreview?: boolean;
+  /** Activation is denied: the row/card shakes and a "reach out" toast
+   *  shows instead of following the link. Set folder-wide via
+   *  `restrictItems` on a pinned tag folder. */
+  restricted?: boolean;
   action?: () => void;
   meta?: XMBItemMeta;
   items?: XMBItem[]; // Nested items for folders

@@ -45,7 +45,7 @@ export function navigateToLink(
   }
 }
 
-export type EnterActionLabel = 'Open' | 'Toggle';
+export type EnterActionLabel = 'Open' | 'Toggle' | 'Info';
 
 /**
  * The verb that ENTER will perform on this item. Used by both the per-row
@@ -53,6 +53,7 @@ export type EnterActionLabel = 'Open' | 'Toggle';
  * bottom of the screen — keep both in sync via this one function.
  */
 export function getEnterActionLabel(item: XMBItem): EnterActionLabel {
+  if (item.restricted) return 'Info';
   if (item.type === 'folder') return 'Open';
   if (item.action) return 'Toggle';
   return 'Open';
@@ -63,20 +64,28 @@ export interface ActivateItemContext {
   startNavigation: (href?: string) => void;
   /** Optional — when omitted, folders are ignored (used by ArrowRight). */
   drillIntoFolder?: (index: number) => void;
+  /** Restricted item activated: shake the row and show the info toast.
+   *  The handler owns the deny sound. */
+  onRestricted?: (item: XMBItem, index: number) => void;
 }
 
 /**
  * Authoritative "activate this item" handler used by both click and
- * keyboard paths. The priority is: folder drill → run action → follow link.
- * Previously click handlers checked link before action while keyboard
- * checked action before link, so an item with both could behave
- * differently across input modes — this function unifies the order.
+ * keyboard paths. The priority is: restricted deny → folder drill →
+ * run action → follow link. Previously click handlers checked link before
+ * action while keyboard checked action before link, so an item with both
+ * could behave differently across input modes — this function unifies
+ * the order.
  */
 export function activateItem(
   item: XMBItem,
   index: number,
   ctx: ActivateItemContext,
 ): void {
+  if (item.restricted) {
+    ctx.onRestricted?.(item, index);
+    return;
+  }
   if (item.type === 'folder' && item.items) {
     ctx.drillIntoFolder?.(index);
     return;

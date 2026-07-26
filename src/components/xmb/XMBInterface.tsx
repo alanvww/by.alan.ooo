@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import type { XMBCategory, XMBItem } from '@/lib/xmb-types';
 import { useXMBNavigation } from '@/hooks/useXMBNavigation';
 import { useIndexPan } from '@/hooks/useIndexPan';
-import { playConfirm, playNavigate, playCancel } from '@/hooks/useKeyAudioFx';
+import { playConfirm, playNavigate, playCancel, playDeny } from '@/hooks/useKeyAudioFx';
 import { focusSilently } from '@/lib/focus';
 import { EASE, XMB_GESTURE } from '@/lib/xmb-constants';
 import XMBCategoryRow from './XMBCategoryRow';
@@ -15,6 +15,7 @@ import XMBCarousel from './XMBCarousel';
 import XMBPreview from './XMBPreview';
 import XMBHeader from './XMBHeader';
 import XMBCommandBar from './XMBCommandBar';
+import XMBRestrictedToast, { type RestrictedPing } from './XMBRestrictedToast';
 
 interface XMBInterfaceProps {
   categories: XMBCategory[];
@@ -25,6 +26,16 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
   const [layoutMode, setLayoutMode] = useState<'full' | 'paged'>('full');
+
+  // Restricted-item deny: every activation attempt bumps the nonce so the
+  // matching row/card re-shakes and the toast timer resets. The handler owns
+  // the deny sound — the shared confirm paths skip their bloom for
+  // restricted items.
+  const [restrictedPing, setRestrictedPing] = useState<RestrictedPing | null>(null);
+  const handleRestricted = useCallback((item: XMBItem) => {
+    playDeny();
+    setRestrictedPing((prev) => ({ id: item.id, nonce: (prev?.nonce ?? 0) + 1 }));
+  }, []);
 
   const {
     categoryIndex,
@@ -38,7 +49,7 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
     setItemIndex,
     setNavigationPath,
     finishNavigation
-  } = useXMBNavigation(categories, layoutMode);
+  } = useXMBNavigation(categories, layoutMode, handleRestricted);
 
   useEffect(() => {
     finishNavigation();
@@ -360,6 +371,8 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
             isContextView={isInsideFolder}
             onItemSelect={setItemIndex}
             onFolderDrill={handleFolderDrill}
+            onRestricted={handleRestricted}
+            restrictedPing={restrictedPing}
             isPointerEvent={isPointerEvent}
           />
         </div>
@@ -410,6 +423,8 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
               onItemSelect={setItemIndex}
               onFolderDrill={handleFolderDrill}
               onBack={handleFolderBack}
+              onRestricted={handleRestricted}
+              restrictedPing={restrictedPing}
               isPointerEvent={isPointerEvent}
               listClassName="w-[88vw] max-w-2xl"
               showHeader
@@ -435,6 +450,8 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
             activeIndex={itemIndex >= 0 ? itemIndex : 0}
             onSelect={setItemIndex}
             onBack={handleFolderBack}
+            onRestricted={handleRestricted}
+            restrictedPing={restrictedPing}
             isPointerEvent={isPointerEvent}
           />
         )}
@@ -448,6 +465,9 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
           <XMBPreview item={activeItem} />
         )}
       </AnimatePresence>
+
+      {/* Restricted-item toast — sits just above the command bar */}
+      <XMBRestrictedToast ping={restrictedPing} />
 
       {/* Contextual command bar (PS3-style hint strip; pressable on touch) */}
       <XMBCommandBar commands={commands} />

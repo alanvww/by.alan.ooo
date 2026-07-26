@@ -67,7 +67,12 @@ interface XMBNavigationResult {
   setNavigationPath: (path: number[]) => void;
 }
 
-export function useXMBNavigation(categories: XMBCategory[], layoutMode: 'full' | 'paged' = 'full'): XMBNavigationResult {
+export function useXMBNavigation(
+  categories: XMBCategory[],
+  layoutMode: 'full' | 'paged' = 'full',
+  /** Restricted item activated (Enter/ArrowRight): shake + toast owner. */
+  onRestricted?: (item: XMBItem, index: number) => void,
+): XMBNavigationResult {
   const {
     categoryIndex,
     setCategoryIndex,
@@ -100,6 +105,7 @@ export function useXMBNavigation(categories: XMBCategory[], layoutMode: 'full' |
   const routerRef = useRef(router);
   const startNavigationRef = useRef(startNavigation);
   const layoutModeRef = useRef(layoutMode);
+  const onRestrictedRef = useRef(onRestricted);
 
   useEffect(() => {
     categoriesRef.current = categories;
@@ -112,7 +118,8 @@ export function useXMBNavigation(categories: XMBCategory[], layoutMode: 'full' |
     routerRef.current = router;
     startNavigationRef.current = startNavigation;
     layoutModeRef.current = layoutMode;
-  }, [categories, categoryIndex, itemIndex, navigationPath, activeCategory, activeItem, currentItems, router, startNavigation, layoutMode]);
+    onRestrictedRef.current = onRestricted;
+  }, [categories, categoryIndex, itemIndex, navigationPath, activeCategory, activeItem, currentItems, router, startNavigation, layoutMode, onRestricted]);
 
   const moveLeft = useCallback(() => {
     playNavigate();
@@ -130,18 +137,23 @@ export function useXMBNavigation(categories: XMBCategory[], layoutMode: 'full' |
   }, [setCategoryIndex, setItemIndex, setNavigationPath]);
 
   const moveRight = useCallback(() => {
-    playNavigate();
     if (navigationPathRef.current.length > 0) {
       // Inside folder: open the selected item (link/action only, not folders).
       // `drillIntoFolder` is intentionally omitted so folders are no-ops
-      // here — Enter is required to drill into nested folders.
+      // here — Enter is required to drill into nested folders. Restricted
+      // items skip the navigate tick (the deny path owns its own sound).
+      if (!activeItemRef.current?.restricted) {
+        playNavigate();
+      }
       if (activeItemRef.current) {
         activateItem(activeItemRef.current, itemIndexRef.current, {
           router: routerRef.current,
           startNavigation: startNavigationRef.current,
+          onRestricted: onRestrictedRef.current,
         });
       }
     } else {
+      playNavigate();
       // Category level or item selected: switch to next category
       setCategoryIndex((categoryIndexRef.current < categoriesRef.current.length - 1 ? categoryIndexRef.current + 1 : 0));
       setItemIndex(-1);
@@ -170,7 +182,10 @@ export function useXMBNavigation(categories: XMBCategory[], layoutMode: 'full' |
   }, [setItemIndex]);
 
   const confirm = useCallback(() => {
-    playConfirm();
+    // Restricted items swap the confirm bloom for the deny path's own cue.
+    if (!activeItemRef.current?.restricted) {
+      playConfirm();
+    }
     if (activeItemRef.current) {
       activateItem(activeItemRef.current, itemIndexRef.current, {
         router: routerRef.current,
@@ -179,6 +194,7 @@ export function useXMBNavigation(categories: XMBCategory[], layoutMode: 'full' |
           setNavigationPath([...navigationPathRef.current, idx]);
           setItemIndex(0);
         },
+        onRestricted: onRestrictedRef.current,
       });
     } else if (currentItemsRef.current.length > 0) {
       setItemIndex(0);

@@ -20,3 +20,8 @@ export function playConfirm(): void {
 export function playCancel(): void {
   play('whisper');
 }
+
+/** Play the deny cue (activating a restricted item). */
+export function playDeny(): void {
+  play('error');
+}

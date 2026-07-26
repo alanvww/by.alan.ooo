@@ -4,15 +4,16 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import Image from 'next/image';
 import Link from 'next/link';
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence, useAnimationControls, useReducedMotion } from "motion/react";
 import { useXMBLoadingContext } from "@/lib/xmb-navigation-context";
 import { isExternalLink } from "@/lib/xmb-navigation";
 import { focusListSibling } from "@/lib/focus";
 import type { XMBItem } from "@/lib/xmb-types";
 import XMBIcon from "./XMBIcon";
 import XMBBackPill from "./XMBBackPill";
-import { XMB_CAROUSEL, XMB_ANIMATION, EASE } from "@/lib/xmb-constants";
+import { XMB_CAROUSEL, XMB_ANIMATION, EASE, XMB_SHAKE } from "@/lib/xmb-constants";
 import { playNavigate, playConfirm } from "@/hooks/useKeyAudioFx";
+import type { RestrictedPing } from "./XMBRestrictedToast";
 
 // motion-wrapped next/link so internal link cards keep SPA navigation while
 // being genuine anchors (middle-click, context menu, AT link semantics).
@@ -24,6 +25,10 @@ interface XMBCarouselProps {
   onSelect: (index: number) => void;
   /** Exit the folder (mouse/touch equivalent of Escape). */
   onBack?: () => void;
+  /** Restricted item activated by click: shake + toast owner. */
+  onRestricted?: (item: XMBItem, index: number) => void;
+  /** Latest deny ping — the matching card runs the shake. */
+  restrictedPing?: RestrictedPing | null;
   /** True during a pointer press: focus events it causes must not drive selection. */
   isPointerEvent?: () => boolean;
 }
@@ -35,12 +40,16 @@ interface XMBCarouselCardProps {
   setSize: number;
   scrollOffset: number;
   onSelect: (index: number) => void;
+  /** Restricted item activated by click: shake + toast owner. */
+  onRestricted?: (item: XMBItem, index: number) => void;
+  /** 0 when this card isn't the deny target; bumps to re-run the shake. */
+  shakeNonce: number;
   /** Shows the loading skeleton ahead of internal link navigation. */
   startNavigation: (href?: string) => void;
   isPointerEvent?: () => boolean;
 }
 
-const XMBCarouselCard = React.memo(({ item, index, setSize, scrollOffset, onSelect, startNavigation, isPointerEvent }: XMBCarouselCardProps) => {
+const XMBCarouselCard = React.memo(({ item, index, setSize, scrollOffset, onSelect, onRestricted, shakeNonce, startNavigation, isPointerEvent }: XMBCarouselCardProps) => {
   const distance = index - scrollOffset;
   const absDistance = Math.abs(distance);
   const isActive = Math.round(scrollOffset) === index;
@@ -61,8 +70,25 @@ const XMBCarouselCard = React.memo(({ item, index, setSize, scrollOffset, onSele
   // Link cards render as real anchors (SPA <Link> internally, <a target=
   // _blank> externally); folders/actions stay divs so the window dispatcher
   // owns their Enter (a native button click would swallow the drill).
-  const isLinkCard = !!item.link && !item.action && item.type !== 'folder';
+  // Restricted cards must NOT be anchors — Enter/click deny instead of
+  // navigating, and an anchor would follow its href natively.
+  const isLinkCard = !!item.link && !item.action && item.type !== 'folder' && !item.restricted;
   const isExternal = isLinkCard && isExternalLink(item.link!);
+
+  // Deny shake: replays whenever the parent bumps this card's nonce.
+  // Edge-triggered — the ref starts at the mount value, so a card that
+  // remounts with a stale ping (folder exit/re-entry, culling, layout
+  // switch) never replays a ghost shake.
+  const shakeControls = useAnimationControls();
+  const reduceMotion = useReducedMotion();
+  const lastShakeNonceRef = useRef(shakeNonce);
+  useEffect(() => {
+    if (shakeNonce === lastShakeNonceRef.current) return;
+    lastShakeNonceRef.current = shakeNonce;
+    if (shakeNonce > 0 && !reduceMotion) {
+      shakeControls.start({ x: XMB_SHAKE.KEYFRAMES }, XMB_SHAKE.TRANSITION);
+    }
+  }, [shakeNonce, reduceMotion, shakeControls]);
 
   const handleClick = (e: React.MouseEvent<HTMLElement>): void => {
     // Modified clicks on links (cmd/ctrl/shift/middle) are pure browser
@@ -75,6 +101,11 @@ const XMBCarouselCard = React.memo(({ item, index, setSize, scrollOffset, onSele
       e.preventDefault();
       playNavigate();
       onSelect(index);
+      return;
+    }
+    if (item.restricted) {
+      // Deny: the handler owns the sound, shake, and toast.
+      onRestricted?.(item, index);
       return;
     }
     if (isLinkCard) {
@@ -149,9 +180,10 @@ const XMBCarouselCard = React.memo(({ item, index, setSize, scrollOffset, onSele
   };
 
   const cardContent = (
-      <div
+      <motion.div
         className="flex flex-col md:flex-row items-center gap-6 md:gap-12 px-4 md:px-6"
-        style={{ transform: 'translateY(-50%)' }}
+        style={{ y: '-50%' }}
+        animate={shakeControls}
       >
         <div
           className={`
@@ -178,6 +210,11 @@ const XMBCarouselCard = React.memo(({ item, index, setSize, scrollOffset, onSele
         <div className="flex flex-col justify-center drop-shadow-2xl max-w-2xl text-center md:text-left md:h-[16rem] sm:h-[14rem] h-36 overflow-hidden">
           <h2 className={`text-2xl sm:text-3xl md:text-4xl font-extralight tracking-wide transition-colors duration-150 leading-tight ${isActive ? 'text-xmb-fg' : 'text-xmb-fg/35'}`}>
             {item.title}
+            {/* Pre-activation cue for AT: restricted cards otherwise
+                announce identically to openable ones. */}
+            {item.restricted && (
+              <span className="sr-only"> — under wraps, activate for info</span>
+            )}
           </h2>
           <AnimatePresence mode="popLayout">
             {isActive && item.description && (
@@ -210,7 +247,7 @@ const XMBCarouselCard = React.memo(({ item, index, setSize, scrollOffset, onSele
             </motion.div>
           )}
         </div>
-      </div>
+      </motion.div>
   );
 
   if (isLinkCard && !isExternal) {
@@ -233,7 +270,7 @@ const XMBCarouselCard = React.memo(({ item, index, setSize, scrollOffset, onSele
 
 XMBCarouselCard.displayName = 'XMBCarouselCard';
 
-const XMBCarousel = ({ items, activeIndex, onSelect, onBack, isPointerEvent }: XMBCarouselProps) => {
+const XMBCarousel = ({ items, activeIndex, onSelect, onBack, onRestricted, restrictedPing, isPointerEvent }: XMBCarouselProps) => {
   const { startNavigation } = useXMBLoadingContext();
   const containerRef = useRef<HTMLDivElement>(null);
   const touchStartY = useRef<number>(0);
@@ -467,6 +504,8 @@ const XMBCarousel = ({ items, activeIndex, onSelect, onBack, isPointerEvent }: X
                 setSize={items.length}
                 scrollOffset={scrollOffset}
                 onSelect={onSelect}
+                onRestricted={onRestricted}
+                shakeNonce={restrictedPing?.id === item.id ? restrictedPing.nonce : 0}
                 startNavigation={startNavigation}
                 isPointerEvent={isPointerEvent}
               />

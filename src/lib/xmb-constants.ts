@@ -55,6 +55,16 @@ export const XMB_CAROUSEL = {
 };
 
 /**
+ * iOS-style "unavailable" deny shake, shared by the vertical-list rows and
+ * carousel cards so restricted items feel identical everywhere: a quick
+ * horizontal oscillation with decaying amplitude.
+ */
+export const XMB_SHAKE = {
+  KEYFRAMES: [0, -10, 10, -7, 7, -4, 4, 0],
+  TRANSITION: { duration: 0.4, ease: 'easeInOut' } as const,
+};
+
+/**
  * Touch gesture tuning. All thresholds for swipes, pans, flicks and
  * hold-to-repeat live here so the numbers stay next to EASE/XMB_ANIMATION
  * instead of scattering through components.
@@ -127,6 +137,7 @@ export const XMB_ICON_NAMES = [
   'Cube',
   'VirtualReality',
   'Backpack',
+  'Crab',
 ] as const;
 
 export type XMBIconName = (typeof XMB_ICON_NAMES)[number];
