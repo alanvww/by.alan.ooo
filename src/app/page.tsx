@@ -7,7 +7,7 @@ export default async function Home() {
     return (
         <LayoutWrapper>
             <div className="relative w-full h-full">
-                <h1 className="sr-only">alan.ooo — Alan Yam, frontend design engineer</h1>
+                <h1 className="sr-only">alan.ooo — Alan Yam, creative technologist and design engineer</h1>
                 <XMBInterface categories={categories} />
             </div>
         </LayoutWrapper>

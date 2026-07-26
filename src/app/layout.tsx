@@ -4,6 +4,7 @@ import "./globals.css";
 import { XMBNavigationProvider } from "@/lib/xmb-navigation-context";
 import { getXMBData } from "@/lib/xmb-data";
 import { getContentTypes } from "@/lib/mdx";
+import { siteConfig } from "@/lib/site-config";
 import WebGLBackground from "@/components/WebGLBackground";
 import AnimatedFavicon from "@/components/AnimatedFavicon";
 import MotionProvider from "@/components/MotionProvider";
@@ -19,11 +20,21 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(siteConfig.url),
   title: {
-    template: '%s | Alan',
-    default: 'Alan - Web Developer & Creative Coder',
+    template: '%s | Alan Yam',
+    default: 'Alan Yam - Creative Technologist & Design Engineer',
   },
-  description: "Personal website and digital garden of Alan, a web developer and creative coder.",
+  description: siteConfig.description,
+  openGraph: {
+    siteName: siteConfig.name,
+    type: 'website',
+    locale: 'en_US',
+    url: '/',
+  },
+  twitter: {
+    card: 'summary_large_image',
+  },
 };
 
 export const viewport: Viewport = {

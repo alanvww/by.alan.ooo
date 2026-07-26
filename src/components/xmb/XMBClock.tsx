@@ -4,33 +4,43 @@
 import React, { useState, useEffect } from 'react';
 
 const XMBClock = () => {
-    const [time, setTime] = useState(() => new Date());
-    
+    // null until mounted: the page is statically prerendered, so any Date
+    // computed during render bakes the *build-time* clock into the HTML and
+    // stays visible until hydration (which the WebGL/animation boot can delay
+    // by seconds). Same neutral-until-mounted idiom as XMBProgressIndicator.
+    const [time, setTime] = useState<Date | null>(null);
+
     useEffect(() => {
-        const timer = setInterval(() => setTime(new Date()), 1000);
+        const tick = () => setTime(new Date());
+        tick();
+        const timer = setInterval(tick, 1000);
         return () => clearInterval(timer);
     }, []);
 
-    const timeString = time.toLocaleTimeString('en-US', {
+    // Placeholders share the exact character shape of real values ('en-US'
+    // 2-digit/hour12 is always "HH:MM AM|PM"; EST/EDT are both 3 chars), so
+    // the fade-in causes zero layout shift.
+    const timeString = time?.toLocaleTimeString('en-US', {
         hour: '2-digit',
         minute: '2-digit',
         timeZone: 'America/New_York',
         hour12: true
-    });
+    }) ?? '00:00 PM';
 
-    const tzName = time.toLocaleTimeString('en-US', {
-        timeZone: 'America/New_York',
-        timeZoneName: 'short'
-    }).split(' ').pop();
+    const tzName = time
+        ? time.toLocaleTimeString('en-US', {
+            timeZone: 'America/New_York',
+            timeZoneName: 'short'
+        }).split(' ').pop()
+        : 'EST';
+
+    const fadeIn = `transition-opacity duration-300 ${time ? 'opacity-100' : 'opacity-0'}`;
 
     return (
         <div className="flex items-center gap-3">
-            {/* Server render and hydration can straddle a minute rollover
-                (or a DST switch for the tz badge) — the text is expected to
-                differ, and the 1s interval corrects it immediately. */}
-            <span className="whitespace-nowrap" suppressHydrationWarning>{timeString}</span>
+            <span className={`whitespace-nowrap tabular-nums ${fadeIn}`} aria-hidden={time === null}>{timeString}</span>
             <div className="flex items-center gap-2 text-base">
-                 <span className="bg-xmb-fg/20 px-1.5 py-0.5 rounded text-xs font-medium tracking-wider" suppressHydrationWarning>{tzName}</span>
+                 <span className={`bg-xmb-fg/20 px-1.5 py-0.5 rounded text-xs font-medium tracking-wider ${fadeIn}`} aria-hidden={time === null}>{tzName}</span>
                  {/* Hidden on ultra-narrow screens (<336px) where the clock
                      can't fit beside the title without clipping. */}
                  <span className="opacity-60 text-sm max-[335px]:hidden">@ NYC</span>
