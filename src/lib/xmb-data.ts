@@ -52,6 +52,13 @@ const PINNED_TAG_FOLDERS: {
         link: 'https://blog.google/innovation-and-ai/models-and-research/google-labs/flow-updates/',
         type: 'link',
       },
+      {
+        id: 'gcl-wave-studio',
+        title: 'Wave Studio',
+        description: 'Generative shader experiment for Viberary — featured at Google Creative House @ Cannes Lions International Festival of Creativity',
+        image: '/assets/projects/google-creative-lab/wave-studio.gif',
+        type: 'link',
+      },
     ],
   },
 ];
