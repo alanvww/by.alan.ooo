@@ -11,10 +11,20 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ['@phosphor-icons/react', 'motion'],
   },
-  // The /content/[...path] fallback route reads colocated assets from
-  // src/content at request time — make sure they ship with the server bundle.
+  // Every route renders through the layout's XMB menu, which reads MDX from
+  // src/content at render time (and /content/[...path] serves colocated
+  // assets from there) — ship it with every server bundle so on-demand
+  // revalidation keeps working.
   outputFileTracingIncludes: {
-    '/content/[...path]': ['./src/content/**/*'],
+    '/**': ['./src/content/**/*'],
+  },
+  // public/ is served from the CDN; traced into functions it adds ~233MB and
+  // blows Vercel's 250MB function limit. Belt to the turbopackIgnore
+  // suspenders in src/lib/content-assets.ts — the only runtime reader of
+  // public/ files is the image-dimension probe there, which falls back to
+  // 16:9 when a file is absent.
+  outputFileTracingExcludes: {
+    '/**': ['./public/**'],
   },
   reactCompiler: true,
   images: {
