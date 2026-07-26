@@ -1,9 +1,67 @@
 // src/lib/xmb-data.ts
-import { getAllContent, getContentTypes, getAllTags, getFeatured, BaseFrontmatter } from './mdx';
+import { getAllContent, getContentTypes, getFeatured, BaseFrontmatter } from './mdx';
 import { getContentTypeConfig, type ContentTypeConfig } from './content-config';
 import type { XMBItem, XMBCategory } from './xmb-types';
+import type { XMBIconName } from './xmb-constants';
 import { siteConfig } from './site-config';
 import { cache } from 'react';
+
+/** Unique thumbnails for known tag folders, keyed by folder slug;
+ *  unmapped categories fall back to the generic Folder icon. */
+const TAG_FOLDER_ICONS: Partial<Record<string, XMBIconName>> = {
+  'creative-coding': 'Code',
+  'design-engineering': 'CompassTool',
+  'google-creative-lab': 'Crab',
+  'installation': 'Cube',
+  'virtual-reality': 'VirtualReality',
+};
+
+/** Tag folders that must exist even before enough tagged projects land,
+ *  each pinned directly above the folder named by `aboveSlug` (or to the
+ *  top of the tag folders if that anchor is missing). Curate a pinned
+ *  folder by tagging projects with its slug, or via `extraItems` — hand-made
+ *  rows for work that lives elsewhere and has no MDX page of its own. */
+const PINNED_TAG_FOLDERS: {
+  slug: string;
+  title: string;
+  aboveSlug: string;
+  extraItems?: XMBItem[];
+  /** Stamp every item in this folder `restricted` — activation shakes the
+   *  row and shows the "reach out" toast instead of opening anything. */
+  restrictItems?: boolean;
+}[] = [
+  {
+    slug: 'google-creative-lab',
+    title: 'Google Creative Lab',
+    aboveSlug: 'design-engineering',
+    restrictItems: true,
+    extraItems: [
+      {
+        id: 'gcl-little-language-lessons',
+        title: 'Little Language Lessons',
+        description: 'Bite-sized language-learning experiments built with Gemini',
+        image: '/assets/projects/google-creative-lab/little-language-lessons.png',
+        link: 'https://labs.google/lll',
+        type: 'link',
+      },
+      {
+        id: 'gcl-flow-tools',
+        title: 'Google Flow Tools',
+        description: "First-party tools in Flow's official gallery, and the tool builder agent",
+        image: '/assets/projects/google-creative-lab/flow-tools-shader.jpg',
+        link: 'https://blog.google/innovation-and-ai/models-and-research/google-labs/flow-updates/',
+        type: 'link',
+      },
+      {
+        id: 'gcl-wave-studio',
+        title: 'Wave Studio',
+        description: 'Generative shader experiment for Viberary — featured at Google Creative House @ Cannes Lions International Festival of Creativity',
+        image: '/assets/projects/google-creative-lab/wave-studio.gif',
+        type: 'link',
+      },
+    ],
+  },
+];
 
 /**
  * Generic function to group content items into XMB folders
@@ -66,17 +124,24 @@ function groupItemsIntoFolders(
       }
     });
 
+    // Materialize pinned folders even when no item carries their tag yet
+    for (const pinned of PINNED_TAG_FOLDERS) {
+      if (!tagFolders.has(pinned.title)) {
+        tagFolders.set(pinned.title, []);
+      }
+    }
+
     // Create folder items for each category
+    const tagFolderItems: { slug: string; folder: XMBItem }[] = [];
     tagFolders.forEach((categoryItems, categoryName) => {
-      // Skip if only one item in category (don't create single-item folders)
-      if (categoryItems.length < 2) return;
-      
-      folders.push({
-        id: `folder-${categoryName.toLowerCase().replace(/\s+/g, '-')}`,
-        title: categoryName,
-        description: `${categoryItems.length} ${categoryItems.length === 1 ? singular : type}`,
-        type: 'folder',
-        items: categoryItems.map((item) => ({
+      const slug = categoryName.toLowerCase().replace(/\s+/g, '-');
+      const pinned = PINNED_TAG_FOLDERS.find((p) => p.slug === slug);
+      // Skip if only one item in category (don't create single-item folders);
+      // pinned folders always render, even while empty
+      if (categoryItems.length < 2 && !pinned) return;
+
+      let folderItems: XMBItem[] = [
+        ...categoryItems.map((item) => ({
           id: `${type}-${item.slug}`,
           title: item.title,
           description: item.excerpt || '',
@@ -84,9 +149,36 @@ function groupItemsIntoFolders(
           link: `/${type}/${item.slug}`,
           type: type.replace(/s$/, '') as 'project' | 'post',
           meta: item
-        }))
+        })),
+        ...(pinned?.extraItems ?? []),
+      ];
+      if (pinned?.restrictItems) {
+        folderItems = folderItems.map((item) => ({ ...item, restricted: true }));
+      }
+
+      tagFolderItems.push({
+        slug,
+        folder: {
+          id: `folder-${slug}`,
+          title: categoryName,
+          description: `${folderItems.length} ${folderItems.length === 1 ? singular : type}`,
+          type: 'folder',
+          icon: TAG_FOLDER_ICONS[slug],
+          items: folderItems
+        }
       });
     });
+
+    // Move each pinned folder directly above its anchor folder
+    for (const pinned of PINNED_TAG_FOLDERS) {
+      const from = tagFolderItems.findIndex((f) => f.slug === pinned.slug);
+      if (from === -1) continue;
+      const [entry] = tagFolderItems.splice(from, 1);
+      const anchor = tagFolderItems.findIndex((f) => f.slug === pinned.aboveSlug);
+      tagFolderItems.splice(anchor === -1 ? 0 : anchor, 0, entry);
+    }
+
+    folders.push(...tagFolderItems.map((f) => f.folder));
   } else {
     // Simple grouping: Recent + All (like the old posts folders)
     const recentItems = items.slice(0, 5);
@@ -132,91 +224,132 @@ function groupItemsIntoFolders(
 }
 
 /**
- * Build the profile category items
+ * Build the About me category items
  */
-function buildProfileItems(): XMBItem[] {
+function buildAboutMeItems(): XMBItem[] {
   return [
     {
-      id: 'profile-about',
-      title: 'About Me',
-      description: 'Learn more about my background and skills.',
-      link: '/about',
-      type: 'profile',
+      id: 'about-resume',
+      title: 'Resume',
+      description: 'Latest resume (PDF)',
+      link: siteConfig.links.resume,
+      type: 'link',
+      icon: 'FilePdf',
+      hidePreview: true,
     },
     {
-      id: 'profile-github',
+      id: 'about-cv',
+      title: 'CV',
+      description: 'Curriculum vitae with PDF download',
+      link: '/cv',
+      type: 'link',
+      icon: 'ReadCvLogo',
+      hidePreview: true,
+    },
+    {
+      id: 'about-stack-gear',
+      title: 'Stack & Gear',
+      description: 'Software stack and everyday gear',
+      link: '/stack-and-gear',
+      type: 'link',
+      icon: 'Backpack',
+      hidePreview: true,
+    }
+  ];
+}
+
+/**
+ * Build the Socials category items
+ */
+function buildSocialsItems(): XMBItem[] {
+  return [
+    {
+      id: 'social-instagram',
+      title: 'Instagram',
+      description: '@alan.k.y',
+      link: siteConfig.links.instagram,
+      type: 'link',
+      icon: 'InstagramLogo',
+      hidePreview: true,
+    },
+    {
+      id: 'social-github',
       title: 'GitHub',
-      description: 'Check out my open source projects.',
+      description: 'alanvww',
       link: siteConfig.links.github,
       type: 'link',
+      icon: 'GithubLogo',
+      hidePreview: true,
     },
     {
-      id: 'profile-twitter',
-      title: 'Twitter',
-      description: 'Follow me for updates.',
-      link: siteConfig.links.twitter,
+      id: 'social-mastodon',
+      title: 'Mastodon',
+      description: '@alanvww@mas.to',
+      link: siteConfig.links.mastodon,
       type: 'link',
-    }
-  ];
-}
-
-/**
- * Build the settings category items
- */
-function buildSettingItems(): XMBItem[] {
-  return [
+      icon: 'MastodonLogo',
+      hidePreview: true,
+    },
     {
-      id: 'setting-theme',
-      title: 'Toggle Theme',
-      description: 'Switch between light and dark mode.',
-      type: 'settings',
-      actionId: 'toggle-theme'
-    }
-  ];
-}
-
-/**
- * Build the contact category items
- */
-function buildContactItems(): XMBItem[] {
-  return [
+      id: 'social-bluesky',
+      title: 'Bluesky',
+      description: '@alan.ooo',
+      link: siteConfig.links.bluesky,
+      type: 'link',
+      icon: 'Butterfly',
+      hidePreview: true,
+    },
     {
-      id: 'contact-email',
+      id: 'social-linkedin',
+      title: 'LinkedIn',
+      description: 'in/alanyam',
+      link: siteConfig.links.linkedin,
+      type: 'link',
+      icon: 'LinkedinLogo',
+      hidePreview: true,
+    },
+    {
+      id: 'social-x',
+      title: 'X',
+      description: '@alanvww',
+      link: siteConfig.links.x,
+      type: 'link',
+      icon: 'XLogo',
+      hidePreview: true,
+    },
+    {
+      id: 'social-email',
       title: 'Email',
-      description: 'Send me an email.',
-      link: `mailto:${siteConfig.contact.email}`,
-      type: 'link'
+      description: siteConfig.contact.email,
+      link: siteConfig.links.email,
+      type: 'link',
+      icon: 'EnvelopeSimple',
+      hidePreview: true,
     }
   ];
 }
 
 /**
  * Get XMB data with dynamic content categories
- * Categories are ordered: Settings (0), Profile (5), content types (10+), Contact (100)
+ * Categories are ordered: Settings (0), About me (5), content types (10+), Socials (100)
  */
 export const getXMBData = cache(async (): Promise<XMBCategory[]> => {
   // Fixed categories at the start
   const fixedStartCategories: XMBCategory[] = [
     {
-      id: 'settings',
-      title: 'Settings',
-      iconName: 'Gear',
-      items: buildSettingItems()
-    },
-    {
       id: 'profile',
-      title: 'Profile',
+      title: 'About me',
       iconName: 'User',
-      items: buildProfileItems()
+      items: buildAboutMeItems()
     }
   ];
 
   // Fixed category at the end
   const fixedEndCategory: XMBCategory = {
     id: 'contact',
-    title: 'Contact',
-    iconName: 'EnvelopeSimple',
-    items: buildContactItems()
+    title: 'Socials',
+    iconName: 'ShareNetwork',
+    items: buildSocialsItems()
   };
 
   // Dynamically discover and build content categories

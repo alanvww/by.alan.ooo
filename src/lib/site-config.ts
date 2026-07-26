@@ -2,15 +2,21 @@
 
 export const siteConfig = {
   name: 'alan.ooo',
-  author: 'Alan',
-  description: 'Design Engineer Portfolio',
+  url: 'https://alan.ooo',
+  author: 'Alan Yam',
+  description: 'Portfolio of Alan Yam — creative technologist and design engineer.',
   links: {
-    github: 'https://github.com/alan-ooo',
-    twitter: 'https://twitter.com/alan_ooo',
-    email: 'hello@alan.ooo',
+    github: 'https://github.com/alanvww',
+    email: 'mailto:alan.j.ren@pm.me',
+    instagram: 'https://www.instagram.com/alan.k.y',
+    mastodon: 'https://mas.to/@alanvww',
+    bluesky: 'https://bsky.app/profile/alan.ooo',
+    linkedin: 'https://www.linkedin.com/in/alanyam/',
+    x: 'https://x.com/alanvww',
+    resume: 'https://link.alan.ooo/resume',
   },
   contact: {
-    email: 'hello@alan.ooo',
+    email: 'alan.j.ren@pm.me',
   }
 } as const;
 

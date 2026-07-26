@@ -1,49 +1,27 @@
 // src/hooks/useKeyAudioFx.ts
-import { useEffect, useRef, useCallback } from 'react';
+'use client';
 
-const AUDIO_SRC = '/assets/audio/key-audio-fx.wav';
+import { play } from 'cuelume';
 
-export function useKeyAudioFx() {
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const audioBufferRef = useRef<AudioBuffer | null>(null);
+// Cuelume synthesizes each cue live on a shared lazy AudioContext and is a
+// no-op during SSR, so no warm-up or resume handling is needed here.
 
-  useEffect(() => {
-    // Create AudioContext lazily
-    const ctx = new AudioContext();
-    audioContextRef.current = ctx;
+/** Play the navigation tick (arrow keys, tab, wheel/swipe settle). */
+export function playNavigate(): void {
+  play('release');
+}
 
-    // Fetch and decode the WAV file into a reusable buffer
-    fetch(AUDIO_SRC)
-      .then(res => res.arrayBuffer())
-      .then(data => ctx.decodeAudioData(data))
-      .then(buffer => {
-        audioBufferRef.current = buffer;
-      })
-      .catch(err => {
-        console.warn('Failed to load key audio FX:', err);
-      });
+/** Play the confirm/open cue (Enter, click-to-open). */
+export function playConfirm(): void {
+  play('bloom');
+}
 
-    return () => {
-      ctx.close();
-    };
-  }, []);
+/** Play the back/cancel cue (Escape, Backspace, back pill). */
+export function playCancel(): void {
+  play('whisper');
+}
 
-  const playKeySound = useCallback(() => {
-    const ctx = audioContextRef.current;
-    const buffer = audioBufferRef.current;
-    if (!ctx || !buffer) return;
-
-    // Resume context if suspended (browser autoplay policy)
-    if (ctx.state === 'suspended') {
-      ctx.resume();
-    }
-
-    // Create a new source node for each play (they're disposable)
-    const source = ctx.createBufferSource();
-    source.buffer = buffer;
-    source.connect(ctx.destination);
-    source.start(0);
-  }, []);
-
-  return { playKeySound };
+/** Play the deny cue (activating a restricted item). */
+export function playDeny(): void {
+  play('error');
 }

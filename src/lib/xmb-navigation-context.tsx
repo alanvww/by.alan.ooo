@@ -1,56 +1,98 @@
 'use client';
 
-import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
+import React, { createContext, useContext, useMemo, useRef, useState, useCallback } from 'react';
 import type { XMBCategory, XMBItem } from './xmb-types';
-import { useRouter } from 'next/navigation';
 
-interface XMBNavigationContextType {
+interface XMBSelectionContextType {
     categoryIndex: number;
     itemIndex: number;
     navigationPath: number[];
-    setCategoryIndex: (index: number) => void;
-    setItemIndex: (index: number) => void;
-    setNavigationPath: (path: number[]) => void;
+    setCategoryIndex: React.Dispatch<React.SetStateAction<number>>;
+    setItemIndex: React.Dispatch<React.SetStateAction<number>>;
+    setNavigationPath: React.Dispatch<React.SetStateAction<number[]>>;
+}
+
+interface XMBDerivedContextType {
     activeCategory: XMBCategory | null;
     activeItem: XMBItem | null;
     currentItems: XMBItem[];
-    pressedKeys: Set<string>;
-    isContentViewing: boolean;
-    setIsContentViewing: (isViewing: boolean) => void;
+}
+
+interface XMBLoadingContextType {
     isNavigating: boolean;
-    startNavigation: () => void;
+    /**
+     * Destination of the in-flight navigation, when known. Lets the loading
+     * overlay pick a route-shaped skeleton (/cv, /stack-and-gear) instead of
+     * the article one; null falls back to the article shape.
+     */
+    pendingHref: string | null;
+    startNavigation: (href?: string) => void;
     finishNavigation: () => void;
 }
 
-const XMBNavigationContext = createContext<XMBNavigationContextType | undefined>(undefined);
+const XMBSelectionContext = createContext<XMBSelectionContextType | undefined>(undefined);
+const XMBDerivedContext = createContext<XMBDerivedContextType | undefined>(undefined);
+const XMBLoadingContext = createContext<XMBLoadingContextType | undefined>(undefined);
 
-export const XMBNavigationProvider = ({ children, categories }: { children: React.ReactNode, categories: XMBCategory[] }) => {
-    const [categoryIndex, setCategoryIndex] = useState(2); // Default to Projects
+function getCurrentItems(activeCategory: XMBCategory | null, navigationPath: number[]): XMBItem[] {
+    if (!activeCategory) {
+        return [];
+    }
+
+    let nextItems = activeCategory.items;
+
+    for (const pathIndex of navigationPath) {
+        const nestedItems = nextItems[pathIndex]?.items;
+
+        if (!nestedItems) {
+            break;
+        }
+
+        nextItems = nestedItems;
+    }
+
+    return nextItems;
+}
+
+export const XMBNavigationProvider = ({
+    children,
+    categories,
+    initialCategoryIndex = 0,
+}: {
+    children: React.ReactNode;
+    categories: XMBCategory[];
+    initialCategoryIndex?: number;
+}) => {
+    const [categoryIndex, setCategoryIndex] = useState(() =>
+        Math.min(Math.max(initialCategoryIndex, 0), Math.max(categories.length - 1, 0)),
+    );
+
     const [itemIndex, setItemIndex] = useState(-1);
     const [navigationPath, setNavigationPath] = useState<number[]>([]);
-    const [pressedKeys, setPressedKeys] = useState<Set<string>>(new Set());
-    const [isContentViewing, setIsContentViewing] = useState(false);
     const [isNavigating, setIsNavigating] = useState(false);
-    
+    const [pendingHref, setPendingHref] = useState<string | null>(null);
+
     const navTimerRef = useRef<NodeJS.Timeout | null>(null);
     const minDelayReachedRef = useRef(false);
     const finishPendingRef = useRef(false);
 
-    const router = useRouter();
-
-    const startNavigation = useCallback(() => {
+    const startNavigation = useCallback((href?: string) => {
         setIsNavigating(true);
+        setPendingHref(href ?? null);
         minDelayReachedRef.current = false;
         finishPendingRef.current = false;
-        
-        if (navTimerRef.current) clearTimeout(navTimerRef.current);
-        
+
+        if (navTimerRef.current) {
+            clearTimeout(navTimerRef.current);
+        }
+
         navTimerRef.current = setTimeout(() => {
             minDelayReachedRef.current = true;
+
             if (finishPendingRef.current) {
                 setIsNavigating(false);
             }
-        }, 400); // 400ms minimum display time
+        }, 150);
     }, []);
 
     const finishNavigation = useCallback(() => {
@@ -61,52 +103,71 @@ export const XMBNavigationProvider = ({ children, categories }: { children: Reac
         }
     }, []);
 
-    const activeCategory = categories[categoryIndex] || null;
-    
-    const getCurrentItems = (): XMBItem[] => {
-        if (!activeCategory) return [];
-        let currentItems = activeCategory.items;
-        for (const pathIndex of navigationPath) {
-            if (currentItems[pathIndex]?.items) {
-                currentItems = currentItems[pathIndex].items!;
-            }
-        }
-        return currentItems;
-    };
+    const selectionValue = useMemo<XMBSelectionContextType>(() => ({
+        categoryIndex,
+        itemIndex,
+        navigationPath,
+        setCategoryIndex,
+        setItemIndex,
+        setNavigationPath,
+    }), [categoryIndex, itemIndex, navigationPath, setCategoryIndex]);
 
-    const currentItems = getCurrentItems();
-    const activeItem = itemIndex >= 0 ? currentItems[itemIndex] : null;
+    const derivedValue = useMemo<XMBDerivedContextType>(() => {
+        const activeCategory = categories[categoryIndex] ?? null;
+        const currentItems = getCurrentItems(activeCategory, navigationPath);
+        const activeItem = itemIndex >= 0 ? currentItems[itemIndex] ?? null : null;
 
-    // We'll keep the keyboard handling here too if we want it global
-    // But for now, let's just provide the state
-
-    return (
-        <XMBNavigationContext.Provider value={{
-            categoryIndex,
-            itemIndex,
-            navigationPath,
-            setCategoryIndex,
-            setItemIndex,
-            setNavigationPath,
+        return {
             activeCategory,
             activeItem,
             currentItems,
-            pressedKeys,
-            isContentViewing,
-            setIsContentViewing,
-            isNavigating,
-            startNavigation,
-            finishNavigation
-        }}>
-            {children}
-        </XMBNavigationContext.Provider>
+        };
+    }, [categories, categoryIndex, itemIndex, navigationPath]);
+
+    const loadingValue = useMemo<XMBLoadingContextType>(() => ({
+        isNavigating,
+        pendingHref,
+        startNavigation,
+        finishNavigation,
+    }), [finishNavigation, isNavigating, pendingHref, startNavigation]);
+
+    return (
+        <XMBLoadingContext.Provider value={loadingValue}>
+            <XMBSelectionContext.Provider value={selectionValue}>
+                <XMBDerivedContext.Provider value={derivedValue}>
+                    {children}
+                </XMBDerivedContext.Provider>
+            </XMBSelectionContext.Provider>
+        </XMBLoadingContext.Provider>
     );
 };
 
-export const useXMBNavigationContext = () => {
-    const context = useContext(XMBNavigationContext);
-    if (!context) {
-        throw new Error('useXMBNavigationContext must be used within an XMBNavigationProvider');
+function useRequiredContext<T>(context: React.Context<T | undefined>, name: string): T {
+    const value = useContext(context);
+
+    if (!value) {
+        throw new Error(`${name} must be used within an XMBNavigationProvider`);
     }
-    return context;
-};
+
+    return value;
+}
+
+export function useXMBSelectionContext(): XMBSelectionContextType {
+    return useRequiredContext(XMBSelectionContext, 'useXMBSelectionContext');
+}
+
+export function useXMBDerivedContext(): XMBDerivedContextType {
+    return useRequiredContext(XMBDerivedContext, 'useXMBDerivedContext');
+}
+
+export function useXMBLoadingContext(): XMBLoadingContextType {
+    return useRequiredContext(XMBLoadingContext, 'useXMBLoadingContext');
+}
+
+export function useXMBNavigationContext(): XMBSelectionContextType & XMBDerivedContextType & XMBLoadingContextType {
+    return {
+        ...useXMBSelectionContext(),
+        ...useXMBDerivedContext(),
+        ...useXMBLoadingContext(),
+    };
+}

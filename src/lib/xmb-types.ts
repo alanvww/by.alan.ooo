@@ -1,6 +1,6 @@
 import { XMBIconName } from './xmb-constants';
 
-export type XMBItemType = 'project' | 'post' | 'profile' | 'settings' | 'link' | 'folder';
+export type XMBItemType = 'project' | 'post' | 'profile' | 'link' | 'folder';
 
 export interface XMBProjectMeta {
   tags?: string[];
@@ -27,7 +27,14 @@ export interface XMBItem {
   image?: string;
   link?: string;
   type: XMBItemType;
-  actionId?: 'toggle-theme';
+  /** Menu icon rendered in the row thumbnail slot instead of an image/blank block. */
+  icon?: XMBIconName;
+  /** Suppresses the right-side XMBPreview panel for simple link chips. */
+  hidePreview?: boolean;
+  /** Activation is denied: the row/card shakes and a "reach out" toast
+   *  shows instead of following the link. Set folder-wide via
+   *  `restrictItems` on a pinned tag folder. */
+  restricted?: boolean;
   action?: () => void;
   meta?: XMBItemMeta;
   items?: XMBItem[]; // Nested items for folders

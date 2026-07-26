@@ -2,7 +2,7 @@
 
 import React, { useEffect } from 'react';
 import XMBHeader from './XMBHeader';
-import { useXMBNavigationContext } from '@/lib/xmb-navigation-context';
+import { useXMBLoadingContext } from '@/lib/xmb-navigation-context';
 
 interface XMBContentLayoutProps {
     children: React.ReactNode;
@@ -10,7 +10,7 @@ interface XMBContentLayoutProps {
 }
 
 const XMBContentLayout = ({ children, shouldFinishLoading = true }: XMBContentLayoutProps) => {
-    const { finishNavigation } = useXMBNavigationContext();
+    const { finishNavigation } = useXMBLoadingContext();
 
     useEffect(() => {
         if (shouldFinishLoading) {
@@ -19,8 +19,11 @@ const XMBContentLayout = ({ children, shouldFinishLoading = true }: XMBContentLa
     }, [finishNavigation, shouldFinishLoading]);
 
     return (
-        <div className="fixed inset-0 text-white overflow-hidden font-sans select-none">
-            <div className="absolute inset-0 bg-linear-to-br from-black/40 to-transparent" />
+        // No select-none here: this shell wraps the reading view, where text
+        // must stay selectable/copyable. The XMB menu applies its own
+        // select-none on XMBInterface's root.
+        <div className="fixed inset-0 text-xmb-fg overflow-hidden font-sans">
+            <div className="absolute inset-0 bg-linear-to-br dark:from-black/20 from-transparent to-transparent" />
 
             <XMBHeader />
 

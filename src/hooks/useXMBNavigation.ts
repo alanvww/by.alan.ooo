@@ -1,11 +1,78 @@
 // src/hooks/useXMBNavigation.ts
-import { useEffect, useCallback, useRef, useState } from 'react';
+import { useEffect, useCallback, useMemo, useRef } from 'react';
 import type { XMBCategory, XMBItem } from '@/lib/xmb-types';
 import { useRouter } from 'next/navigation';
-import { useXMBNavigationContext } from '@/lib/xmb-navigation-context';
-import { useKeyAudioFx } from '@/hooks/useKeyAudioFx';
+import { useXMBDerivedContext, useXMBLoadingContext, useXMBSelectionContext } from '@/lib/xmb-navigation-context';
+import { playConfirm, playCancel, playNavigate } from '@/hooks/useKeyAudioFx';
+import { activateItem } from '@/lib/xmb-navigation';
 
-export function useXMBNavigation(categories: XMBCategory[]) {
+// Holding ArrowLeft/Right auto-repeats at the OS rate (~30ms), which queues
+// category switches (and their exit animations) faster than they can render.
+// Repeat events are throttled to one switch per this interval so hold-to-scroll
+// still works but the animation pipeline never backs up. Up/Down row moves are
+// cheap and stay unthrottled.
+const HORIZONTAL_REPEAT_INTERVAL_MS = 150;
+
+/**
+ * True when the keydown's target natively activates on Enter/Space (links,
+ * buttons, form fields). The dispatcher must stand down there: the browser
+ * synthesizes a click on the focused element, and that click path is the
+ * single activation — dispatching confirm() too would run two activations
+ * from one keypress (e.g. the same external link opening in two tabs). The
+ * dispatcher owns Enter/Space only when focus rests on <body> or a
+ * non-interactive element (the arrows-only console mode).
+ */
+function isNativeActivationTarget(e: KeyboardEvent): boolean {
+  const target = e.target;
+  if (!(target instanceof Element) || target === document.body) {
+    return false;
+  }
+  return target.closest('a[href], button, input, textarea, select, summary, [contenteditable="true"]') !== null;
+}
+
+/**
+ * The six XMB navigation primitives, shared verbatim between the keyboard
+ * dispatcher and the touch controls (command bar buttons, swipes, pans).
+ * Each command owns its own sound, so keyboard/touch parity — state
+ * transitions, clamping, wrap-around, AND audio — holds by construction.
+ */
+export interface XMBCommands {
+  /** ArrowLeft: prev category (wraps) at root; exit folder when inside one. */
+  moveLeft: () => void;
+  /** ArrowRight: next category (wraps) at root; activate (links only) inside a folder. */
+  moveRight: () => void;
+  /** ArrowUp: selection up one row; floors at the first item inside a folder or in the paged list, at -1 (deselected) at the full layout's root. */
+  moveUp: () => void;
+  /** ArrowDown: selection down one row; clamps at the last item. */
+  moveDown: () => void;
+  /** Enter: activate the selected item (incl. folder drill), or select item 0. */
+  confirm: () => void;
+  /** Escape/Backspace: exit one folder level, else deselect to the category row. */
+  back: () => void;
+}
+
+interface XMBNavigationResult {
+  categoryIndex: number;
+  itemIndex: number;
+  navigationPath: number[];
+  activeCategory: XMBCategory | null;
+  activeItem: XMBItem | null;
+  currentItems: XMBItem[];
+  isNavigating: boolean;
+  commands: XMBCommands;
+  startNavigation: (href?: string) => void;
+  finishNavigation: () => void;
+  setCategoryIndex: (index: number) => void;
+  setItemIndex: (index: number) => void;
+  setNavigationPath: (path: number[]) => void;
+}
+
+export function useXMBNavigation(
+  categories: XMBCategory[],
+  layoutMode: 'full' | 'paged' = 'full',
+  /** Restricted item activated (Enter/ArrowRight): shake + toast owner. */
+  onRestricted?: (item: XMBItem, index: number) => void,
+): XMBNavigationResult {
   const {
     categoryIndex,
     setCategoryIndex,
@@ -13,16 +80,18 @@ export function useXMBNavigation(categories: XMBCategory[]) {
     setItemIndex,
     navigationPath,
     setNavigationPath,
+  } = useXMBSelectionContext();
+  const {
     activeCategory,
     activeItem,
     currentItems,
+  } = useXMBDerivedContext();
+  const {
     isNavigating,
     startNavigation,
     finishNavigation
-  } = useXMBNavigationContext();
+  } = useXMBLoadingContext();
 
-  const { playKeySound } = useKeyAudioFx();
-  const [pressedKeys, setPressedKeys] = useState<Set<string>>(new Set());
   const router = useRouter();
 
   // Use refs to prevent handler recreation
@@ -35,7 +104,8 @@ export function useXMBNavigation(categories: XMBCategory[]) {
   const currentItemsRef = useRef(currentItems);
   const routerRef = useRef(router);
   const startNavigationRef = useRef(startNavigation);
-  const playKeySoundRef = useRef(playKeySound);
+  const layoutModeRef = useRef(layoutMode);
+  const onRestrictedRef = useRef(onRestricted);
 
   useEffect(() => {
     categoriesRef.current = categories;
@@ -47,123 +117,168 @@ export function useXMBNavigation(categories: XMBCategory[]) {
     currentItemsRef.current = currentItems;
     routerRef.current = router;
     startNavigationRef.current = startNavigation;
-    playKeySoundRef.current = playKeySound;
-  }, [categories, categoryIndex, itemIndex, navigationPath, activeCategory, activeItem, currentItems, router, startNavigation, playKeySound]);
+    layoutModeRef.current = layoutMode;
+    onRestrictedRef.current = onRestricted;
+  }, [categories, categoryIndex, itemIndex, navigationPath, activeCategory, activeItem, currentItems, router, startNavigation, layoutMode, onRestricted]);
 
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    const key = e.key;
-    setPressedKeys(prev => new Set(prev).add(key));
-
-    // Play sound for all handled navigation keys
-    const handledKeys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter', 'Escape', 'Backspace'];
-    if (handledKeys.includes(key)) {
-      // Skip Backspace sound when focused on input/textarea (Backspace is ignored there)
-      if (key === 'Backspace' && ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName || '')) {
-        // Don't play sound — this keypress is not handled by XMB
-      } else {
-        playKeySoundRef.current();
-      }
-    }
-
-    switch (key) {
-      case 'ArrowLeft':
-        if (navigationPathRef.current.length > 0) {
-          // Inside folder: exit folder, restore cursor to the folder item we came from
-          const parentFolderIndex = navigationPathRef.current[navigationPathRef.current.length - 1];
-          setNavigationPath(navigationPathRef.current.slice(0, -1));
-          setItemIndex(parentFolderIndex);
-        } else {
-          // Category level or item selected: switch to previous category
-          setCategoryIndex((categoryIndexRef.current > 0 ? categoryIndexRef.current - 1 : categoriesRef.current.length - 1));
-          setItemIndex(-1);
-          setNavigationPath([]);
-        }
-        break;
-      case 'ArrowRight':
-        if (navigationPathRef.current.length > 0) {
-          // Inside folder: open the selected item (link/action only, not folders)
-          if (activeItemRef.current) {
-            if (activeItemRef.current.action) {
-              activeItemRef.current.action();
-            } else if (activeItemRef.current.link) {
-              if (activeItemRef.current.link.startsWith('http') || activeItemRef.current.link.startsWith('mailto')) {
-                window.open(activeItemRef.current.link, '_blank');
-              } else {
-                startNavigationRef.current();
-                routerRef.current.push(activeItemRef.current.link);
-              }
-            }
-            // If it's a folder, → does nothing (Enter is required to drill into nested folders)
-          }
-        } else {
-          // Category level or item selected: switch to next category
-          setCategoryIndex((categoryIndexRef.current < categoriesRef.current.length - 1 ? categoryIndexRef.current + 1 : 0));
-          setItemIndex(-1);
-          setNavigationPath([]);
-        }
-        break;
-      case 'ArrowUp':
-        setItemIndex((itemIndexRef.current > -1 ? itemIndexRef.current - 1 : -1));
-        break;
-      case 'ArrowDown':
-        setItemIndex((() => {
-          const max = currentItemsRef.current.length - 1;
-          return itemIndexRef.current < max ? itemIndexRef.current + 1 : itemIndexRef.current;
-        })());
-        break;
-      case 'Enter':
-        if (activeItemRef.current) {
-          if (activeItemRef.current.type === 'folder' && activeItemRef.current.items) {
-            setNavigationPath([...navigationPathRef.current, itemIndexRef.current]);
-            setItemIndex(0);
-          } else if (activeItemRef.current.action) {
-            activeItemRef.current.action();
-          } else if (activeItemRef.current.link) {
-            if (activeItemRef.current.link.startsWith('http') || activeItemRef.current.link.startsWith('mailto')) {
-              window.open(activeItemRef.current.link, '_blank');
-            } else {
-              startNavigationRef.current();
-              routerRef.current.push(activeItemRef.current.link);
-            }
-          }
-        } else {
-            if (currentItemsRef.current.length > 0) {
-                setItemIndex(0);
-            }
-        }
-        break;
-      case 'Escape':
-      case 'Backspace':
-        if (key === 'Backspace' && ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName || '')) {
-          return;
-        }
-        if (navigationPathRef.current.length > 0) {
-          const parentFolderIndex = navigationPathRef.current[navigationPathRef.current.length - 1];
-          setNavigationPath(navigationPathRef.current.slice(0, -1));
-          setItemIndex(parentFolderIndex);
-        } else if (itemIndexRef.current !== -1) {
-          setItemIndex(-1);
-        }
-        break;
+  const moveLeft = useCallback(() => {
+    playNavigate();
+    if (navigationPathRef.current.length > 0) {
+      // Inside folder: exit folder, restore cursor to the folder item we came from
+      const parentFolderIndex = navigationPathRef.current[navigationPathRef.current.length - 1];
+      setNavigationPath(navigationPathRef.current.slice(0, -1));
+      setItemIndex(parentFolderIndex);
+    } else {
+      // Category level or item selected: switch to previous category
+      setCategoryIndex((categoryIndexRef.current > 0 ? categoryIndexRef.current - 1 : categoriesRef.current.length - 1));
+      setItemIndex(-1);
+      setNavigationPath([]);
     }
   }, [setCategoryIndex, setItemIndex, setNavigationPath]);
 
-  const handleKeyUp = useCallback((e: KeyboardEvent) => {
-    setPressedKeys(prev => {
-      const next = new Set(prev);
-      next.delete(e.key);
-      return next;
-    });
-  }, []);
+  const moveRight = useCallback(() => {
+    if (navigationPathRef.current.length > 0) {
+      // Inside folder: open the selected item (link/action only, not folders).
+      // `drillIntoFolder` is intentionally omitted so folders are no-ops
+      // here — Enter is required to drill into nested folders. Restricted
+      // items skip the navigate tick (the deny path owns its own sound).
+      if (!activeItemRef.current?.restricted) {
+        playNavigate();
+      }
+      if (activeItemRef.current) {
+        activateItem(activeItemRef.current, itemIndexRef.current, {
+          router: routerRef.current,
+          startNavigation: startNavigationRef.current,
+          onRestricted: onRestrictedRef.current,
+        });
+      }
+    } else {
+      playNavigate();
+      // Category level or item selected: switch to next category
+      setCategoryIndex((categoryIndexRef.current < categoriesRef.current.length - 1 ? categoryIndexRef.current + 1 : 0));
+      setItemIndex(-1);
+      setNavigationPath([]);
+    }
+  }, [setCategoryIndex, setItemIndex, setNavigationPath]);
+
+  const moveUp = useCallback(() => {
+    playNavigate();
+    // The first item is the floor inside folders, and also at the root of
+    // the paged layout while the list is showing — deselecting to -1 there
+    // would pop the stage back to categories, so exiting stays on the BACK
+    // and header controls. At the full layout's root, moving past item 0
+    // deselects to the category row (-1).
+    const inPagedList = layoutModeRef.current === 'paged' && itemIndexRef.current >= 0;
+    const floor = navigationPathRef.current.length > 0 || inPagedList ? 0 : -1;
+    setItemIndex(Math.max(itemIndexRef.current - 1, floor));
+  }, [setItemIndex]);
+
+  const moveDown = useCallback(() => {
+    playNavigate();
+    setItemIndex((() => {
+      const max = currentItemsRef.current.length - 1;
+      return itemIndexRef.current < max ? itemIndexRef.current + 1 : itemIndexRef.current;
+    })());
+  }, [setItemIndex]);
+
+  const confirm = useCallback(() => {
+    // Restricted items swap the confirm bloom for the deny path's own cue.
+    if (!activeItemRef.current?.restricted) {
+      playConfirm();
+    }
+    if (activeItemRef.current) {
+      activateItem(activeItemRef.current, itemIndexRef.current, {
+        router: routerRef.current,
+        startNavigation: startNavigationRef.current,
+        drillIntoFolder: (idx) => {
+          setNavigationPath([...navigationPathRef.current, idx]);
+          setItemIndex(0);
+        },
+        onRestricted: onRestrictedRef.current,
+      });
+    } else if (currentItemsRef.current.length > 0) {
+      setItemIndex(0);
+    }
+  }, [setItemIndex, setNavigationPath]);
+
+  const back = useCallback(() => {
+    playCancel();
+    if (navigationPathRef.current.length > 0) {
+      const parentFolderIndex = navigationPathRef.current[navigationPathRef.current.length - 1];
+      setNavigationPath(navigationPathRef.current.slice(0, -1));
+      setItemIndex(parentFolderIndex);
+    } else if (itemIndexRef.current !== -1) {
+      setItemIndex(-1);
+    }
+  }, [setItemIndex, setNavigationPath]);
+
+  const commands = useMemo<XMBCommands>(() => ({
+    moveLeft,
+    moveRight,
+    moveUp,
+    moveDown,
+    confirm,
+    back,
+  }), [back, confirm, moveDown, moveLeft, moveRight, moveUp]);
+
+  // Timestamp of the last accepted Left/Right press, for repeat throttling.
+  const lastHorizontalMoveRef = useRef(0);
+
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    switch (e.key) {
+      case 'ArrowLeft':
+      case 'ArrowRight': {
+        const now = performance.now();
+        // First (non-repeat) press is always instant; only OS auto-repeat is
+        // rate-limited.
+        if (e.repeat && now - lastHorizontalMoveRef.current < HORIZONTAL_REPEAT_INTERVAL_MS) {
+          return;
+        }
+        lastHorizontalMoveRef.current = now;
+        if (e.key === 'ArrowLeft') {
+          moveLeft();
+        } else {
+          moveRight();
+        }
+        break;
+      }
+      case 'ArrowUp':
+        moveUp();
+        break;
+      case 'ArrowDown':
+        moveDown();
+        break;
+      case 'Enter':
+      case ' ':
+        if (isNativeActivationTarget(e)) {
+          return;
+        }
+        // Consume the key outright: confirm() moves the selection, the focus
+        // sync moves DOM focus with it, and without preventDefault the same
+        // keypress's default action would synthesize a click on the NEWLY
+        // focused control — one Enter selecting item 0 and drilling into it.
+        e.preventDefault();
+        confirm();
+        break;
+      case 'Escape':
+      case 'Backspace':
+        // Backspace in an editable field is typing, not navigation — skip
+        // the command entirely (no sound, no action), same as before the
+        // command extraction.
+        if (e.key === 'Backspace' && ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName || '')) {
+          return;
+        }
+        back();
+        break;
+    }
+  }, [back, confirm, moveDown, moveLeft, moveRight, moveUp]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [handleKeyDown, handleKeyUp]);
+  }, [handleKeyDown]);
 
   return {
     categoryIndex,
@@ -173,11 +288,11 @@ export function useXMBNavigation(categories: XMBCategory[]) {
     activeItem,
     currentItems,
     isNavigating,
+    commands,
     startNavigation,
     finishNavigation,
     setCategoryIndex,
     setItemIndex,
     setNavigationPath,
-    pressedKeys
   };
 }

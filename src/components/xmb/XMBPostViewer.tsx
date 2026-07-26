@@ -1,11 +1,18 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
+import { DotWavePlaceholder } from '@/components/mdx/DotWavePlaceholder';
 import { motion } from 'motion/react';
 import { useRouter } from 'next/navigation';
-import { XMB_ANIMATION } from '@/lib/xmb-constants';
-import { useXMBNavigationContext } from '@/lib/xmb-navigation-context';
+import { XMB_ANIMATION, EASE, XMB_OVERLAY } from '@/lib/xmb-constants';
+import { useReducedMotion } from 'motion/react';
+import { useKeyPressed } from '@/hooks/usePressedKeys';
+import { useCoarsePointer } from '@/hooks/useCoarsePointer';
+import { playNavigate } from '@/hooks/useKeyAudioFx';
+import { focusSilently } from '@/lib/focus';
 import XMBIcon from './XMBIcon';
+import XMBKeycap from './XMBKeycap';
 import type { PostFrontmatter, ProjectFrontmatter } from '@/lib/mdx';
 import type { SiblingInfo } from '@/lib/get-content-siblings';
 
@@ -17,170 +24,150 @@ interface XMBPostViewerProps {
     siblings: SiblingInfo;
 }
 
-const XMBPostViewer = ({ type, slug, frontmatter, children, siblings }: XMBPostViewerProps) => {
+const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerProps) => {
     const router = useRouter();
-    const { startNavigation } = useXMBNavigationContext();
     const scrollContainerRef = useRef<HTMLDivElement>(null);
-    const [pressedKeys, setPressedKeys] = useState<Set<string>>(new Set());
+    const prevPressed = useKeyPressed('ArrowLeft');
+    const nextPressed = useKeyPressed('ArrowRight');
+    const isCoarse = useCoarsePointer();
+    const reduceMotion = useReducedMotion();
+    // JS-initiated scrolling honors prefers-reduced-motion (2.3.3); the CSS
+    // scroll-behavior is gated separately in globals.css.
+    const scrollBehavior: ScrollBehavior = reduceMotion ? 'auto' : 'smooth';
 
-    // Handle keyboard navigation
+    // Warm the sibling routes so ←/→ swaps render instantly instead of
+    // dropping to the loading skeleton (router.push alone never prefetches).
+    useEffect(() => {
+        if (siblings.prev) router.prefetch(`/${type}/${siblings.prev.slug}`);
+        if (siblings.next) router.prefetch(`/${type}/${siblings.next.slug}`);
+    }, [router, siblings, type]);
+
+    // Dot-wave placeholder sits behind the cover until it finishes loading.
+    const [coverLoaded, setCoverLoaded] = useState(false);
+    const coverRef = useCallback((node: HTMLImageElement | null) => {
+        if (node?.complete && node.naturalWidth > 0) setCoverLoaded(true);
+    }, []);
+
+    // Reading context enters the article whenever this viewer mounts — first
+    // open and every prev/next sibling swap (the old viewer unmounts and
+    // focus falls to body). Also claims focus from the frame root: on
+    // Suspense-streamed loads the frame's fallback effect fires while the
+    // skeleton is up, parking focus there before this viewer exists. Never
+    // steals focus a user placed elsewhere (e.g. the frame's back button).
+    // focusSilently keeps the :focus-visible ring hidden for this
+    // programmatic focus — the ring stays reserved for real Tab visits.
+    useEffect(() => {
+        const region = scrollContainerRef.current;
+        if (!region) return;
+        const current = document.activeElement;
+        const onFrameFallback = current instanceof HTMLElement && current.dataset.xmbFrame !== undefined;
+        // `current === region` re-arms the silent-focus mark on StrictMode's
+        // dev replay (the first pass already focused the region and its
+        // cleanup unmarked it).
+        if (current !== document.body && !onFrameFallback && current !== region) return;
+        return focusSilently(region);
+    }, []);
+
+    // Handle keyboard navigation. Only ←/→ sibling swaps are intercepted —
+    // vertical scrolling (↑/↓, PageUp/Down, Home/End, Space) is left to the
+    // browser's native handling of the focused scroll region, same as the CV
+    // page: native key-repeat scrolls continuously, where a per-keydown
+    // scrollBy restarts its smooth animation on every repeat and crawls.
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            const container = scrollContainerRef.current;
-            const SCROLL_AMOUNT = 150;
-            const PAGE_SCROLL_AMOUNT = 500;
-            setPressedKeys(prev => {
-                const next = new Set(prev);
-                next.add(e.key);
-                return next;
-            });
+            // Modified keys are browser affordances (Alt+Left = history back,
+            // Shift+arrows = text selection, Cmd/Ctrl combos = shortcuts) —
+            // never hijack them. Same for keys typed into editable UI.
+            if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+            const target = e.target;
+            if (target instanceof Element && target.closest('input, textarea, select, [contenteditable="true"]')) {
+                return;
+            }
 
             switch (e.key) {
-                case 'Escape':
-                case 'Backspace':
-                    // Prevent backspace from navigating back if focused on an input
-                    if (e.key === 'Backspace' && ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName || '')) {
-                        return;
-                    }
-                    router.push('/');
-                    break;
                 case 'ArrowLeft':
                     if (siblings.prev) {
-                        startNavigation();
+                        playNavigate();
                         router.push(`/${type}/${siblings.prev.slug}`);
                     }
                     break;
                 case 'ArrowRight':
                     if (siblings.next) {
-                        startNavigation();
+                        playNavigate();
                         router.push(`/${type}/${siblings.next.slug}`);
-                    }
-                    break;
-                case 'ArrowUp':
-                    e.preventDefault();
-                    if (container) {
-                        container.scrollBy({ top: -SCROLL_AMOUNT, behavior: 'smooth' });
-                    }
-                    break;
-                case 'ArrowDown':
-                    e.preventDefault();
-                    if (container) {
-                        container.scrollBy({ top: SCROLL_AMOUNT, behavior: 'smooth' });
-                    }
-                    break;
-                case 'PageUp':
-                    e.preventDefault();
-                    if (container) {
-                        container.scrollBy({ top: -PAGE_SCROLL_AMOUNT, behavior: 'smooth' });
-                    }
-                    break;
-                case 'PageDown':
-                    e.preventDefault();
-                    if (container) {
-                        container.scrollBy({ top: PAGE_SCROLL_AMOUNT, behavior: 'smooth' });
-                    }
-                    break;
-                case 'Home':
-                    e.preventDefault();
-                    if (container) {
-                        container.scrollTo({ top: 0, behavior: 'smooth' });
-                    }
-                    break;
-                case 'End':
-                    e.preventDefault();
-                    if (container) {
-                        container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
                     }
                     break;
             }
         };
 
-        const handleKeyUp = (e: KeyboardEvent) => {
-            setPressedKeys(prev => {
-                const next = new Set(prev);
-                next.delete(e.key);
-                return next;
-            });
-        };
-
         window.addEventListener('keydown', handleKeyDown);
-        window.addEventListener('keyup', handleKeyUp);
         return () => {
             window.removeEventListener('keydown', handleKeyDown);
-            window.removeEventListener('keyup', handleKeyUp);
         };
-    }, [router, siblings, type, startNavigation]);
+    }, [router, siblings, type]);
 
+    // The frosted backdrop and back button live in XMBPostFrame (the [type]
+    // layout), which persists across sibling navigation — this root only
+    // fades the per-post content in over the already-opaque frame.
     return (
         <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ duration: 0.3 }}
-            className="fixed inset-0 z-50 flex flex-col bg-black/40 backdrop-blur-2xl text-white overflow-hidden"
+            transition={{ duration: 0.2, ease: EASE.ENTER }}
+            className="absolute inset-0 flex flex-col overflow-hidden"
         >
             {/* Background Image (Blurred) */}
             {frontmatter.coverImage && (
                 <div className="absolute inset-0 -z-10 opacity-20 overflow-hidden">
-                    <img 
-                        src={frontmatter.coverImage} 
-                        alt="" 
-                        className="w-full h-full object-cover blur-3xl scale-110"
+                    <Image
+                        src={frontmatter.coverImage}
+                        alt=""
+                        fill
+                        sizes="100vw"
+                        className="object-cover blur-3xl scale-110"
                     />
-                    <div className="absolute inset-0 bg-linear-to-b from-black/60 via-black/40 to-black/80" />
+                    <div className="absolute inset-0 bg-linear-to-b dark:from-black/60 from-white/60 dark:via-black/40 via-white/40 dark:to-black/80 to-white/80" />
                 </div>
             )}
 
-            {/* Close Button / Back (Top Left) */}
-            <div className="absolute top-8 left-12 z-50">
-                <button 
-                    onClick={() => {
-                        router.push('/');
-                    }}
-                    className="group flex items-center gap-3 text-white/50 hover:text-white transition-colors duration-300 focus:outline-none"
-                >
-                    <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 transition-all group-hover:border-white/30 group-hover:bg-white/10">
-                        <XMBIcon name="ArrowLeft" size={18} />
-                        <motion.span
-                            className={`px-1.5 h-6 rounded flex items-center justify-center text-[10px] font-mono transition-all duration-150 hover:bg-white hover:text-black hover:shadow-[0_0_15px_rgba(255,255,255,0.6)] ${
-                                pressedKeys.has('Escape')
-                                    ? 'bg-white text-black shadow-[0_0_15px_rgba(255,255,255,0.8)]'
-                                    : 'border border-white/20 bg-white/5 text-white/70'
-                            }`}
-                            animate={{ scale: pressedKeys.has('Escape') ? 1.05 : 1 }}
-                            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-                        >
-                            ESC
-                        </motion.span>
-                    </div>
-                    <span className="text-xs font-mono uppercase tracking-[0.2em] opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300">
-                        Back to Menu
-                    </span>
-                </button>
-            </div>
-
-            {/* Scrollable Content */}
-            <div 
+            {/* Scrollable Content — a real tab stop (2.1.1): keyboard users
+                can focus the scroll region directly, and it receives reading
+                focus on mount. Its Tab-focus hairline lives in globals.css
+                (the [role="region"][tabindex] rule) so the silent-focus gate
+                can suppress it — utilities here would out-cascade the gate. */}
+            <div
                 ref={scrollContainerRef}
-                className="flex-1 overflow-y-auto overflow-x-hidden pt-32 pb-48 px-6 md:px-0 scroll-smooth"
+                tabIndex={0}
+                role="region"
+                aria-label="Article content"
+                // Tells the frame's focus fallback to leave this region to
+                // the viewer's own mount effect — the frame stamping it on
+                // SSR loads, before this Suspense subtree hydrates, would
+                // trip React's hydration-mismatch warning.
+                data-xmb-viewer-region=""
+                className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pt-32 pb-48 px-6 md:px-0 scroll-smooth motion-reduce:scroll-auto select-text"
             >
                 <div className="max-w-4xl mx-auto">
                     {/* Header Section */}
                     <motion.header 
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.2, ...XMB_ANIMATION.SPRING_CONFIG }}
+                        transition={{ delay: 0.1, ...XMB_ANIMATION.SPRING_CONFIG }}
                         className="mb-16 text-center"
                     >
                         <div className="flex items-center justify-center gap-4 mb-8">
-                             <span className="px-3 py-1 rounded-lg border border-white/10 bg-white/5 text-[10px] font-mono uppercase tracking-widest text-white/40">
+                            <span className="px-3 py-1 rounded-lg border border-xmb-fg/10 bg-xmb-fg/5 text-[10px] font-mono uppercase tracking-widest text-xmb-fg/40">
                                 {type}
                             </span>
-                            <div className="h-px w-12 bg-white/10" />
-                            <time className="text-xs font-mono text-white/40 uppercase tracking-widest">
+                            <div className="h-px w-12 bg-xmb-fg/10" />
+                            <time className="text-xs font-mono text-xmb-fg/40 uppercase tracking-widest">
                                 {new Date(frontmatter.date).toLocaleDateString('en-US', {
                                     year: 'numeric',
                                     month: 'long',
                                     day: 'numeric',
+                                    // Frontmatter dates parse as UTC midnight — format in
+                                    // UTC too, or viewers west of GMT see the previous day.
+                                    timeZone: 'UTC',
                                 })}
                             </time>
                         </div>
@@ -192,7 +179,7 @@ const XMBPostViewer = ({ type, slug, frontmatter, children, siblings }: XMBPostV
                         {frontmatter.tags && (
                             <div className="flex flex-wrap justify-center gap-3">
                                 {frontmatter.tags.map(tag => (
-                                    <span key={tag} className="text-[10px] font-mono uppercase tracking-widest px-3 py-1.5 bg-white/5 rounded-full border border-white/10 text-white/60">
+                                    <span key={tag} className="text-[10px] font-mono uppercase tracking-widest px-3 py-1.5 bg-xmb-fg/5 rounded-full border border-xmb-fg/10 text-xmb-fg/60">
                                         {tag}
                                     </span>
                                 ))}
@@ -205,15 +192,22 @@ const XMBPostViewer = ({ type, slug, frontmatter, children, siblings }: XMBPostV
                         <motion.div
                             initial={{ opacity: 0, y: 40, scale: 0.98 }}
                             animate={{ opacity: 1, y: 0, scale: 1 }}
-                            transition={{ delay: 0.3, duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-                            className="relative aspect-video rounded-2xl overflow-hidden border border-white/10 shadow-[0_0_80px_rgba(255,255,255,0.05)] mb-24"
+                            transition={{ delay: 0.15, duration: 0.4, ease: EASE.MOVE }}
+                            className="relative aspect-video rounded-2xl overflow-hidden border border-xmb-fg/10 shadow-[0_0_80px_var(--color-xmb-shadow-glow)] mb-24"
                         >
-                            <img 
-                                src={frontmatter.coverImage} 
+                            {!coverLoaded && <DotWavePlaceholder className="absolute inset-0" />}
+                            <Image
+                                ref={coverRef}
+                                src={frontmatter.coverImage}
                                 alt={frontmatter.title}
-                                className="w-full h-full object-cover"
+                                fill
+                                sizes="(max-width: 1024px) 100vw, 1024px"
+                                className="object-cover"
+                                priority
+                                onLoad={() => setCoverLoaded(true)}
+                                onError={() => setCoverLoaded(true)}
                             />
-                            <div className="absolute inset-0 ring-1 ring-inset ring-white/20 rounded-2xl" />
+                            <div className="absolute inset-0 ring-1 ring-inset ring-xmb-fg/20 rounded-2xl" />
                         </motion.div>
                     )}
 
@@ -224,34 +218,27 @@ const XMBPostViewer = ({ type, slug, frontmatter, children, siblings }: XMBPostV
                 </div>
             </div>
 
-            {/* Bottom Navigation Controls */}
-            <div className="absolute bottom-0 inset-x-0 h-32 bg-linear-to-t from-black/80 to-transparent pointer-events-none z-40">
-                <div className="h-full max-w-6xl mx-auto px-12 flex items-center justify-between pointer-events-auto">
+            {/* Bottom Navigation Controls. The fade strip and its inner
+                container stay pointer-events-none — only the buttons take
+                pointer events, so touch-scrolls starting in the bottom of the
+                screen still reach the article. */}
+            <div className={`absolute bottom-0 inset-x-0 h-32 ${XMB_OVERLAY.BOTTOM_FADE} pointer-events-none z-40`}>
+                <div className="h-full max-w-6xl mx-auto px-6 md:px-12 pb-[env(safe-area-inset-bottom)] flex items-center justify-between pointer-events-none">
                     {/* Previous */}
                     <div className="flex-1 flex justify-start">
                         {siblings.prev && (
-                            <button 
+                            <button
                                 onClick={() => {
-                                    startNavigation();
+                                    playNavigate();
                                     router.push(`/${type}/${siblings.prev!.slug}`);
                                 }}
-                                className="group flex flex-col items-start gap-1 text-white/40 hover:text-white transition-all"
+                                className="group pointer-events-auto touch-manipulation min-h-11 flex flex-col items-start justify-center gap-1 text-xmb-fg/70 hover:text-xmb-fg transition-all"
                             >
-                                <span className="text-[10px] font-mono uppercase tracking-widest opacity-50">Previous</span>
+                                <span className="text-[10px] font-mono uppercase tracking-widest">Previous</span>
                                 <span className="text-sm font-light tracking-wide flex items-center gap-2">
                                     <XMBIcon name="ArrowLeft" size={12} className="group-hover:-translate-x-1 transition-transform" />
-                                    <motion.span
-                                        className={`w-6 h-6 rounded flex items-center justify-center text-[10px] font-mono transition-all duration-150 hover:bg-white hover:text-black hover:shadow-[0_0_15px_rgba(255,255,255,0.6)] ${
-                                            pressedKeys.has('ArrowLeft')
-                                                ? 'bg-white text-black shadow-[0_0_15px_rgba(255,255,255,0.8)]'
-                                                : 'border border-white/20 bg-white/5 text-white/70'
-                                        }`}
-                                        animate={{ scale: pressedKeys.has('ArrowLeft') ? 1.05 : 1 }}
-                                        transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-                                    >
-                                        ←
-                                    </motion.span>
-                                    {siblings.prev.title}
+                                    {!isCoarse && <XMBKeycap label="←" hoverable pressed={prevPressed} />}
+                                    <span className="max-w-[32vw] truncate">{siblings.prev.title}</span>
                                 </span>
                             </button>
                         )}
@@ -260,27 +247,17 @@ const XMBPostViewer = ({ type, slug, frontmatter, children, siblings }: XMBPostV
                     {/* Next */}
                     <div className="flex-1 flex justify-end text-right">
                         {siblings.next && (
-                            <button 
+                            <button
                                 onClick={() => {
-                                    startNavigation();
+                                    playNavigate();
                                     router.push(`/${type}/${siblings.next!.slug}`);
                                 }}
-                                className="group flex flex-col items-end gap-1 text-white/40 hover:text-white transition-all"
+                                className="group pointer-events-auto touch-manipulation min-h-11 flex flex-col items-end justify-center gap-1 text-xmb-fg/70 hover:text-xmb-fg transition-all"
                             >
-                                <span className="text-[10px] font-mono uppercase tracking-widest opacity-50">Next</span>
+                                <span className="text-[10px] font-mono uppercase tracking-widest">Next</span>
                                 <span className="text-sm font-light tracking-wide flex items-center gap-2">
-                                    {siblings.next.title}
-                                    <motion.span
-                                        className={`w-6 h-6 rounded flex items-center justify-center text-[10px] font-mono transition-all duration-150 hover:bg-white hover:text-black hover:shadow-[0_0_15px_rgba(255,255,255,0.6)] ${
-                                            pressedKeys.has('ArrowRight')
-                                                ? 'bg-white text-black shadow-[0_0_15px_rgba(255,255,255,0.8)]'
-                                                : 'border border-white/20 bg-white/5 text-white/70'
-                                        }`}
-                                        animate={{ scale: pressedKeys.has('ArrowRight') ? 1.05 : 1 }}
-                                        transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-                                    >
-                                        →
-                                    </motion.span>
+                                    <span className="max-w-[32vw] truncate">{siblings.next.title}</span>
+                                    {!isCoarse && <XMBKeycap label="→" hoverable pressed={nextPressed} />}
                                     <XMBIcon name="CaretRight" size={12} className="group-hover:translate-x-1 transition-transform" />
                                 </span>
                             </button>
@@ -289,12 +266,43 @@ const XMBPostViewer = ({ type, slug, frontmatter, children, siblings }: XMBPostV
                 </div>
             </div>
 
-            {/* Scroll Indicator (Right) */}
-            <div className="absolute right-12 top-1/2 -translate-y-1/2 flex flex-col items-center gap-4 z-40 opacity-30 hover:opacity-100 transition-opacity duration-500">
-                <div className="w-px h-32 bg-linear-to-b from-transparent via-white/50 to-transparent" />
-                <span className="[writing-mode:vertical-rl] text-[10px] font-mono uppercase tracking-widest">Scroll</span>
-                <div className="w-px h-32 bg-linear-to-t from-transparent via-white/50 to-transparent" />
-            </div>
+            {/* Scroll Indicator (Right). Decorative on fine pointers; on touch
+                it becomes a pair of jump controls reusing the keyboard
+                Home/End scroll behavior. */}
+            {isCoarse ? (
+                // pointer-events only on the two buttons — swipes over the
+                // dividers/label must fall through to the article scroller.
+                <div className="absolute right-1 top-1/2 -translate-y-1/2 flex flex-col items-center z-40 opacity-60 pointer-events-none">
+                    <button
+                        type="button"
+                        aria-label="Scroll to top"
+                        onClick={() => scrollContainerRef.current?.scrollTo({ top: 0, behavior: scrollBehavior })}
+                        className="pointer-events-auto min-w-11 min-h-11 flex items-center justify-center touch-manipulation text-xmb-fg/70 active:text-xmb-fg"
+                    >
+                        ↑
+                    </button>
+                    <div className="w-px h-16 bg-linear-to-b from-transparent via-xmb-fg/50 to-transparent" />
+                    <span className="[writing-mode:vertical-rl] text-[10px] font-mono uppercase tracking-widest py-2">Scroll</span>
+                    <div className="w-px h-16 bg-linear-to-t from-transparent via-xmb-fg/50 to-transparent" />
+                    <button
+                        type="button"
+                        aria-label="Scroll to bottom"
+                        onClick={() => {
+                            const container = scrollContainerRef.current;
+                            container?.scrollTo({ top: container.scrollHeight, behavior: scrollBehavior });
+                        }}
+                        className="pointer-events-auto min-w-11 min-h-11 flex items-center justify-center touch-manipulation text-xmb-fg/70 active:text-xmb-fg"
+                    >
+                        ↓
+                    </button>
+                </div>
+            ) : (
+                <div className="absolute right-12 top-1/2 -translate-y-1/2 flex flex-col items-center gap-4 z-40 opacity-30 hover:opacity-100 transition-opacity duration-250">
+                    <div className="w-px h-32 bg-linear-to-b from-transparent via-xmb-fg/50 to-transparent" />
+                    <span className="[writing-mode:vertical-rl] text-[10px] font-mono uppercase tracking-widest">Scroll</span>
+                    <div className="w-px h-32 bg-linear-to-t from-transparent via-xmb-fg/50 to-transparent" />
+                </div>
+            )}
         </motion.div>
     );
 };

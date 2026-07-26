@@ -1,67 +1,144 @@
 # Content Guide
 
-This guide explains how to create and manage content for the XMB-style portfolio site. It's designed for both humans and LLMs.
+How to create and manage content for the XMB-style portfolio site. Written for
+both humans and LLMs. The pipeline is designed so files authored in external
+editors (Obsidian, Zed, anything that writes markdown) work without extra steps.
 
 ---
 
 ## Quick Reference
 
-### Adding a New Post
+### The fastest possible post
 
-1. Create a new `.mdx` file in `src/content/posts/`:
-   ```
-   src/content/posts/my-new-post.mdx
-   ```
+Create `src/content/posts/My New Idea.md` in any editor:
 
-2. Add frontmatter and content:
-   ```mdx
-   ---
-   title: "My New Post"
-   date: "2026-02-14"
-   excerpt: "A brief description shown in listings."
-   coverImage: "/assets/posts/my-image.jpg"
-   tags: ["category", "another-tag"]
-   publish: true
-   ---
+```md
+# My New Idea
 
-   # My New Post
+Write here. That's it.
+```
 
-   Your content here...
-   ```
+Everything else is derived:
 
-3. The post automatically appears in the XMB "Writing" category.
+- **URL/slug** — from the filename, normalized: `/posts/my-new-idea`
+- **Title** — frontmatter `title`, else the first `# Heading`, else the filename
+- **Date** — frontmatter `date`, else the file's modification time
+- **Excerpt** — frontmatter `excerpt`, else the first paragraph
+- **Read time** — computed from word count
+- **Published** — yes, unless `draft: true` or `publish: false`
+
+### The recommended shape (folder + colocated images)
+
+```
+src/content/posts/my-new-post/
+├── index.md          (or index.mdx)
+├── cover.jpg
+└── sketch.png
+```
+
+```md
+---
+title: "My New Post"
+date: "2026-07-05"
+excerpt: "A brief description shown in listings."
+coverImage: "./cover.jpg"
+tags: ["creative-coding"]
+---
+
+Paste images next to the file and reference them however your editor does it:
+
+![[sketch.png]]                          ← Obsidian embed
+![alt text](sketch.png)                  ← bare relative path
+![alt text](./sketch.png "A caption")    ← ./ prefix + visible caption
+```
+
+All three image forms work. In `bun dev` they are served directly from
+`src/content` (no sync step); `bun run build` mirrors them into
+`public/content` for static serving.
 
 ---
 
-### Adding a New Project
+## .md vs .mdx — pick by content
 
-1. Create a new `.mdx` file in `src/content/projects/`:
-   ```
-   src/content/projects/my-project.mdx
-   ```
+| Extension | Behavior |
+| --------- | -------- |
+| `.md` | Plain markdown. `{braces}` and `<angle brackets>` in prose are safe. No JSX. This is what Obsidian/Zed output — **default to this**. |
+| `.mdx` | Full MDX: can use `<Figure>`, `<Demo>`, `<Tabs>`, `<Callout>` and JSX expressions. A stray `{` or `<` in prose is a syntax error, so reserve `.mdx` for files that need components. |
 
-2. Add frontmatter and content:
-   ```mdx
-   ---
-   title: "My Project"
-   date: "2026-02-14"
-   excerpt: "A brief project description."
-   coverImage: "/assets/projects/my-project/cover.jpg"
-   tags: ["portfolio", "web"]
-   featured: true
-   publish: true
-   projectUrl: "https://myproject.com"
-   githubUrl: "https://github.com/user/myproject"
-   technologies: ["React", "TypeScript", "Next.js"]
-   status: "completed"
-   ---
+One caveat for `.md`: raw HTML fragments (including accidental `<word>` in
+prose) are dropped silently rather than rendered. Escape as `\<word\>` or wrap
+in backticks when you mean the literal characters.
 
-   # My Project
+One caveat for `.mdx`: next-mdx-remote v6 blocks JavaScript expressions by
+default (`blockJS: true`). On the dynamic content pages
+(`src/app/[type]/[slug]/page.tsx`) any JSX attribute expression —
+`<Tabs items={[...]}>`, inline `{expressions}` — is silently stripped at
+compile time: string attributes like `title="..."` survive, expression
+attributes arrive as `undefined`. In posts and projects, stick to string
+attributes for custom components. A page rendering trusted content can opt
+out the way the standalone CV page does: `src/app/cv/page.tsx` passes
+`options={{ mdxOptions, blockJS: false }}` because `src/content/cv.mdx` uses
+`<CVEntry links={[...]} />` (see the comment there).
 
-   Project details here...
-   ```
+---
 
-3. The project automatically appears in the XMB "Projects" category.
+## Wikilinks (topic links)
+
+`[[...]]` resolves against every published post and project, by slug or title:
+
+```md
+[[Gestura]]                     → link to /projects/gestura
+[[gestura|my hand-tracking app]] → same link, custom label
+[[Some Future Note]]            → renders as inert dashed text until the note exists
+![[image.png]]                  → embeds a colocated image
+```
+
+Unresolved links are not errors — they mark notes you haven't written yet.
+
+---
+
+## Markdown features (both .md and .mdx)
+
+- **GFM**: tables, task lists, strikethrough, autolinked URLs
+- **Code fences** with shiki syntax highlighting (dual light/dark theme),
+  language label, and a copy button
+- **Heading anchors**: hover a heading for its `#` link
+- **External links** open in a new tab automatically; in-page `#anchors` and
+  internal `/paths` stay in-tab
+
+Images get intrinsic dimensions read at build time (no layout shift), show an
+XMB-style dot-wave placeholder while loading, and a markdown title
+(`![alt](src "caption")`) renders as a visible caption — `alt` stays for
+accessibility. External image URLs work from any host.
+
+---
+
+## Frontmatter Schema
+
+### Shared fields (all optional)
+
+| Field | Type | Default |
+| ----- | ---- | ------- |
+| `title` | string | first `# Heading`, else filename |
+| `date` | YYYY-MM-DD | file modification time |
+| `excerpt` | string | first paragraph |
+| `coverImage` | path/URL | none — `./name.jpg` resolves to the colocated file |
+| `tags` | string[] | none — first tag groups projects into XMB folders |
+| `draft` | boolean | `false` — `true` hides from lists and production (still viewable at its URL in dev) |
+| `publish` | boolean | `true` — `false` behaves like `draft: true` |
+| `featured` | boolean | `false` — featured projects get a Featured folder |
+| `readTime` | number | computed |
+
+### Project-only fields (optional)
+
+`projectUrl`, `githubUrl`, `demoUrl`, `technologies` (string[]),
+`status` (`completed` | `in-progress` | `archived`)
+
+### Slugs
+
+Always derived from the file/folder name, normalized to URL-safe form
+(`My Note.md` → `my-note`, `Altify.mdx` → `altify`). Never set `slug` manually.
+Duplicate slugs within a type log a warning and the later file is skipped.
 
 ---
 
@@ -69,269 +146,44 @@ This guide explains how to create and manage content for the XMB-style portfolio
 
 ```
 src/content/
-├── posts/           # Blog posts → "Writing" category
-│   ├── hello-world.mdx
-│   └── ...
-└── projects/        # Portfolio projects → "Projects" category
-    ├── gestura.mdx
-    └── ...
+├── posts/                    # → "Writing" category
+│   ├── quick-note.md         # flat file — loose images go next to it
+│   └── my-post/              # folder — preferred for anything with images
+│       ├── index.md
+│       └── cover.jpg
+└── projects/                 # → "Projects" category
+    └── gestura/
+        ├── index.mdx
+        └── demo.png
 ```
+
+Adding a **new content type** is dropping a new folder in `src/content/` —
+it auto-appears as an XMB category (configure title/icon/order in
+`src/lib/content-config.ts`).
 
 ---
 
-## Frontmatter Schema
+## How media serving works
 
-### Required Fields (All Content Types)
+- **Dev**: `src/app/content/[...path]/route.ts` serves colocated files
+  straight from `src/content` — paste an image, refresh, done.
+- **Build**: `scripts/sync-content-media.js` mirrors them into
+  `public/content/<type>/<slug>/` (slug-normalized, stale files removed) so
+  production serves them statically. The route stays as a fallback.
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `title` | string | Display title |
-| `date` | string | ISO date (YYYY-MM-DD) for sorting |
-| `excerpt` | string | Short description for listings |
-| `slug` | string | **Auto-derived from filename** — do not set manually |
-
-### Optional Fields (All Content Types)
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `coverImage` | string | — | Hero image path or URL |
-| `tags` | string[] | `[]` | Categories for filtering/grouping |
-| `publish` | boolean \| "true" \| "false" | `false` | Whether to show the content |
-| `featured` | boolean | `false` | Show in "Featured" folder (projects only) |
-| `readTime` | number | — | Estimated reading time in minutes |
-
-### Post-Specific Fields
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `author` | string | Author name |
-| `category` | string | Post category |
-| `updatedDate` | string | ISO date of last update |
-
-### Project-Specific Fields
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `projectUrl` | string | Live demo URL |
-| `githubUrl` | string | Source code URL |
-| `demoUrl` | string | Alternative demo URL |
-| `technologies` | string[] | Tech stack used |
-| `status` | "completed" \| "in-progress" \| "archived" | Project status |
-
----
-
-## Content Type Configuration
-
-Content types are configured in `src/lib/content-config.ts`:
-
-```typescript
-const contentConfig = {
-  projects: {
-    title: 'Projects',       // XMB category title
-    iconName: 'Atom',        // Icon from XMB_ICON_NAMES
-    order: 10,               // Position in XMB (lower = more left)
-    groupByTags: true,       // Create tag-based sub-folders
-    showFeatured: true,      // Show "Featured" folder
-    singularLabel: 'project' // For "3 projects" labels
-  },
-  posts: {
-    title: 'Writing',
-    iconName: 'Notebook',
-    order: 20,
-    groupByTags: false,      // Simple "Recent" + "All" grouping
-    showFeatured: false,
-    singularLabel: 'post'
-  }
-};
-```
-
-### Available Icons
-
-From `XMB_ICON_NAMES` in `src/lib/xmb-constants.ts`:
-- `Gear`, `User`, `Atom`, `Notebook`, `EnvelopeSimple`
-- `Folder`, `File`, `CaretRight`, `ArrowLeft`, `Question`
-
----
-
-## Adding a New Content Type
-
-To add a completely new content category (e.g., "notes", "talks"):
-
-### Step 1: Create the Folder
-
-```bash
-mkdir src/content/notes
-```
-
-### Step 2: Add Content Files
-
-Create `.mdx` files with the required frontmatter:
-
-```
-src/content/notes/
-├── my-note-1.mdx
-└── my-note-2.mdx
-```
-
-### Step 3: (Optional) Configure the Category
-
-Add to `src/lib/content-config.ts`:
-
-```typescript
-const contentConfig = {
-  // ... existing config
-  notes: {
-    title: 'Notes',
-    iconName: 'File',
-    order: 30,
-    groupByTags: false,
-    showFeatured: false,
-    singularLabel: 'note'
-  }
-};
-```
-
-**Without configuration**, the system auto-discovers the folder and uses defaults:
-- Title: Capitalized folder name ("Notes")
-- Icon: `Folder`
-- Order: `50` (appears after configured types)
-- No tag grouping, no featured folder
-
-### Step 4: Done!
-
-The new category automatically appears in the XMB. Routes are generated at `/notes/[slug]`.
-
----
-
-## URL Structure
-
-| Content Type | URL Pattern |
-|--------------|-------------|
-| Posts | `/posts/hello-world` |
-| Projects | `/projects/gestura` |
-| Custom types | `/{folder-name}/{file-slug}` |
-
-The slug is derived from the filename (without `.mdx` extension).
-
----
-
-## XMB Category Ordering
-
-Categories appear in this order:
-
-1. **Settings** (fixed, order 0)
-2. **Profile** (fixed, order 5)
-3. **Content Types** (sorted by `order` property: 10, 20, 30...)
-4. **Contact** (fixed, order 100)
-
----
-
-## Asset Management
-
-### Local Images
-
-Store in `public/assets/`:
-
-```
-public/assets/
-├── posts/
-│   └── my-post/
-│       ├── cover.jpg
-│       └── diagram.png
-└── projects/
-    └── my-project/
-        └── screenshot.png
-```
-
-Reference in frontmatter:
-```yaml
-coverImage: "/assets/posts/my-post/cover.jpg"
-```
-
-Reference in content:
-```mdx
-![Diagram](/assets/posts/my-post/diagram.png)
-```
-
-### External Images
-
-Use full URLs:
-```yaml
-coverImage: "https://example.com/image.jpg"
-```
-
----
-
-## MDX Features
-
-Standard Markdown plus React components:
-
-### Code Blocks with Syntax Highlighting
-
-````mdx
-```typescript
-interface User {
-  id: string;
-  name: string;
-}
-```
-````
-
-### Custom Components (if available)
-
-Check `src/components/mdx/` for available components:
-- `Alert` — Callout boxes
-- `Badge` — Status badges
-- `Callout` — Highlighted sections
-- `Card` — Content cards
-- `Figure` — Image figures with captions
-- `Tabs` — Tabbed content
-
----
-
-## Publishing Checklist
-
-Before publishing content:
-
-- [ ] Set `publish: true` in frontmatter
-- [ ] Verify date is correct (ISO format: YYYY-MM-DD)
-- [ ] Add meaningful excerpt (shown in listings)
-- [ ] Include tags for discoverability
-- [ ] For projects: set `featured: true` if it should appear in Featured folder
-- [ ] Run `bun run build` to verify no errors
+Legacy images under `public/assets/...` keep working via absolute paths.
 
 ---
 
 ## Common Tasks for LLMs
 
-When asked to add content:
-
-1. **Create post**: Add `.mdx` file to `src/content/posts/`
-2. **Create project**: Add `.mdx` file to `src/content/projects/`
-3. **New content type**: Create folder in `src/content/`, optionally add config
-
-When asked to modify content display:
-
-1. **Change category title/icon/order**: Edit `src/lib/content-config.ts`
-2. **Change grouping behavior**: Toggle `groupByTags` or `showFeatured`
-3. **Add new icon**: Add to `XMB_ICON_NAMES` in `src/lib/xmb-constants.ts`
-
----
-
-## File Naming Conventions
-
-- Use lowercase with hyphens: `my-post-title.mdx`
-- Avoid special characters
-- Slug is auto-derived: `my-post-title.mdx` → `/posts/my-post-title`
-
----
-
-## Troubleshooting
-
-| Issue | Solution |
-|-------|----------|
-| Content not showing | Set `publish: true` |
-| Wrong category order | Check `order` in content-config |
-| Missing icon | Verify icon is in `XMB_ICON_NAMES` |
-| Image not loading | Check path starts with `/` for local images |
-| Build error | Check frontmatter syntax (YAML valid) |
+- **"Add a post about X"** → create `src/content/posts/<slug>/index.md` with
+  minimal frontmatter (title, date, excerpt, tags). Prefer `.md` unless the
+  content needs interactive components.
+- **"Hide/unpublish something"** → add `draft: true` to its frontmatter.
+- **"Scaffold interactively"** → `bun run new` (refuses to overwrite existing
+  slugs).
+- **"Check everything renders"** → `/posts/pipeline-test` is a permanent draft
+  exercising every pipeline feature; view it in dev after pipeline changes.
+- **Do not** set `slug` in frontmatter, hand-copy images into `public/`, or
+  edit `public/content` (it is generated and cleaned by the sync script).

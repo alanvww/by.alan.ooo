@@ -1,258 +1,240 @@
 'use client';
+
+import type { ReactElement } from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { useTheme } from '@/lib/theme-context';
+import { usePathname } from 'next/navigation';
+import { createBackgroundRenderer } from '@/components/background';
+import type { BackgroundRenderer, RendererCallbacks } from '@/components/background';
 
-const WebGLBackground = () => {
-    const canvasRef = useRef(null);
-    const { theme } = useTheme();
-    const [mounted, setMounted] = useState(false);
-    let program: WebGLProgram;
-    let uTimeLocation: WebGLUniformLocation;
-    let uResolutionLocation: WebGLUniformLocation;
+const MAX_DEVICE_PIXEL_RATIO = 1.0;
+const TARGET_FRAME_MS = 33; // ~30fps cap for the shader
 
-    useEffect(() => {
-        setMounted(true);
-    }, []);
+interface LoopControls {
+  start: () => void;
+  stop: () => void;
+  renderOnce: () => void;
+}
 
-    useEffect(() => {
-        if (!mounted) return;
-        const canvas = canvasRef.current as unknown as HTMLCanvasElement;
-        const gl = canvas.getContext('webgl');
+/**
+ * Mounted exactly once in the root layout and kept alive across all client
+ * navigations — the GL context, compiled shaders, and shader clock persist.
+ * The render loop runs only on the home screen (content pages cover the
+ * canvas with blurred overlays, so animating under them is wasted GPU work)
+ * and while the tab is visible.
+ */
+const WebGLBackground = (): ReactElement => {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const rendererRef = useRef<BackgroundRenderer | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
+  const startTimeRef = useRef<number>(0);
+  const elapsedRef = useRef<number>(0);
+  const lastRenderTimeRef = useRef<number>(0);
+  const shouldAnimateRef = useRef<boolean>(true);
+  const loopControlsRef = useRef<LoopControls | null>(null);
+  const [mounted, setMounted] = useState(false);
+  const [canvasGeneration, setCanvasGeneration] = useState(0);
+  const pathname = usePathname();
+  const isHome = pathname === '/';
 
-        if (!gl) {
-            console.error(
-                'Unable to initialize WebGL. Your browser may not support it.'
-            );
-            return;
-        }
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the generation-keyed canvas must only mount client-side, after hydration
+    setMounted(true);
+  }, []);
 
-        // Functions for shader creation, program setup, etc.
-        const createShader = (
-            gl: WebGLRenderingContext,
-            type: number,
-            source: string
-        ) => {
-            const shader = gl.createShader(type) as WebGLShader;
-            gl.shaderSource(shader, source);
-            gl.compileShader(shader);
-            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-                alert(
-                    'An error occurred compiling the shaders: ' +
-                    gl.getShaderInfoLog(shader)
-                );
-                gl.deleteShader(shader);
-                return null;
-            }
-            return shader;
-        };
+  useEffect(() => {
+    if (!mounted || !canvasRef.current) {
+      return;
+    }
 
-        const createProgram = (
-            gl: WebGLRenderingContext,
-            vertexShader: any,
-            fragmentShader: any
-        ) => {
-            const program = gl.createProgram() as WebGLProgram;
-            gl.attachShader(program, vertexShader);
-            gl.attachShader(program, fragmentShader);
-            gl.linkProgram(program);
-            if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-                alert(
-                    'Unable to initialize the shader program: ' +
-                    gl.getProgramInfoLog(program)
-                );
-                return null;
-            }
-            return program;
-        };
+    const canvas = canvasRef.current;
+    // The renderer factory is async — if the effect tore down before it
+    // resolved, the just-created renderer must be destroyed, not adopted.
+    let cancelled = false;
+    let lostRenderer: BackgroundRenderer | null = null;
 
-        // Vertex shader source
-        const vertexShaderSource = `
-      // Vertex shader code
-      attribute vec4 position;
-      void main() {
-        gl_Position = position;
+    const resizeCanvas = (): void => {
+      const dpr = Math.min(window.devicePixelRatio || 1, MAX_DEVICE_PIXEL_RATIO);
+      const width = Math.round(window.innerWidth * dpr);
+      const height = Math.round(window.innerHeight * dpr);
+
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
       }
-    `;
 
-        // Fragment shader source (Replace with your GLSL code)
-        const fragmentShaderSource = `/*
-        * Original shader from: https://www.shadertoy.com/view/DsVSRy
-        */
-       
-       #ifdef GL_ES
-       precision highp float;
-       #endif
-       
-       // glslsandbox uniforms
-       uniform float uTime;
-       uniform vec2 uResolution;
-       
-       // shadertoy emulation
-       #define iTime uTime
-       #define iResolution uResolution
-       
-       // --------[ Original ShaderToy begins here ]---------- //
-       #define t iTime 
-#define SAMPLES 5
-#define FOCAL_DISTANCE 0.1
-#define FOCAL_RANGE 1.0
-mat2 m(float a){float c=cos(a), s=sin(a);return mat2(c,-s,s,c);}
+      rendererRef.current?.resize(canvas.width, canvas.height);
+    };
 
-float map(vec3 p){
-    p.xz *= m(t * 0.8);
-    p.xy *= m(t * 0.6);
-    vec3 q = p * 2.0 + t;
-    return length(p + vec3(sin(t * 0.7))) * log(length(p) + 1.0) + sin(q.x + sin(q.z + sin(q.y))) * 0.5 - 3.0;
-}
+    const renderFrame = (now: number): void => {
+      const renderer = rendererRef.current;
+      if (!renderer) return;
 
-vec3 hslToRgb(vec3 hsl) {
-    vec3 rgb = clamp(abs(mod(hsl.x * 6.0 + vec3(5.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
-    return hsl.z + hsl.y * (rgb - 0.5) * (1.0 - abs(2.0 * hsl.z - 1.0));
-}
+      const elapsedTime = (now - startTimeRef.current) / 1000;
+      elapsedRef.current = elapsedTime;
 
-vec3 getColor(in vec2 fragCoord, in float depth) {
-    vec2 p = fragCoord.xy / iResolution.y - vec2(.9, .5);
-    vec3 cl = vec3(0.);
-    float d = depth;
+      renderer.render(elapsedTime);
+    };
 
-    for (int i = 0; i <= 5; i++) {
-        vec3 p = vec3(0, 0, 5.0) + normalize(vec3(p, -1.0)) * d;
-        float rz = map(p);
-        float f = clamp((rz - map(p + .1)) * 0.5, -1.1, 1.0);
+    const tick = (): void => {
+      if (!rendererRef.current || !shouldAnimateRef.current || document.hidden) {
+        animationFrameRef.current = null;
+        return;
+      }
 
-        float hue = mod(t * 1.0 + float(i) / 5.0, 1.0);
-        float hueRange = 0.5; 
-        float hueShift = 0.3; 
-        hue = mix(0.0, 1.0, smoothstep(0.0, hueRange, hue)) + hueShift;
+      const now = performance.now();
 
-        vec3 color = hslToRgb(vec3(hue, 0.0, 0.8));
+      // Cap at ~30fps — skip draw if less than 33ms since last render
+      if (now - lastRenderTimeRef.current >= TARGET_FRAME_MS) {
+        // Fixed-timestep accumulator: advance the anchor by exactly one
+        // interval per draw so main-thread jitter cannot flip the cadence
+        // between 2- and 3-vsync gaps (resetting to `now` compounds the
+        // jitter into visible judder during springs). When more than one
+        // full interval behind (loop was paused or a long frame stalled us),
+        // re-anchor to `now` instead of bursting catch-up draws.
+        lastRenderTimeRef.current =
+          now - lastRenderTimeRef.current >= TARGET_FRAME_MS * 2
+            ? now
+            : lastRenderTimeRef.current + TARGET_FRAME_MS;
+        renderFrame(now);
+      }
 
-        vec3 l = color + vec3(1.0, 5.5, 0.5) * f;
-        cl = cl * l + smoothstep(1.5, 0.0, rz) * 0.3 * l;
+      animationFrameRef.current = window.requestAnimationFrame(tick);
+    };
 
-        d += min(rz, 1.0);
+    const startLoop = (): void => {
+      if (animationFrameRef.current !== null || !rendererRef.current) return;
+      if (!shouldAnimateRef.current || document.hidden) return;
+      // Resume the shader clock where it left off instead of jumping to t=0.
+      startTimeRef.current = performance.now() - elapsedRef.current * 1000;
+      animationFrameRef.current = window.requestAnimationFrame(tick);
+    };
+
+    const stopLoop = (): void => {
+      if (animationFrameRef.current !== null) {
+        window.cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+    };
+
+    // A GPU reset (sleep/wake, driver restart) invalidates the context —
+    // rebuild the pipeline instead of leaving a frozen background. The lost
+    // renderer is kept aside so its restore listener stays alive until the
+    // replacement takes over.
+    const callbacks: RendererCallbacks = {
+      onLost: (): void => {
+        stopLoop();
+        if (rendererRef.current) {
+          lostRenderer = rendererRef.current;
+          rendererRef.current = null;
+        }
+      },
+      onRestored: (): void => {
+        void setup().then((ready) => {
+          if (ready) {
+            renderFrame(performance.now());
+            startLoop();
+            return;
+          }
+          // A canvas is bound for life to its first context type, so once
+          // WebGPU has claimed it the WebGL fallback can never attach — and a
+          // WebGPU device loss is one-shot, with no restore event to retry on.
+          // Remounting the canvas re-runs setup against a fresh element.
+          if (!cancelled) {
+            setCanvasGeneration((generation) => generation + 1);
+          }
+        });
+      },
+    };
+
+    const setup = async (): Promise<boolean> => {
+      const renderer = await createBackgroundRenderer(canvas, callbacks);
+      if (!renderer) return false;
+      if (cancelled) {
+        renderer.destroy();
+        return false;
+      }
+      lostRenderer?.destroy();
+      lostRenderer = null;
+      rendererRef.current?.destroy();
+      rendererRef.current = renderer;
+      resizeCanvas();
+      return true;
+    };
+
+    const handleResize = (): void => {
+      if (rendererRef.current) {
+        resizeCanvas();
+        // Resizing clears the drawing buffer — repaint if the loop is idle.
+        if (animationFrameRef.current === null) {
+          loopControlsRef.current?.renderOnce();
+        }
+      }
+    };
+
+    const handleVisibilityChange = (): void => {
+      if (document.hidden) {
+        stopLoop();
+      } else {
+        startLoop();
+      }
+    };
+
+    void setup().then((ready) => {
+      if (!ready) return;
+
+      loopControlsRef.current = {
+        start: startLoop,
+        stop: stopLoop,
+        renderOnce: () => renderFrame(startTimeRef.current + elapsedRef.current * 1000),
+      };
+
+      // Paint one frame immediately so the canvas is never uninitialized black,
+      // even when mounting paused (direct load of a content page).
+      startTimeRef.current = performance.now() - elapsedRef.current * 1000;
+      renderFrame(performance.now());
+      startLoop();
+
+      window.addEventListener('resize', handleResize);
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    });
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener('resize', handleResize);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+
+      stopLoop();
+      loopControlsRef.current = null;
+
+      lostRenderer?.destroy();
+      lostRenderer = null;
+
+      if (rendererRef.current) {
+        rendererRef.current.destroy();
+        rendererRef.current = null;
+      }
+    };
+  }, [mounted, canvasGeneration]);
+
+  // Animate only on the home screen; content routes get a static frame.
+  useEffect(() => {
+    shouldAnimateRef.current = isHome;
+    if (isHome) {
+      loopControlsRef.current?.start();
+    } else {
+      loopControlsRef.current?.stop();
     }
+  }, [isHome]);
 
-    return cl;
-}
-
-void mainImage(out vec4 fragColor, in vec2 fragCoord) {
-    vec3 color = vec3(0.0);
-    float depthSum = 5.2;
-
-    for (int i = 0; i < SAMPLES; i++) {
-        float depth = FOCAL_DISTANCE + (float(i) / float(SAMPLES - 1)) * FOCAL_RANGE;
-        vec3 sampleColor = getColor(fragCoord, depth);
-        float weight = 3.0 / (0.2 + abs(depth - FOCAL_DISTANCE));
-
-        color += sampleColor * weight;
-        depthSum += weight;
-    }
-
-    color /= depthSum;
-
-    fragColor = vec4(color, 1.0);
-}
-       // --------[ Original ShaderToy ends here ]---------- //
-       
-       void main(void)
-       {
-           mainImage(gl_FragColor, gl_FragCoord.xy);
-       }
-       
-    `;
-
-        // Create shaders
-        const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
-        const fragmentShader = createShader(
-            gl,
-            gl.FRAGMENT_SHADER,
-            fragmentShaderSource
-        );
-
-        // Create program
-        program = createProgram(gl, vertexShader, fragmentShader) as WebGLProgram;
-
-        // Set up buffers and attributes
-        const positionBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-        const positions = [-5.0, 5.0, 5.0, 5.0, -5.0, -5.0, 5.0, -5.0];
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
-        const positionAttributeLocation = gl.getAttribLocation(program, 'position');
-        gl.enableVertexAttribArray(positionAttributeLocation);
-        gl.vertexAttribPointer(positionAttributeLocation, 2, gl.FLOAT, false, 0, 0);
-
-        // Set up uniforms
-        uTimeLocation = gl.getUniformLocation(
-            program,
-            'uTime'
-        ) as WebGLUniformLocation;
-        uResolutionLocation = gl.getUniformLocation(
-            program,
-            'uResolution'
-        ) as WebGLUniformLocation;
-
-        // Animation loop
-        let startTime = performance.now();
-        const render = () => {
-            const currentTime = performance.now();
-            const elapsedTime = (currentTime - startTime) / 1000; // time in seconds
-
-            // Set background color based on theme
-            // Matches globals.css background tokens
-            const bgColor = theme === 'light' ? [0.98, 0.98, 0.98, 1] : [0.08, 0.08, 0.12, 1];
-            gl.clearColor(bgColor[0], bgColor[1], bgColor[2], bgColor[3]);
-            gl.clear(gl.COLOR_BUFFER_BIT);
-
-            gl.useProgram(program);
-            gl.uniform1f(uTimeLocation, elapsedTime);
-            gl.uniform2f(uResolutionLocation, gl.canvas.width, gl.canvas.height);
-            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-
-            requestAnimationFrame(render);
-        };
-        render();
-
-        const resizeCanvas = () => {
-            const canvas = canvasRef.current as unknown as HTMLCanvasElement;
-            if (canvas) {
-                canvas.width = window.innerWidth;
-                canvas.height = window.innerHeight;
-                gl.viewport(0, 0, canvas.width, canvas.height);
-
-                // Update the resolution uniform
-                if (program && uResolutionLocation) {
-                    gl.useProgram(program);
-                    gl.uniform2f(uResolutionLocation, canvas.width, canvas.height);
-                }
-            }
-        };
-
-        window.addEventListener('resize', resizeCanvas);
-        resizeCanvas(); // Call once to set initial size
-        // Cleanup
-        return () => {
-            window.removeEventListener('resize', resizeCanvas);
-            gl.deleteProgram(program);
-            gl.deleteShader(fragmentShader);
-            gl.deleteShader(vertexShader);
-            gl.deleteBuffer(positionBuffer);
-        };
-    }, [mounted, theme]);
-
-    // Don't render canvas until mounted to avoid hydration mismatch
-    return (
-        <div className="fixed top-0 left-0 w-full h-full z-[-1]">
-            {/* Theme-aware backdrop */}
-            <div className={`absolute inset-0 transition-colors duration-300 ${theme === 'light' ? 'bg-[#fafafa]' : 'bg-[#14141f]'}`} />
-            {mounted && (
-                <canvas
-                    ref={canvasRef}
-                    className="absolute top-0 left-0 w-full h-full opacity-60"
-                />
-            )}
-        </div>
-    );
+  return (
+    <div className="fixed top-0 left-0 w-full h-full z-[-1]" aria-hidden="true">
+      {/* Visible until the canvas boots (or if GL init fails); once the canvas
+          paints it is fully opaque — the dim is baked into the shaders — so the
+          compositor can occlusion-cull this underlay. */}
+      <div className="absolute inset-0 bg-[#14141f]" />
+      {mounted ? <canvas key={canvasGeneration} ref={canvasRef} className="absolute top-0 left-0 w-full h-full" /> : null}
+    </div>
+  );
 };
 
 export default WebGLBackground;

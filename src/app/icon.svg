@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Static mid-pulse frame of the animated favicon (AnimatedFavicon.tsx):
+       shown pre-hydration, with JS off, and under prefers-reduced-motion.
+       Follows the browser theme like the animated version: near-black dot on
+       light tab strips, white on dark ones. -->
+  <style>
+    :root { color: #0b0b14; }
+    @media (prefers-color-scheme: dark) { :root { color: #ffffff; } }
+  </style>
+  <circle cx="32" cy="32" r="22" fill="currentColor" opacity="0.18"/>
+  <circle cx="32" cy="32" r="16" fill="currentColor"/>
+</svg>
