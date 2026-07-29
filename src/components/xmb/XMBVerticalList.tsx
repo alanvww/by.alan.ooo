@@ -12,6 +12,7 @@ import XMBIcon from "./XMBIcon";
 import XMBBackPill from "./XMBBackPill";
 import { XMB_LAYOUT, XMB_ANIMATION, EASE, XMB_SHAKE } from "@/lib/xmb-constants";
 import { activateItem, isExternalLink } from "@/lib/xmb-navigation";
+import { isStandaloneDocRoute } from "@/lib/xmb-routes";
 import { focusListSibling } from "@/lib/focus";
 import { playNavigate, playConfirm } from "@/hooks/useKeyAudioFx";
 import type { RestrictedPing } from "./XMBRestrictedToast";
@@ -73,6 +74,11 @@ const XMBListItem = React.memo(forwardRef<HTMLElement, XMBListItemProps>(
         // follow its href natively.
         const isLinkRow = !!item.link && !item.action && !isFolder && !item.restricted;
         const isExternal = isLinkRow && isExternalLink(item.link!);
+        // Standalone doc routes are tiny static payloads — keep Next's default
+        // viewport prefetch so their loading skeleton never shows in production.
+        // Post links stay opted out so a list can't bulk-fetch every
+        // /[type]/[slug] payload (prefetch={false} also disables hover).
+        const prefetch = isLinkRow && !isExternal && isStandaloneDocRoute(item.link!) ? undefined : false;
 
         // Deny shake: replays whenever the parent bumps this row's nonce.
         // Edge-triggered — the ref starts at the mount value, so a row that
@@ -304,7 +310,7 @@ const XMBListItem = React.memo(forwardRef<HTMLElement, XMBListItemProps>(
 
         if (isLinkRow && !isExternal) {
             return (
-                <Link href={item.link!} prefetch={false} ref={ref as React.Ref<HTMLAnchorElement>} {...sharedProps}>
+                <Link href={item.link!} prefetch={prefetch} ref={ref as React.Ref<HTMLAnchorElement>} {...sharedProps}>
                     {content}
                 </Link>
             );

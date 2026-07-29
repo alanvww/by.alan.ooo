@@ -6,6 +6,8 @@ import { XMBMenuLoadingSkeleton } from '@/components/xmb/XMBLoadingSkeleton';
  * loads used to flash the wrong shape. No XMBContentLayout wrapper — its
  * corner gradient isn't rendered by XMBInterface and would shift on swap;
  * the skeleton draws its own header and transparent shell instead.
+ * Registered in LayoutWrapper's DOC_SKELETONS via STANDALONE_DOC_ROUTES
+ * (src/lib/xmb-routes.ts).
  */
 export default function Loading(): React.ReactElement {
   return <XMBMenuLoadingSkeleton />;

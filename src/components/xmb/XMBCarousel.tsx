@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { motion, AnimatePresence, useAnimationControls, useReducedMotion } from "motion/react";
 import { useXMBLoadingContext } from "@/lib/xmb-navigation-context";
 import { isExternalLink } from "@/lib/xmb-navigation";
+import { isStandaloneDocRoute } from "@/lib/xmb-routes";
 import { focusListSibling } from "@/lib/focus";
 import type { XMBItem } from "@/lib/xmb-types";
 import XMBIcon from "./XMBIcon";
@@ -74,6 +75,11 @@ const XMBCarouselCard = React.memo(({ item, index, setSize, scrollOffset, onSele
   // navigating, and an anchor would follow its href natively.
   const isLinkCard = !!item.link && !item.action && item.type !== 'folder' && !item.restricted;
   const isExternal = isLinkCard && isExternalLink(item.link!);
+  // Standalone doc routes are tiny static payloads — keep Next's default
+  // viewport prefetch so their loading skeleton never shows in production.
+  // Post links stay opted out so the carousel can't bulk-fetch every
+  // /[type]/[slug] payload (prefetch={false} also disables hover).
+  const prefetch = isLinkCard && !isExternal && isStandaloneDocRoute(item.link!) ? undefined : false;
 
   // Deny shake: replays whenever the parent bumps this card's nonce.
   // Edge-triggered — the ref starts at the mount value, so a card that
@@ -252,7 +258,7 @@ const XMBCarouselCard = React.memo(({ item, index, setSize, scrollOffset, onSele
 
   if (isLinkCard && !isExternal) {
     return (
-      <MotionLink href={item.link!} prefetch={false} {...sharedProps}>
+      <MotionLink href={item.link!} prefetch={prefetch} {...sharedProps}>
         {cardContent}
       </MotionLink>
     );

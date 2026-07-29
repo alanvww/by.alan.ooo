@@ -9,18 +9,33 @@ import XMBLoadingSkeleton, {
 } from './xmb/XMBLoadingSkeleton';
 import XMBLaunchFlash from './xmb/XMBLaunchFlash';
 import { useXMBLoadingContext } from '@/lib/xmb-navigation-context';
+import { normalizePathname, type StandaloneDocRoute } from '@/lib/xmb-routes';
 
 /**
  * The overlay paints over the destination route's own loading boundary until
- * finishNavigation, so it must match the destination's shape. Every internal
- * href the menu can start a navigation for is the home menu, a standalone
- * document page, or a /[type]/[slug] post — so the article fallback is
- * correct by exhaustion, not a wrong-shape catch-all.
+ * finishNavigation, so it must match the destination's shape. Doc routes are
+ * matched on the normalized pathname (query/hash/trailing slash stripped);
+ * keying the map by StandaloneDocRoute makes TypeScript demand a skeleton
+ * whenever a route joins STANDALONE_DOC_ROUTES. Everything else the menu can
+ * navigate to is a /[type]/[slug] post, which the article fallback covers.
  */
+const DOC_SKELETONS: Record<StandaloneDocRoute, React.ComponentType> = {
+  '/': XMBMenuLoadingSkeleton,
+  '/cv': CVLoadingSkeleton,
+  '/stack-and-gear': StackGearLoadingSkeleton,
+};
+
+const POST_PATHNAME = /^\/[^/]+\/[^/]+$/;
+
 function skeletonForHref(pendingHref: string | null): React.ReactElement {
-  if (pendingHref === '/') return <XMBMenuLoadingSkeleton />;
-  if (pendingHref === '/cv') return <CVLoadingSkeleton />;
-  if (pendingHref === '/stack-and-gear') return <StackGearLoadingSkeleton />;
+  const pathname = normalizePathname(pendingHref);
+  const DocSkeleton = pathname && DOC_SKELETONS[pathname as StandaloneDocRoute];
+  if (DocSkeleton) return <DocSkeleton />;
+  if (process.env.NODE_ENV !== 'production' && pathname && !POST_PATHNAME.test(pathname)) {
+    console.warn(
+      `LayoutWrapper: no skeleton mapped for "${pathname}" — the article-shaped fallback will paint over that route's own loading.tsx. Register it in STANDALONE_DOC_ROUTES and DOC_SKELETONS.`,
+    );
+  }
   return <XMBLoadingSkeleton />;
 }
 
