@@ -14,17 +14,16 @@ const XMBPreview = ({ item }: XMBPreviewProps) => {
     <motion.div
       initial={{ opacity: 0, x: 100 }}
       animate={{ opacity: 1, x: 0 }}
-      // Exit is an opacity-only fast tween (not the shared spring): this
-      // subtree holds a full-viewport blurred backdrop, and springing it
-      // out concurrently with a category switch's own springs causes jank.
+      // Exit is an opacity-only fast tween (quicker than the shared TWEEN):
+      // this subtree holds a full-viewport blurred backdrop, and animating
+      // it out concurrently with a category switch's own motion causes jank.
       exit={{ opacity: 0, transition: { duration: 0.13, ease: EASE.EXIT } }}
-      transition={XMB_ANIMATION.SPRING_CONFIG}
+      transition={XMB_ANIMATION.TWEEN}
       // Visual echo of the already-announced selected item: hiding it from AT
       // removes the duplicate reading AND the stale ghost that lingers in the
       // tree during the AnimatePresence exit animation.
       aria-hidden="true"
       className="absolute inset-0 z-10 pointer-events-none"
-      style={{ willChange: 'transform, opacity' }}
     >
       {/* Background Dim/Blur */}
       {item.image && (
@@ -45,9 +44,12 @@ const XMBPreview = ({ item }: XMBPreviewProps) => {
         <motion.div
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            transition={{ delay: 0.04, ...XMB_ANIMATION.SPRING_CONFIG }}
-            className="w-full max-w-[450px] aspect-video bg-xmb-fg/5 rounded-lg overflow-hidden border-2 border-xmb-fg/20 shadow-[0_0_50px_var(--color-xmb-shadow-glow)]"
-            style={{ willChange: 'transform, opacity' }}
+            transition={{ delay: 0.04, ...XMB_ANIMATION.TWEEN }}
+            // relative: the containing block for the next/image fill cover.
+            // The permanent willChange hint that used to sit here was
+            // accidentally serving that role — motion promotes layers on its
+            // own while the springs run, so the hint itself was pure cost.
+            className="relative w-full max-w-[450px] aspect-video bg-xmb-fg/5 rounded-lg overflow-hidden border-2 border-xmb-fg/20 shadow-[0_0_50px_var(--color-xmb-shadow-glow)]"
         >
             {item.image ? (
                 <Image
@@ -69,7 +71,7 @@ const XMBPreview = ({ item }: XMBPreviewProps) => {
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.08, ...XMB_ANIMATION.SPRING_CONFIG }}
+                transition={{ delay: 0.08, ...XMB_ANIMATION.TWEEN }}
             >
                 <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-xmb-fg drop-shadow-lg">
                     {item.title}
@@ -80,7 +82,7 @@ const XMBPreview = ({ item }: XMBPreviewProps) => {
             <motion.p
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.12, ...XMB_ANIMATION.SPRING_CONFIG }}
+                transition={{ delay: 0.12, ...XMB_ANIMATION.TWEEN }}
                 className="text-lg md:text-xl text-xmb-fg/70 font-light leading-relaxed line-clamp-3 md:line-clamp-4"
             >
                 {item.description}
@@ -104,7 +106,7 @@ const XMBPreview = ({ item }: XMBPreviewProps) => {
       </div>
 
       {/* Selector Glow Effect - Hidden on mobile if needed, or moved */}
-      <div className="hidden md:block absolute left-[15%] top-1/2 -translate-y-1/2 w-4 h-4 bg-xmb-fg rounded-full blur-md animate-pulse shadow-[0_0_20px_var(--color-xmb-glow)]" />
+      <div className="hidden md:block absolute left-[15%] top-1/2 -translate-y-1/2 w-4 h-4 bg-xmb-fg rounded-full blur-md animate-pulse motion-reduce:animate-none motion-reduce:opacity-75 shadow-[0_0_20px_var(--color-xmb-glow)]" />
     </motion.div>
   );
 };

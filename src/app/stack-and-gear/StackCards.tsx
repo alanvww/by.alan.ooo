@@ -9,7 +9,11 @@ function StackItem({ item }: { item: StackGearItem }): ReactElement {
       href={item.href}
       target="_blank"
       rel="noopener noreferrer"
-      className="group flex h-full items-start gap-4 rounded-xl border border-xmb-fg/10 bg-xmb-fg/5 p-4 transition-all hover:border-xmb-fg/40 hover:bg-xmb-fg/10"
+      // active: press acknowledgement — on touch, hover never fires and the
+      // native tap highlight is suppressed globally, so this is the only
+      // feedback a tap gets. /50 steps past the /40 hover border so mouse
+      // presses read too. box-shadow keeps the global focus ring fading.
+      className="group flex h-full items-start gap-4 rounded-xl border border-xmb-fg/10 bg-xmb-fg/5 p-4 transition-[color,background-color,border-color,text-decoration-color,box-shadow] hover:border-xmb-fg/40 hover:bg-xmb-fg/10 active:border-xmb-fg/50 active:bg-xmb-fg/15"
     >
       {/* Fixed square tile so non-square logos (some sources are wide
           banners) letterbox consistently; the /10 fill lifts dark marks
@@ -28,7 +32,7 @@ function StackItem({ item }: { item: StackGearItem }): ReactElement {
             size={14}
             weight="bold"
             aria-hidden
-            className="mt-1 shrink-0 text-xmb-fg/40 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+            className="mt-1 shrink-0 text-xmb-fg/40 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 group-active:opacity-100"
           />
         </div>
         <p className="mt-1 text-sm font-extralight leading-relaxed text-xmb-fg/60">

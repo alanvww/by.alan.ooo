@@ -2,7 +2,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
+import { EASE } from '@/lib/xmb-constants';
 
 const XMBProgressIndicator = () => {
     type ProgressMode = 'day' | 'month' | 'year';
@@ -62,43 +63,49 @@ const XMBProgressIndicator = () => {
     const filledSegments = Math.floor((progress.value / 100) * totalSegments);
 
     return (
-        <div 
-            className="flex items-center gap-3 cursor-pointer group pointer-events-auto hover:opacity-100 transition-opacity"
+        <div
+            className="flex items-center gap-3 cursor-pointer group pointer-events-auto"
             onClick={cycleMode}
             title="Click to cycle progress mode"
         >
-            {/* Local AnimatePresence shadows the route transition's
-                initial={false} presence context, which would otherwise
-                suppress the segments' mount animation entirely. Keying the
-                row by mode remounts it on each click so the stagger replays. */}
-            <AnimatePresence>
-                <div key={mode} className="flex items-center gap-0.5">
-                    {Array.from({ length: totalSegments }).map((_, i) => {
-                        const isFilled = i < filledSegments;
-                        return (
-                            <motion.div
-                                key={i}
-                                initial={{ opacity: 0, scale: 0.8 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                transition={{ delay: i * 0.02 }}
-                                className={`w-3 h-6 transition-all duration-150 ${
-                                    isFilled
-                                        ? 'bg-xmb-fg shadow-[0_0_8px_var(--color-xmb-shadow-glow)]'
-                                        : 'border border-xmb-fg/30'
-                                }`}
-                                style={{
-                                    // skewX (not transform) so it composes with
-                                    // the animated scale instead of being
-                                    // overwritten by it.
-                                    skewX: -15,
-                                    clipPath: 'polygon(20% 0%, 100% 0%, 80% 100%, 0% 100%)'
-                                }}
-                            />
-                        );
-                    })}
-                </div>
-            </AnimatePresence>
-            <div className="font-mono text-xs tracking-wider opacity-70 group-hover:opacity-100 transition-opacity">
+            {/* Keyed by mode: cycling remounts the row so the segments'
+                staggered entrance replays. A bare keyed swap happens within a
+                single React commit — old and new rows never coexist in the
+                DOM, so the header layout can't jump. */}
+            <div key={mode} className="flex items-center gap-0.5">
+                {Array.from({ length: totalSegments }).map((_, i) => {
+                    const isFilled = i < filledSegments;
+                    return (
+                        <motion.div
+                            key={i}
+                            initial={{ opacity: 0, scale: 0.8 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ delay: i * 0.02, duration: 0.3, ease: EASE.SOFT }}
+                            // border-transparent on the filled branch keeps
+                            // border-width constant, so fill flips only tween
+                            // paint-tier properties.
+                            className={`w-3 h-6 transition-[background-color,box-shadow,border-color] duration-150 ${
+                                isFilled
+                                    ? 'border border-transparent bg-xmb-fg shadow-[0_0_8px_var(--color-xmb-shadow-glow)]'
+                                    : 'border border-xmb-fg/30'
+                            }`}
+                            style={{
+                                // skewX — the motion style prop, not a raw
+                                // transform string (which motion would erase
+                                // while animating scale) — composes with the
+                                // entrance scale to slant the segments beyond
+                                // the clipPath's own angle.
+                                skewX: -15,
+                                clipPath: 'polygon(20% 0%, 100% 0%, 80% 100%, 0% 100%)'
+                            }}
+                        />
+                    );
+                })}
+            </div>
+            {/* min-w-[9ch]: widest content is "100.000%" — 8 mono chars plus
+                tracking-wider letter-spacing — so label/value changes never
+                resize the widget or shift layout. */}
+            <div className="font-mono text-xs tracking-wider opacity-70 group-hover:opacity-100 transition-opacity min-w-[9ch]">
                 <div className="text-[10px] leading-none mb-0.5 text-xmb-fg/60">{progress.label}</div>
                 <div className="text-xmb-fg font-semibold">{progress.value.toFixed(3)}%</div>
             </div>

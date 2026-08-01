@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useSyncExternalStore } from 'react';
 
 // Module-level key-press store shared by all useKeyPressed subscribers: the
 // window listeners attach once (on first subscribe) and every subscriber is
@@ -56,10 +56,10 @@ const subscribeToStore = (listener: () => void): (() => void) => {
 };
 
 /**
- * Whether a single key is currently held down. Prefer this over
- * usePressedKeys in perf-sensitive trees: subscribing at the leaf keeps
- * keydown/keyup from re-rendering large ancestors (e.g. the command bar's
- * backdrop-blurred pill, where a mid-animation re-render caused jank).
+ * Whether a single key is currently held down. Subscribing at the leaf
+ * keeps keydown/keyup from re-rendering large ancestors (e.g. the command
+ * bar's backdrop-blurred pill, where a mid-animation re-render caused
+ * jank) — every consumer subscribes per-key through this hook.
  */
 export function useKeyPressed(key: string): boolean {
   return useSyncExternalStore(
@@ -68,48 +68,4 @@ export function useKeyPressed(key: string): boolean {
     // Nothing can be held during SSR/hydration.
     () => false,
   );
-}
-
-/**
- * Tracks which keys are currently held down on the window.
- * Returns the same Set reference when nothing changed so consumers
- * don't trigger spurious renders.
- */
-export function usePressedKeys(): Set<string> {
-  const [pressedKeys, setPressedKeys] = useState<Set<string>>(() => new Set());
-
-  useEffect(() => {
-    const onDown = (event: KeyboardEvent) => {
-      setPressedKeys((prev) => {
-        if (prev.has(event.key)) return prev;
-        const next = new Set(prev);
-        next.add(event.key);
-        return next;
-      });
-    };
-    const onUp = (event: KeyboardEvent) => {
-      setPressedKeys((prev) => {
-        if (!prev.has(event.key)) return prev;
-        const next = new Set(prev);
-        next.delete(event.key);
-        return next;
-      });
-    };
-
-    // Same rationale as the store's blur reset: focus loss eats keyups.
-    const onBlur = () => {
-      setPressedKeys((prev) => (prev.size === 0 ? prev : new Set()));
-    };
-
-    window.addEventListener('keydown', onDown);
-    window.addEventListener('keyup', onUp);
-    window.addEventListener('blur', onBlur);
-    return () => {
-      window.removeEventListener('keydown', onDown);
-      window.removeEventListener('keyup', onUp);
-      window.removeEventListener('blur', onBlur);
-    };
-  }, []);
-
-  return pressedKeys;
 }

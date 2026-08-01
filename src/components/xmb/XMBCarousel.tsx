@@ -4,7 +4,18 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import Image from 'next/image';
 import Link from 'next/link';
-import { motion, AnimatePresence, useAnimationControls, useReducedMotion } from "motion/react";
+import {
+  motion,
+  AnimatePresence,
+  animate,
+  useAnimationControls,
+  useFollowValue,
+  useMotionValue,
+  useMotionValueEvent,
+  useReducedMotion,
+  useTransform,
+} from "motion/react";
+import type { AnimationPlaybackControls, FollowValueOptions, MotionValue } from "motion/react";
 import { useXMBLoadingContext } from "@/lib/xmb-navigation-context";
 import { isExternalLink } from "@/lib/xmb-navigation";
 import { isStandaloneDocRoute } from "@/lib/xmb-routes";
@@ -39,7 +50,14 @@ interface XMBCarouselCardProps {
   index: number;
   /** Total item count — aria-setsize keeps "n of N" correct despite culling. */
   setSize: number;
-  scrollOffset: number;
+  /**
+   * Frame-rate scroll position as a motion value. Cards subscribe via
+   * useTransform/useFollowValue, so wheel/touch/snap writes never re-render
+   * them.
+   */
+  scrollOffset: MotionValue<number>;
+  /** Quantized selection: true when Math.round(scrollOffset) === index. */
+  isActive: boolean;
   onSelect: (index: number) => void;
   /** Restricted item activated by click: shake + toast owner. */
   onRestricted?: (item: XMBItem, index: number) => void;
@@ -50,23 +68,72 @@ interface XMBCarouselCardProps {
   isPointerEvent?: () => boolean;
 }
 
-const XMBCarouselCard = React.memo(({ item, index, setSize, scrollOffset, onSelect, onRestricted, shakeNonce, startNavigation, isPointerEvent }: XMBCarouselCardProps) => {
-  const distance = index - scrollOffset;
-  const absDistance = Math.abs(distance);
-  const isActive = Math.round(scrollOffset) === index;
-  const isVisible = absDistance <= XMB_CAROUSEL.VISIBLE_ITEMS;
-  const yOffset = distance * XMB_CAROUSEL.ITEM_SPACING;
+const XMBCarouselCard = React.memo(({ item, index, setSize, scrollOffset, isActive, onSelect, onRestricted, shakeNonce, startNavigation, isPointerEvent }: XMBCarouselCardProps) => {
+  // Every positional channel is a pure function of (index − scrollOffset),
+  // computed as motion-value transforms so frame-rate scrolling stays out of
+  // React entirely. Continuous falloff so cards don't snap their
+  // scale/opacity/x when the rounded `isActive` flips at half-integer scroll
+  // positions. `near` covers the first step away from center (smooth scale +
+  // opacity drop), `far` handles items further out with a gentler decay.
+  const yTarget = useTransform(scrollOffset, (offset) =>
+    (index - offset) * XMB_CAROUSEL.ITEM_SPACING
+  );
+  const xTarget = useTransform(scrollOffset, (offset) =>
+    24 * (1 - Math.min(Math.abs(index - offset), 1))
+  );
+  const scaleTarget = useTransform(scrollOffset, (offset) => {
+    const absDistance = Math.abs(index - offset);
+    const near = Math.min(absDistance, 1);
+    const far = Math.max(0, absDistance - 1);
+    return Math.max(0.42, 1 - near * 0.45 - far * 0.05);
+  });
+  const opacityTarget = useTransform(scrollOffset, (offset) => {
+    const absDistance = Math.abs(index - offset);
+    const near = Math.min(absDistance, 1);
+    const far = Math.max(0, absDistance - 1);
+    return Math.max(0.08, 1 - near * 0.7 - far * 0.1);
+  });
+  const zIndex = useTransform(scrollOffset, (offset) =>
+    100 - Math.floor(Math.abs(index - offset))
+  );
+  // Same float-accurate hit-test window as before (±VISIBLE_ITEMS), tracked
+  // per frame — the widened *mount* window below never widens hit targets.
+  const pointerEvents = useTransform(scrollOffset, (offset) =>
+    Math.abs(index - offset) <= XMB_CAROUSEL.VISIBLE_ITEMS ? 'auto' : 'none'
+  );
 
-  // Continuous falloff so cards don't snap their scale/opacity/x when the
-  // rounded `isActive` flips at half-integer scroll positions. `near` covers
-  // the first step away from center (smooth scale + opacity drop), `far`
-  // handles items further out with a gentler decay.
-  const near = Math.min(absDistance, 1);
-  const far = Math.max(0, absDistance - 1);
-  const scale = Math.max(0.42, 1 - near * 0.45 - far * 0.05);
-  const opacity = Math.max(0.08, 1 - near * 0.7 - far * 0.1);
-  const xShift = 24 * (1 - near);
-  const zIndex = 100 - Math.floor(absDistance);
+  // The followers replace the old animate-prop retargeting one-for-one: the
+  // same 300ms ease-out tween chases the same per-frame targets, so keyboard
+  // jumps, the wheel trail and the settle snap keep the shipped motion. (The
+  // useSpring followers these replace were REAL springs — the only consumers
+  // of the old "spring" configs that ever sprang, since useSpring's
+  // attachFollow path defaults type:'spring' — and settled visibly slower
+  // than the shipped tween.) FOLLOW_TWEEN, not TWEEN: attachFollow takes
+  // durations in milliseconds, and its explicit `type` is load-bearing
+  // because attachFollow spreads options over a `type: "spring"` default
+  // (see XMB_ANIMATION). A follower initializes at the source's current
+  // value, so a card culled back into the mount window paints at its real
+  // transform on first render — the same no-ghost guarantee initial={false}
+  // gave the old animate props.
+  //
+  // MotionConfig reducedMotion="user" (MotionProvider) only governs animate
+  // props — it can't see style-driven motion values — so the gate is manual,
+  // same pattern as XMBVerticalList's entrance, and mirrors motion's
+  // reducedMotion="user" split: transform channels (y/x/scale) snap via a
+  // duration-0 follower (replacing the old raw-target style swap, and
+  // sparing reduce users the cost of dead per-frame animations), while
+  // opacity keeps the full tween. reduceMotion is constant for the life of
+  // a mounted component, so the ternary picks one stable options object —
+  // and useFollowValue re-attaches on JSON.stringify(options) changes, so
+  // even an OS-level flip mid-session resolves correctly.
+  const reduceMotion = useReducedMotion();
+  const transformFollow: FollowValueOptions = reduceMotion
+    ? { type: 'keyframes', duration: 0 }
+    : XMB_ANIMATION.FOLLOW_TWEEN;
+  const y = useFollowValue(yTarget, transformFollow);
+  const x = useFollowValue(xTarget, transformFollow);
+  const scale = useFollowValue(scaleTarget, transformFollow);
+  const opacity = useFollowValue(opacityTarget, XMB_ANIMATION.FOLLOW_TWEEN);
 
   // Link cards render as real anchors (SPA <Link> internally, <a target=
   // _blank> externally); folders/actions stay divs so the window dispatcher
@@ -86,7 +153,6 @@ const XMBCarouselCard = React.memo(({ item, index, setSize, scrollOffset, onSele
   // remounts with a stale ping (folder exit/re-entry, culling, layout
   // switch) never replays a ghost shake.
   const shakeControls = useAnimationControls();
-  const reduceMotion = useReducedMotion();
   const lastShakeNonceRef = useRef(shakeNonce);
   useEffect(() => {
     if (shakeNonce === lastShakeNonceRef.current) return;
@@ -162,24 +228,20 @@ const XMBCarouselCard = React.memo(({ item, index, setSize, scrollOffset, onSele
     // wider than the card), so the ring is suppressed and re-drawn on the
     // card box itself via group-focus-visible.
     className: "group absolute left-0 block w-full cursor-pointer outline-none focus-visible:ring-0 focus-visible:ring-offset-0",
+    // Position is fully style-driven (motion values), so a card entering the
+    // mount window paints at its current computed transform on first render —
+    // no "ghost in the center". initial={false} is kept for its second job:
+    // variant/initial propagation to children stays exactly as before.
     style: {
       top: '50%',
       zIndex,
-      pointerEvents: isVisible ? 'auto' : 'none',
-    } as React.CSSProperties,
-    // Cards entering the visibility window (after being culled by
-    // `visibleEntries`) would otherwise mount at identity (center,
-    // full scale, full opacity) and animate to their real position —
-    // a brief "ghost in the center" before they fly out. `initial=false`
-    // paints them at the computed target on first render instead.
-    initial: false,
-    animate: {
-      y: yOffset,
-      opacity,
-      x: xShift,
+      pointerEvents,
+      y,
+      x,
       scale,
+      opacity,
     },
-    transition: XMB_ANIMATION.SPRING_CONFIG,
+    initial: false,
     onClick: handleClick,
     onFocus: handleFocus,
     onKeyDown: handleTabKeyDown,
@@ -283,107 +345,129 @@ const XMBCarousel = ({ items, activeIndex, onSelect, onBack, onRestricted, restr
   const animationFrameRef = useRef<number | null>(null);
   const wheelDeltaRef = useRef<number>(0);
   const lastCommittedIndexRef = useRef<number>(activeIndex);
-  const snapFrameRef = useRef<number | null>(null);
+  const snapAnimationRef = useRef<AnimationPlaybackControls | null>(null);
   // Flips true when we initiate the parent commit ourselves, so the
   // activeIndex sync effect below knows not to overwrite scrollOffset
-  // (the rAF snap is already handling that transition smoothly).
+  // (the settle animation is already handling that transition smoothly).
   const selfCommittingRef = useRef<boolean>(false);
 
-  // Smooth scroll position - floating point for continuous scrolling
-  const [scrollOffset, setScrollOffset] = useState<number>(activeIndex);
-  const scrollOffsetRef = useRef<number>(activeIndex);
-  // eslint-disable-next-line react-hooks/refs -- render-phase mirror so wheel/rAF handlers read the latest committed offset without re-subscribing
-  scrollOffsetRef.current = scrollOffset;
+  // Smooth scroll position — floating point for continuous scrolling. A
+  // motion value, NOT React state: wheel/touch/settle write it at frame
+  // rate, and routing those writes through setState re-rendered the whole
+  // carousel (recomputing the culling and busting every card's memo) on
+  // every frame. Cards subscribe via useTransform/useFollowValue instead.
+  const scrollOffset = useMotionValue(activeIndex);
 
-  // Smoothly ease scrollOffset to an integer index via rAF. Used after a
+  // Quantized mirror of scrollOffset for the few things that genuinely need
+  // a React render — the cards' isActive styling/aria and the culling
+  // window. Updated only when the rounded value actually changes, never per
+  // frame.
+  const [roundedIndex, setRoundedIndex] = useState<number>(activeIndex);
+  const roundedIndexRef = useRef<number>(activeIndex);
+
+  // Debounce timer for the settle commit, armed imperatively on each offset
+  // write (the old implementation recreated a setTimeout effect per frame).
+  const commitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The timer can fire up to 50ms after it was armed, so it reads its
+  // inputs from a ref refreshed by a passive effect instead of a possibly
+  // stale closure (the old effect re-armed on dep changes to stay fresh).
+  const commitArgsRef = useRef({ itemCount: items.length, onSelect });
+  useEffect(() => {
+    commitArgsRef.current = { itemCount: items.length, onSelect };
+  }, [items.length, onSelect]);
+
+  // Smoothly ease scrollOffset to an integer index. Used after a
   // wheel/touch scroll settles so cards drift the last fractional step
   // instead of springing twice (once to the float rest, then back to the
-  // rounded value when the parent re-syncs).
+  // rounded value when the parent re-syncs). The bezier (1/3, 1, 2/3, 1)
+  // is the exact analytic form of the old hand-rolled ease-out cubic
+  // 1-(1-t)^3 over the same 220ms. Like the old rAF loop, this imperative
+  // animation deliberately runs under reduced motion too: it only moves the
+  // offset, and reduced-motion users' cards snap along via their duration-0
+  // followers.
   const snapScrollOffsetTo = useCallback((target: number) => {
-    if (snapFrameRef.current !== null) {
-      cancelAnimationFrame(snapFrameRef.current);
-      snapFrameRef.current = null;
-    }
-    const start = scrollOffsetRef.current;
-    if (start === target) return;
+    snapAnimationRef.current?.stop();
+    snapAnimationRef.current = null;
+    if (scrollOffset.get() === target) return;
+    snapAnimationRef.current = animate(scrollOffset, target, {
+      duration: 0.22,
+      ease: [1 / 3, 1, 2 / 3, 1],
+    });
+  }, [scrollOffset]);
 
-    const startTime = performance.now();
-    const duration = 220;
-
-    const step = () => {
-      const t = Math.min((performance.now() - startTime) / duration, 1);
-      const eased = 1 - Math.pow(1 - t, 3); // ease-out cubic
-      setScrollOffset(start + (target - start) * eased);
-      if (t < 1) {
-        snapFrameRef.current = requestAnimationFrame(step);
-      } else {
-        snapFrameRef.current = null;
-      }
-    };
-    snapFrameRef.current = requestAnimationFrame(step);
-  }, []);
-
-  // Sync scrollOffset with activeIndex when it changes externally (keyboard nav).
-  // Skip if the change came from our own debounced commit — snapScrollOffsetTo
-  // is already mid-flight and an instant reset would undo it.
+  // Sync scrollOffset with activeIndex when it changes externally (keyboard
+  // nav). The offset retargets instantly — each card's follower tween
+  // carries the visible motion, exactly as it did when this was a setState.
+  // Skip if the
+  // change came from our own debounced commit — snapScrollOffsetTo is
+  // already mid-flight and an instant reset would undo it.
   useEffect(() => {
     if (selfCommittingRef.current) {
       selfCommittingRef.current = false;
       lastCommittedIndexRef.current = activeIndex;
       return;
     }
-    if (snapFrameRef.current !== null) {
-      cancelAnimationFrame(snapFrameRef.current);
-      snapFrameRef.current = null;
-    }
-    setScrollOffset(activeIndex);
+    snapAnimationRef.current?.stop();
+    snapAnimationRef.current = null;
+    scrollOffset.set(activeIndex);
     lastCommittedIndexRef.current = activeIndex;
-  }, [activeIndex]);
+  }, [activeIndex, scrollOffset]);
 
-  // Debounced sync: commit to parent + smooth-snap our own scrollOffset
-  // when scroll settles. Both happen together so the cards animate once.
-  // This branch only runs for wheel/touch-originated moves (keyboard-driven
-  // activeIndex changes update lastCommittedIndexRef before it fires), so
-  // the tick below never double-plays on keyboard navigation.
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      const roundedIndex = Math.round(scrollOffset);
+  // Every offset write lands here (wheel/touch rAF batches, the settle
+  // animation's frames, external syncs): keep the quantized index fresh and
+  // re-arm the 50ms settle debounce. When scroll settles, commit to parent +
+  // smooth-snap our own scrollOffset together so the cards animate once.
+  // The commit branch only runs for wheel/touch-originated moves (keyboard-
+  // driven activeIndex changes update lastCommittedIndexRef before it
+  // fires), so the tick below never double-plays on keyboard navigation.
+  useMotionValueEvent(scrollOffset, "change", (latest) => {
+    const rounded = Math.round(latest);
+    if (rounded !== roundedIndexRef.current) {
+      roundedIndexRef.current = rounded;
+      setRoundedIndex(rounded);
+    }
+
+    if (commitTimerRef.current !== null) {
+      clearTimeout(commitTimerRef.current);
+    }
+    commitTimerRef.current = setTimeout(() => {
+      commitTimerRef.current = null;
+      const { itemCount, onSelect: commitSelect } = commitArgsRef.current;
+      const settledIndex = Math.round(scrollOffset.get());
       if (
-        roundedIndex !== lastCommittedIndexRef.current &&
-        roundedIndex >= 0 &&
-        roundedIndex < items.length
+        settledIndex !== lastCommittedIndexRef.current &&
+        settledIndex >= 0 &&
+        settledIndex < itemCount
       ) {
-        lastCommittedIndexRef.current = roundedIndex;
+        lastCommittedIndexRef.current = settledIndex;
         selfCommittingRef.current = true;
         playNavigate();
-        onSelect(roundedIndex);
-        snapScrollOffsetTo(roundedIndex);
+        commitSelect(settledIndex);
+        snapScrollOffsetTo(settledIndex);
       }
     }, 50);
+  });
 
-    return () => clearTimeout(timer);
-  }, [scrollOffset, activeIndex, items.length, onSelect, snapScrollOffsetTo]);
-
-  // Cancel any in-flight snap frame on unmount
+  // Cancel the in-flight settle animation and any pending commit on unmount
   useEffect(() => {
     return () => {
-      if (snapFrameRef.current !== null) {
-        cancelAnimationFrame(snapFrameRef.current);
-        snapFrameRef.current = null;
+      snapAnimationRef.current?.stop();
+      snapAnimationRef.current = null;
+      if (commitTimerRef.current !== null) {
+        clearTimeout(commitTimerRef.current);
+        commitTimerRef.current = null;
       }
     };
   }, []);
-  
+
   // Mouse wheel handler - smooth continuous scrolling
   const handleWheel = useCallback((e: WheelEvent) => {
     e.preventDefault();
 
     // User is steering again — abort any settle-snap in progress so the
     // wheel input owns scrollOffset.
-    if (snapFrameRef.current !== null) {
-      cancelAnimationFrame(snapFrameRef.current);
-      snapFrameRef.current = null;
-    }
+    snapAnimationRef.current?.stop();
+    snapAnimationRef.current = null;
 
     wheelDeltaRef.current += e.deltaY * XMB_CAROUSEL.SCROLL_SENSITIVITY;
 
@@ -396,25 +480,21 @@ const XMBCarousel = ({ items, activeIndex, onSelect, onBack, onRestricted, restr
       wheelDeltaRef.current = 0;
       animationFrameRef.current = null;
 
-      setScrollOffset((prev) => {
-        const newOffset = prev + delta;
-        return Math.max(0, Math.min(items.length - 1, newOffset));
-      });
+      const newOffset = scrollOffset.get() + delta;
+      scrollOffset.set(Math.max(0, Math.min(items.length - 1, newOffset)));
     });
-  }, [items.length]);
-  
+  }, [items.length, scrollOffset]);
+
   // Touch handlers for mobile swipe support
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     touchStartY.current = e.touches[0].clientY;
   }, []);
-  
+
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     if (!touchStartY.current) return;
 
-    if (snapFrameRef.current !== null) {
-      cancelAnimationFrame(snapFrameRef.current);
-      snapFrameRef.current = null;
-    }
+    snapAnimationRef.current?.stop();
+    snapAnimationRef.current = null;
 
     const currentY = e.touches[0].clientY;
     const deltaY = touchStartY.current - currentY;
@@ -434,13 +514,11 @@ const XMBCarousel = ({ items, activeIndex, onSelect, onBack, onRestricted, restr
       wheelDeltaRef.current = 0;
       animationFrameRef.current = null;
 
-      setScrollOffset((prev) => {
-        const newOffset = prev + touchDelta;
-        return Math.max(0, Math.min(items.length - 1, newOffset));
-      });
+      const newOffset = scrollOffset.get() + touchDelta;
+      scrollOffset.set(Math.max(0, Math.min(items.length - 1, newOffset)));
     });
-  }, [items.length]);
-  
+  }, [items.length, scrollOffset]);
+
   const handleTouchEnd = useCallback(() => {
     touchStartY.current = 0;
   }, []);
@@ -449,9 +527,9 @@ const XMBCarousel = ({ items, activeIndex, onSelect, onBack, onRestricted, restr
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-    
+
     const wheelHandler = (e: WheelEvent) => handleWheel(e);
-    
+
     container.addEventListener('wheel', wheelHandler, { passive: false });
     return () => {
       container.removeEventListener('wheel', wheelHandler);
@@ -463,14 +541,20 @@ const XMBCarousel = ({ items, activeIndex, onSelect, onBack, onRestricted, restr
     };
   }, [handleWheel]);
 
+  // Mount window is quantized to roundedIndex (culling shouldn't run per
+  // frame) at ±(VISIBLE_ITEMS + 1): a superset of the old float-based
+  // ±(VISIBLE_ITEMS + 1) window at every offset. For integer i,
+  // |i − offset| ≤ V+1 implies |i − round(offset)| ≤ V+1.5, and since the
+  // left side is an integer, ≤ V+1 — so a card can never pop in/out
+  // mid-flight.
   const visibleEntries = useMemo(() => {
     return items
       .map((item, index) => ({ item, index }))
-      .filter(({ index }) => Math.abs(index - scrollOffset) <= XMB_CAROUSEL.VISIBLE_ITEMS + 1);
-  }, [items, scrollOffset]);
+      .filter(({ index }) => Math.abs(index - roundedIndex) <= XMB_CAROUSEL.VISIBLE_ITEMS + 1);
+  }, [items, roundedIndex]);
 
   return (
-    <motion.div 
+    <motion.div
       ref={containerRef}
       role="listbox"
       aria-label="Folder contents"
@@ -509,6 +593,7 @@ const XMBCarousel = ({ items, activeIndex, onSelect, onBack, onRestricted, restr
                 index={index}
                 setSize={items.length}
                 scrollOffset={scrollOffset}
+                isActive={index === roundedIndex}
                 onSelect={onSelect}
                 onRestricted={onRestricted}
                 shakeNonce={restrictedPing?.id === item.id ? restrictedPing.nonce : 0}

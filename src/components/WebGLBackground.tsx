@@ -216,14 +216,30 @@ const WebGLBackground = (): ReactElement => {
     };
   }, [mounted, canvasGeneration]);
 
-  // Animate only on the home screen; content routes get a static frame.
+  // Animate only on the home screen — and only for users who haven't asked
+  // for reduced motion; content routes get a static frame. MotionConfig's
+  // reducedMotion="user" covers declarative motion only, so this imperative
+  // loop gates itself (same pattern as AnimatedFavicon). Under the reduce
+  // preference renderOnce holds a fully formed static frame — on a cold
+  // load that's the t=0 plasma.
   useEffect(() => {
-    shouldAnimateRef.current = isHome;
-    if (isHome) {
-      loopControlsRef.current?.start();
-    } else {
-      loopControlsRef.current?.stop();
-    }
+    const motionMql = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+    const applyMotionPreference = (): void => {
+      shouldAnimateRef.current = isHome && !motionMql.matches;
+      if (shouldAnimateRef.current) {
+        loopControlsRef.current?.start();
+      } else {
+        loopControlsRef.current?.stop();
+        if (isHome) {
+          loopControlsRef.current?.renderOnce();
+        }
+      }
+    };
+
+    applyMotionPreference();
+    motionMql.addEventListener('change', applyMotionPreference);
+    return () => motionMql.removeEventListener('change', applyMotionPreference);
   }, [isHome]);
 
   return (

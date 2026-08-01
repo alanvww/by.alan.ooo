@@ -152,7 +152,7 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
                     <motion.header 
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.1, ...XMB_ANIMATION.SPRING_CONFIG }}
+                        transition={{ delay: 0.1, ...XMB_ANIMATION.TWEEN }}
                         className="mb-16 text-center"
                     >
                         <div className="flex items-center justify-center gap-4 mb-8">
@@ -232,11 +232,11 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
                                     playNavigate();
                                     router.push(`/${type}/${siblings.prev!.slug}`);
                                 }}
-                                className="group pointer-events-auto touch-manipulation min-h-11 flex flex-col items-start justify-center gap-1 text-xmb-fg/70 hover:text-xmb-fg transition-all"
+                                className="group pointer-events-auto touch-manipulation min-h-11 flex flex-col items-start justify-center gap-1 text-xmb-fg/70 hover:text-xmb-fg active:text-xmb-fg transition-[color,box-shadow]"
                             >
                                 <span className="text-[10px] font-mono uppercase tracking-widest">Previous</span>
                                 <span className="text-sm font-light tracking-wide flex items-center gap-2">
-                                    <XMBIcon name="ArrowLeft" size={12} className="group-hover:-translate-x-1 transition-transform" />
+                                    <XMBIcon name="ArrowLeft" size={12} className="group-hover:-translate-x-1 group-active:-translate-x-1 transition-transform" />
                                     {!isCoarse && <XMBKeycap label="←" hoverable pressed={prevPressed} />}
                                     <span className="max-w-[32vw] truncate">{siblings.prev.title}</span>
                                 </span>
@@ -252,13 +252,13 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
                                     playNavigate();
                                     router.push(`/${type}/${siblings.next!.slug}`);
                                 }}
-                                className="group pointer-events-auto touch-manipulation min-h-11 flex flex-col items-end justify-center gap-1 text-xmb-fg/70 hover:text-xmb-fg transition-all"
+                                className="group pointer-events-auto touch-manipulation min-h-11 flex flex-col items-end justify-center gap-1 text-xmb-fg/70 hover:text-xmb-fg active:text-xmb-fg transition-[color,box-shadow]"
                             >
                                 <span className="text-[10px] font-mono uppercase tracking-widest">Next</span>
                                 <span className="text-sm font-light tracking-wide flex items-center gap-2">
                                     <span className="max-w-[32vw] truncate">{siblings.next.title}</span>
                                     {!isCoarse && <XMBKeycap label="→" hoverable pressed={nextPressed} />}
-                                    <XMBIcon name="CaretRight" size={12} className="group-hover:translate-x-1 transition-transform" />
+                                    <XMBIcon name="CaretRight" size={12} className="group-hover:translate-x-1 group-active:translate-x-1 transition-transform" />
                                 </span>
                             </button>
                         )}

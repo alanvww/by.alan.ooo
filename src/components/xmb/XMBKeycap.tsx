@@ -1,7 +1,6 @@
 'use client';
 
 import React from 'react';
-import { motion } from 'motion/react';
 import { cn } from '@/lib/utils';
 
 interface XMBKeycapProps {
@@ -17,19 +16,21 @@ const PRESSED = 'bg-xmb-fg text-background shadow-[0_0_15px_var(--color-xmb-glow
 const IDLE = 'border border-xmb-fg/20 bg-xmb-fg/5 text-xmb-fg/70';
 const HOVER = 'hover:bg-xmb-fg hover:text-background hover:shadow-[0_0_15px_var(--color-xmb-glow)]';
 
+// Press pose and its transitions live in .xmb-keycap (globals.css) —
+// CSS instead of a motion spring so keypress feedback never runs on the
+// JS thread while navigation springs are saturating it.
 const XMBKeycap = ({ label, pressed = false, hoverable = false, className }: XMBKeycapProps) => (
-  <motion.span
+  <span
+    data-pressed={pressed}
     className={cn(
-      'w-6 h-6 rounded flex items-center justify-center text-[10px] font-mono transition-all duration-150',
+      'xmb-keycap w-6 h-6 rounded flex items-center justify-center text-[10px] font-mono',
       hoverable && HOVER,
       pressed ? PRESSED : IDLE,
       className,
     )}
-    animate={{ scale: pressed ? 1.05 : 1 }}
-    transition={{ type: 'spring', stiffness: 500, damping: 30 }}
   >
     {label}
-  </motion.span>
+  </span>
 );
 
 export default XMBKeycap;

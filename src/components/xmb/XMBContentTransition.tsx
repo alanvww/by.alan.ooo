@@ -1,26 +1,21 @@
 'use client';
 
-import { motion, AnimatePresence } from 'motion/react';
 import { ReactNode } from 'react';
-import { EASE } from '@/lib/xmb-constants';
 
 /**
- * Route-transition wrapper. Incoming page zooms from 0.94 with a soft fade,
- * outgoing scales up to 1.08 — together they sell the XMB scene-launch.
+ * Route-content wrapper. The scale/fade route transition that used to live
+ * here never ran (a keyless AnimatePresence child with initial={false} has
+ * no mount to animate and no exit that can fire), but its permanent
+ * will-change layer was silently acting as the containing block for the
+ * scene's fixed-position children. `contain: layout` preserves that —
+ * removing it would re-anchor XMBInterface's fixed inset-0 (and the
+ * bottom-anchored command bar) to the taller mobile layout viewport,
+ * sinking them under browser chrome.
  */
 export default function XMBContentTransition({ children }: { children: ReactNode }) {
   return (
-    <AnimatePresence mode="popLayout" initial={false}>
-      <motion.div
-        initial={{ opacity: 0, scale: 0.94 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 1.08 }}
-        transition={{ duration: 0.4, ease: EASE.MOVE }}
-        className="w-full h-full origin-center"
-        style={{ willChange: 'transform, opacity' }}
-      >
-        {children}
-      </motion.div>
-    </AnimatePresence>
+    <div className="w-full h-full" style={{ contain: 'layout' }}>
+      {children}
+    </div>
   );
 }

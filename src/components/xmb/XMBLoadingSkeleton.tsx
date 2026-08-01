@@ -1,28 +1,21 @@
 'use client';
 
 import React from 'react';
-import { motion } from 'motion/react';
 import { XMB_LAYOUT, XMB_OVERLAY } from '@/lib/xmb-constants';
 import { cn } from '@/lib/utils';
 import XMBIcon from './XMBIcon';
 import XMBHeader from './XMBHeader';
 
+// CSS keyframe (xmb-shimmer in globals.css) instead of a motion rAF loop:
+// 20-60 bars are live while a route streams/hydrates — exactly when the
+// main thread has the least headroom.
 const ShimmerBar = ({ className }: { className?: string }) => (
-    <motion.div
+    <div
         aria-hidden="true"
         className={cn('relative overflow-hidden bg-xmb-fg/5 rounded-lg', className)}
     >
-        <motion.div
-            initial={{ x: '-100%' }}
-            animate={{ x: '100%' }}
-            transition={{ 
-                duration: 1.5, 
-                repeat: Infinity, 
-                ease: 'linear' 
-            }}
-            className="absolute inset-0 bg-gradient-to-r from-transparent via-xmb-fg/10 to-transparent"
-        />
-    </motion.div>
+        <div className="xmb-shimmer absolute inset-0 bg-gradient-to-r from-transparent via-xmb-fg/10 to-transparent" />
+    </div>
 );
 
 interface XMBLoadingSkeletonProps {
