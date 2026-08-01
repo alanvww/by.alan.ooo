@@ -385,9 +385,24 @@ code[data-theme] span {
   animation: xmb-dot-wave 1.8s ease-in-out infinite;
 }
 
+/* Reduce variant: opacity-only, centered on the old static 0.25 plate. */
+@keyframes xmb-dot-wave-fade {
+  0%, 100% {
+    opacity: 0.18;
+  }
+  50% {
+    opacity: 0.32;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .dot-wave-dot {
-    animation: none;
+    /* Gentler, not zero: the wave exists to say "an image is still
+       loading", and a static grid deleted that signal for exactly the
+       users with no other cue. Movement goes; a soft fade stays.
+       `backwards` holds the first keyframe through each dot's stagger
+       delay so the grid never steps from the base 0.25. */
+    animation: xmb-dot-wave-fade 1.8s ease-in-out infinite backwards;
     opacity: 0.25;
   }
 }

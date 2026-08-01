@@ -688,6 +688,10 @@ const XMBVerticalList = React.memo(
                                 onClick={onHeaderClick}
                                 initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
+                                // Tokened: without a transition these chrome
+                                // fades fell to motion's ~0.3s defaults and
+                                // visibly lagged the stage's 0.12s entrance.
+                                transition={{ duration: 0.15, ease: EASE.MOVE }}
                                 className="mb-4 text-lg md:text-xl font-light tracking-wide text-xmb-fg/80 focus-visible:outline-none"
                             >
                                 {activeCategory.title}
@@ -701,6 +705,7 @@ const XMBVerticalList = React.memo(
                             <motion.div
                                 initial={{ opacity: 0, y: -10 }}
                                 animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.15, ease: EASE.MOVE }}
                                 className="mb-4"
                             >
                                 <XMBBackPill onBack={backPillAction} />

@@ -33,7 +33,7 @@ export function MDXImage({ src, alt, caption, width, height }: MDXImageProps) {
   const imageClass = 'relative w-full h-auto object-cover opacity-90 group-hover:opacity-100 transition-opacity'
 
   return (
-    <figure className="my-10 group relative rounded-xl overflow-hidden border border-xmb-fg/10 bg-xmb-fg/5 shadow-2xl transition-colors duration-250 hover:border-xmb-fg/30">
+    <figure className="my-10 group relative rounded-xl overflow-hidden border border-xmb-fg/10 bg-xmb-fg/5 shadow-2xl transition-colors duration-150 hover:border-xmb-fg/30">
       {/* Unknown dimensions (some external URLs) get a 16:9 stage while
           loading so the wave has room; known dimensions already reserve the
           exact box via the width/height attributes. */}
