@@ -23,9 +23,11 @@ const XMBProgressIndicator = () => {
             } else if (mode === 'month') {
                 const year = now.getFullYear();
                 const month = now.getMonth();
-                const daysInMonth = new Date(year, month + 1, 0).getDate();
-                const currentDay = now.getDate() + (now.getHours() / 24);
-                value = (currentDay / daysInMonth) * 100;
+                const startOfMonth = new Date(year, month, 1);
+                const endOfMonth = new Date(year, month + 1, 1);
+                const totalMs = endOfMonth.getTime() - startOfMonth.getTime();
+                const currentMs = now.getTime() - startOfMonth.getTime();
+                value = (currentMs / totalMs) * 100;
                 label = 'MONTH';
             } else {
                 const year = now.getFullYear();
