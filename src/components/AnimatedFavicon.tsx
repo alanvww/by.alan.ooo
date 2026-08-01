@@ -8,6 +8,7 @@ const RADIUS_MIN = 10;
 const RADIUS_MAX = 22;
 const PERIOD_MS = 2000;
 const FRAME_MS = 40; // 25fps — Chrome samples these at its own pace; the wall-clock phase keeps every sampled pose time-correct
+const FRAME_COUNT = PERIOD_MS / FRAME_MS; // 50 distinct poses per theme — the pulse is a deterministic cosine
 
 /**
  * Pulsing-dot favicon: redraws a dot on an offscreen canvas and feeds it to
@@ -89,7 +90,7 @@ const AnimatedFavicon = (): null => {
 
     const darkMql = window.matchMedia('(prefers-color-scheme: dark)');
 
-    const draw = (pulse: number): void => {
+    const paint = (pulse: number): void => {
       // Max extent stays under the canvas edge: 22 radius + 8 glow < 32.
       const radius = RADIUS_MIN + (RADIUS_MAX - RADIUS_MIN) * pulse;
       const onDarkStrip = darkMql.matches;
@@ -103,15 +104,35 @@ const AnimatedFavicon = (): null => {
       ctx.arc(CENTER, CENTER, radius, 0, Math.PI * 2);
       ctx.fill();
       ctx.shadowBlur = 0;
+    };
 
-      // Per frame the only DOM write is our own link's href — rival
-      // demotion is event-driven via the MutationObserver above.
+    // Kept for the reduce path's static frame — its mid-pulse 0.5 pose has
+    // no integer frame index, so it encodes directly.
+    const draw = (pulse: number): void => {
+      paint(pulse);
       link.href = canvas.toDataURL('image/png');
     };
 
+    // The pulse only ever shows FRAME_COUNT quantized poses per theme
+    // (quantization error is ≤0.4px on the 64px canvas), so memoize the
+    // encoded data URLs lazily — no mount-time burst, and after one 2s loop
+    // the per-tick PNG encode + base64 (the only unconditional recurring
+    // main-thread work in the app) drops to a Map lookup. Flushed on theme
+    // flips, which change every pose's colors.
+    const frameCache = new Map<number, string>();
+
     const tick = (): void => {
       const phase = (performance.now() / PERIOD_MS) % 1;
-      draw(0.5 - 0.5 * Math.cos(2 * Math.PI * phase));
+      const frame = Math.round(phase * FRAME_COUNT) % FRAME_COUNT;
+      let href = frameCache.get(frame);
+      if (href === undefined) {
+        paint(0.5 - 0.5 * Math.cos((2 * Math.PI * frame) / FRAME_COUNT));
+        href = canvas.toDataURL('image/png');
+        frameCache.set(frame, href);
+      }
+      // Per tick the only DOM write is our own link's href — rival
+      // demotion is event-driven via the MutationObserver above.
+      link.href = href;
     };
 
     let intervalId: number | null = null;
@@ -146,6 +167,7 @@ const AnimatedFavicon = (): null => {
     // Repaint immediately when the browser theme flips; the timer (if any)
     // keeps running untouched.
     const applyTheme = (): void => {
+      frameCache.clear();
       if (motionMql.matches) {
         draw(0.5);
       } else {

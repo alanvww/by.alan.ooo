@@ -19,12 +19,14 @@ export const XMB_LAYOUT = {
  * ENTER — elements arriving, near-instant kickoff
  * EXIT  — fast departure, clears the stage quickly
  * SOFT  — glows, highlights, subtle ambient state changes
+ * FADE  — symmetric crossfades (motion's default easeInOut, made explicit)
  */
 export const EASE = {
   MOVE:  [0.16, 1, 0.3, 1]     as [number, number, number, number],
   ENTER: [0.05, 0.7, 0.1, 1.0] as [number, number, number, number],
   EXIT:  [0.4, 0, 1, 1]        as [number, number, number, number],
   SOFT:  [0.25, 0.1, 0.25, 1]  as [number, number, number, number],
+  FADE:  [0.42, 0, 0.58, 1]    as [number, number, number, number],
 };
 
 export const XMB_ANIMATION = {
@@ -99,9 +101,9 @@ export const XMB_GESTURE = {
 
 /**
  * Theme-aware className snippets for layered chrome (overlays, fades, etc.).
- * Kept as classNames rather than CSS color tokens so they don't add to the
- * animated @property set on <html> (each animated token paints all consumers
- * for the 300ms transition).
+ * Kept as classNames, not CSS color tokens: the scrims are the *inverse* of
+ * --color-xmb-fg (a dark scrim pairs with the white foreground of the dark
+ * theme), so tokenizing them against the fg tokens would flip them.
  */
 export const XMB_OVERLAY = {
   /** Full-screen frosted overlay used by post viewer / loading skeleton / 404. */

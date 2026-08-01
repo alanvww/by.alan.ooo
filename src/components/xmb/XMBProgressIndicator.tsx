@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
+import { EASE } from '@/lib/xmb-constants';
 
 const XMBProgressIndicator = () => {
     type ProgressMode = 'day' | 'month' | 'year';
@@ -60,8 +61,8 @@ const XMBProgressIndicator = () => {
     const filledSegments = Math.floor((progress.value / 100) * totalSegments);
 
     return (
-        <div 
-            className="flex items-center gap-3 cursor-pointer group pointer-events-auto hover:opacity-100 transition-opacity"
+        <div
+            className="flex items-center gap-3 cursor-pointer group pointer-events-auto"
             onClick={cycleMode}
             title="Click to cycle progress mode"
         >
@@ -73,14 +74,19 @@ const XMBProgressIndicator = () => {
                             key={i}
                             initial={{ opacity: 0, scale: 0.8 }}
                             animate={{ opacity: 1, scale: 1 }}
-                            transition={{ delay: i * 0.02 }}
-                            className={`w-3 h-6 transition-all duration-150 ${
-                                isFilled 
-                                    ? 'bg-xmb-fg shadow-[0_0_8px_var(--color-xmb-shadow-glow)]'
+                            transition={{ delay: i * 0.02, duration: 0.3, ease: EASE.SOFT }}
+                            // border-transparent on the filled branch keeps
+                            // border-width constant, so fill flips only tween
+                            // paint-tier properties. The parallelogram comes
+                            // entirely from the clipPath (motion owns this
+                            // element's transform, so an inline skew here
+                            // would be silently erased every frame).
+                            className={`w-3 h-6 transition-[background-color,box-shadow,border-color] duration-150 ${
+                                isFilled
+                                    ? 'border border-transparent bg-xmb-fg shadow-[0_0_8px_var(--color-xmb-shadow-glow)]'
                                     : 'border border-xmb-fg/30'
                             }`}
-                            style={{ 
-                                transform: 'skewX(-15deg)',
+                            style={{
                                 clipPath: 'polygon(20% 0%, 100% 0%, 80% 100%, 0% 100%)'
                             }}
                         />

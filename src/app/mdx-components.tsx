@@ -13,7 +13,10 @@ import { Tabs, Tab } from '@/components/mdx/Tabs'
 import { MDXImage } from '@/components/mdx/MDXImage'
 import { getLocalImageDimensions } from '@/lib/content-assets'
 
-const LINK_CLASS = 'text-xmb-fg/90 underline underline-offset-4 decoration-xmb-fg/20 hover:decoration-xmb-fg/60 transition-all duration-150'
+// box-shadow stays in the transition list: the global focus ring
+// (ring-2 in globals.css) compiles to box-shadow and should fade in like
+// every other state change, not snap.
+const LINK_CLASS = 'text-xmb-fg/90 underline underline-offset-4 decoration-xmb-fg/20 hover:decoration-xmb-fg/60 transition-[color,background-color,border-color,text-decoration-color,box-shadow] duration-150'
 
 // XMB-styled MDX components (theme-aware: xmb-fg token works in both light and dark mode)
 export const mdxComponents: MDXComponents = {

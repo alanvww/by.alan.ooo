@@ -64,7 +64,7 @@ export default function CVPage(): React.ReactElement {
                     <a
                       href="/assets/cv.pdf"
                       download
-                      className="rounded-full border border-xmb-fg/20 bg-xmb-fg/5 px-6 py-3 inline-flex items-center gap-3 text-sm font-mono uppercase tracking-widest hover:bg-xmb-fg/10 hover:border-xmb-fg/40 transition-all"
+                      className="rounded-full border border-xmb-fg/20 bg-xmb-fg/5 px-6 py-3 inline-flex items-center gap-3 text-sm font-mono uppercase tracking-widest hover:bg-xmb-fg/10 hover:border-xmb-fg/40 active:border-xmb-fg/50 active:bg-xmb-fg/15 transition-[color,background-color,border-color,text-decoration-color,box-shadow] duration-150"
                     >
                       <XMBIcon name="DownloadSimple" size={18} />
                       Download PDF

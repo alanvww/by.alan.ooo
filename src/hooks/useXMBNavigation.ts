@@ -162,7 +162,6 @@ export function useXMBNavigation(
   }, [setCategoryIndex, setItemIndex, setNavigationPath]);
 
   const moveUp = useCallback(() => {
-    playNavigate();
     // The first item is the floor inside folders, and also at the root of
     // the paged layout while the list is showing — deselecting to -1 there
     // would pop the stage back to categories, so exiting stays on the BACK
@@ -170,15 +169,23 @@ export function useXMBNavigation(
     // deselects to the category row (-1).
     const inPagedList = layoutModeRef.current === 'paged' && itemIndexRef.current >= 0;
     const floor = navigationPathRef.current.length > 0 || inPagedList ? 0 : -1;
-    setItemIndex(Math.max(itemIndexRef.current - 1, floor));
+    const next = Math.max(itemIndexRef.current - 1, floor);
+    // Clamp before the tick: the "you moved" sound must not play at a list
+    // boundary where nothing moves (useIndexPan.step already gets this right).
+    if (next !== itemIndexRef.current) {
+      playNavigate();
+    }
+    setItemIndex(next);
   }, [setItemIndex]);
 
   const moveDown = useCallback(() => {
-    playNavigate();
-    setItemIndex((() => {
-      const max = currentItemsRef.current.length - 1;
-      return itemIndexRef.current < max ? itemIndexRef.current + 1 : itemIndexRef.current;
-    })());
+    const max = currentItemsRef.current.length - 1;
+    const next = itemIndexRef.current < max ? itemIndexRef.current + 1 : itemIndexRef.current;
+    // Same boundary rule as moveUp: no tick when the clamp holds position.
+    if (next !== itemIndexRef.current) {
+      playNavigate();
+    }
+    setItemIndex(next);
   }, [setItemIndex]);
 
   const confirm = useCallback(() => {

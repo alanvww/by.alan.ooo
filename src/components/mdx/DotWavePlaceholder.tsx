@@ -11,7 +11,7 @@ export function DotWavePlaceholder({ className }: { className?: string }) {
   return (
     <div
       aria-hidden="true"
-      className={`grid place-items-center overflow-hidden text-xmb-fg ${className ?? ''}`}
+      className={`dot-wave-grid grid place-items-center overflow-hidden text-xmb-fg ${className ?? ''}`}
       style={{
         gridTemplateColumns: `repeat(${COLS}, 1fr)`,
         gridTemplateRows: `repeat(${ROWS}, 1fr)`,

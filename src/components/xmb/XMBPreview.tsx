@@ -24,7 +24,6 @@ const XMBPreview = ({ item }: XMBPreviewProps) => {
       // tree during the AnimatePresence exit animation.
       aria-hidden="true"
       className="absolute inset-0 z-10 pointer-events-none"
-      style={{ willChange: 'transform, opacity' }}
     >
       {/* Background Dim/Blur */}
       {item.image && (
@@ -46,8 +45,11 @@ const XMBPreview = ({ item }: XMBPreviewProps) => {
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ delay: 0.04, ...XMB_ANIMATION.SPRING_CONFIG }}
-            className="w-full max-w-[450px] aspect-video bg-xmb-fg/5 rounded-lg overflow-hidden border-2 border-xmb-fg/20 shadow-[0_0_50px_var(--color-xmb-shadow-glow)]"
-            style={{ willChange: 'transform, opacity' }}
+            // relative: the containing block for the next/image fill cover.
+            // The permanent willChange hint that used to sit here was
+            // accidentally serving that role — motion promotes layers on its
+            // own while the springs run, so the hint itself was pure cost.
+            className="relative w-full max-w-[450px] aspect-video bg-xmb-fg/5 rounded-lg overflow-hidden border-2 border-xmb-fg/20 shadow-[0_0_50px_var(--color-xmb-shadow-glow)]"
         >
             {item.image ? (
                 <Image
@@ -104,7 +106,7 @@ const XMBPreview = ({ item }: XMBPreviewProps) => {
       </div>
 
       {/* Selector Glow Effect - Hidden on mobile if needed, or moved */}
-      <div className="hidden md:block absolute left-[15%] top-1/2 -translate-y-1/2 w-4 h-4 bg-xmb-fg rounded-full blur-md animate-pulse shadow-[0_0_20px_var(--color-xmb-glow)]" />
+      <div className="hidden md:block absolute left-[15%] top-1/2 -translate-y-1/2 w-4 h-4 bg-xmb-fg rounded-full blur-md animate-pulse motion-reduce:animate-none motion-reduce:opacity-75 shadow-[0_0_20px_var(--color-xmb-glow)]" />
     </motion.div>
   );
 };

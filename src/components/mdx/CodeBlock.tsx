@@ -1,5 +1,5 @@
 "use client"
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 /**
  * Frame around highlighted code blocks. Syntax highlighting itself is done
@@ -12,14 +12,28 @@ export function CodeBlock({
   ...props
 }: React.HTMLAttributes<HTMLPreElement> & { 'data-language'?: string }) {
   const preRef = useRef<HTMLPreElement>(null)
+  const copiedTimerRef = useRef<number | null>(null)
   const [copied, setCopied] = useState(false)
   const language = props['data-language']
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current !== null) window.clearTimeout(copiedTimerRef.current)
+    }
+  }, [])
 
   const copyToClipboard = async (): Promise<void> => {
     try {
       await navigator.clipboard.writeText(preRef.current?.textContent ?? '')
       setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      // Re-arm rather than stack: a second copy inside the 2s window must
+      // restart the "Copied!" confirmation, not get cut short by the first
+      // timer (same pattern as XMBTouchButton's hold timers).
+      if (copiedTimerRef.current !== null) window.clearTimeout(copiedTimerRef.current)
+      copiedTimerRef.current = window.setTimeout(() => {
+        copiedTimerRef.current = null
+        setCopied(false)
+      }, 2000)
     } catch (err) {
       console.error('Failed to copy code:', err)
     }
