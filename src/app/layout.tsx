@@ -81,13 +81,6 @@ export default async function RootLayout({
             {children}
           </XMBNavigationProvider>
         </MotionProvider>
-        {/* transitions.dev Refine panel — dev-only tuning tool, never bundled.
-            Remove alongside `npx transitions-refine stop`. Module scripts are
-            deferred, so the no-sync-scripts warning doesn't apply. */}
-        {process.env.NODE_ENV === "development" && (
-          // eslint-disable-next-line @next/next/no-sync-scripts
-          <script type="module" src="http://localhost:7331/inject.js" />
-        )}
       </body>
     </html>
   );
