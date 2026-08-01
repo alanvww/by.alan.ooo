@@ -70,9 +70,12 @@ const XMBProgressIndicator = () => {
             {/* Local AnimatePresence shadows the route transition's
                 initial={false} presence context, which would otherwise
                 suppress the segments' mount animation entirely. Keying the
-                row by mode remounts it on each click so the stagger replays. */}
-            <AnimatePresence>
-                <div key={mode} className="flex items-center gap-0.5">
+                row by mode remounts it on each click so the stagger replays.
+                popLayout takes the outgoing row out of flow immediately —
+                without it, old and new rows sit side by side for a frame and
+                the header layout jumps. */}
+            <AnimatePresence mode="popLayout">
+                <motion.div key={mode} className="flex items-center gap-0.5">
                     {Array.from({ length: totalSegments }).map((_, i) => {
                         const isFilled = i < filledSegments;
                         return (
@@ -96,9 +99,12 @@ const XMBProgressIndicator = () => {
                             />
                         );
                     })}
-                </div>
+                </motion.div>
             </AnimatePresence>
-            <div className="font-mono text-xs tracking-wider opacity-70 group-hover:opacity-100 transition-opacity">
+            {/* min-w-[9ch]: widest content is "100.000%" — 8 mono chars plus
+                tracking-wider letter-spacing (~63px, just over 8ch) — so
+                label/value changes never resize the widget or shift layout. */}
+            <div className="font-mono text-xs tracking-wider opacity-70 group-hover:opacity-100 transition-opacity min-w-[9ch]">
                 <div className="text-[10px] leading-none mb-0.5 text-xmb-fg/60">{progress.label}</div>
                 <div className="text-xmb-fg font-semibold">{progress.value.toFixed(3)}%</div>
             </div>
