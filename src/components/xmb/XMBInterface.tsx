@@ -1,7 +1,7 @@
 // src/components/xmb/XMBInterface.tsx
 'use client';
 
-import React, { useMemo, useEffect, useRef, useState, useCallback } from 'react';
+import React, { useMemo, useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import type { XMBCategory, XMBItem } from '@/lib/xmb-types';
 import { useXMBNavigation } from '@/hooks/useXMBNavigation';
@@ -296,8 +296,20 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
   // (itemIndex >= 0 → stays 'list'). A second Escape listener would fight it
   // and jump folders straight back to the category row.
 
+  // handleCategorySelect reads categoryIndex/layoutMode through refs (same
+  // pattern as handleRowFocus in XMBVerticalList) so it keeps ONE identity
+  // for the life of the menu — closing over them minted a new handler on
+  // every category switch, busting every memoized XMBCategoryCell on
+  // exactly the event the memo exists for.
+  const categoryIndexRef = useRef(categoryIndex);
+  const layoutModeRef = useRef(layoutMode);
+  useLayoutEffect(() => {
+    categoryIndexRef.current = categoryIndex;
+    layoutModeRef.current = layoutMode;
+  });
+
   const handleCategorySelect = useCallback((idx: number) => {
-    if (layoutMode === 'paged' && idx === categoryIndex) {
+    if (layoutModeRef.current === 'paged' && idx === categoryIndexRef.current) {
       // Tapping the already-active category ENTERS its list. (It used to
       // reset to the categories stage, which made the initially-active
       // column impossible to open by touch.)
@@ -313,8 +325,8 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
     // or a stale path gets replayed inside the newly selected category.
     setNavigationPath([]);
     // In paged mode, selecting item 0 is what derives the 'list' stage.
-    setItemIndex(layoutMode === 'paged' ? 0 : -1);
-  }, [categoryIndex, layoutMode, setCategoryIndex, setItemIndex, setNavigationPath]);
+    setItemIndex(layoutModeRef.current === 'paged' ? 0 : -1);
+  }, [setCategoryIndex, setItemIndex, setNavigationPath]);
 
   // Drag-with-snap on the paged list: vertical pan travel commits discrete
   // index steps (clamped at 0 — deselect-to-categories stays on the visible

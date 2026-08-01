@@ -512,7 +512,7 @@ const XMBVerticalList = React.memo(
         // Re-measure whenever the column's size changes: breakpoint/viewport
         // resizes AND the selected row's description mounting/unmounting
         // (it appears and collapses instantly, shifting lower rows).
-        // Retargeting the y spring mid-flight is fine in motion.
+        // Retargeting the y tween mid-flight is fine in motion.
         useEffect(() => {
             const column = columnRef.current;
             if (!column) {
@@ -591,23 +591,27 @@ const XMBVerticalList = React.memo(
         const cursor = useMotionValue(displayIndex);
         const selectionLevel = useMotionValue(hasSelection ? 1 : 0);
 
-        // Both values are retargeted with LIST_SPRING passed VERBATIM (no
-        // added `type`): imperative animate() and the old per-row transition
-        // prop share motion's animateMotionValue resolution, so whatever
-        // that config resolves to, the cursor moves exactly like the rows
-        // used to. Imperative animate() bypasses MotionConfig's
-        // reducedMotion (see the entrance above), so reduced motion jumps
-        // here instead.
+        // Both values are retargeted with the shared TWEEN — the honest
+        // form of the 300ms ease-out these values have always shipped with
+        // (the old LIST_SPRING config never sprang; see XMB_ANIMATION).
+        // Imperative animate() and the old per-row transition prop share
+        // motion's animateMotionValue resolution, so the cursor moves
+        // exactly like the rows used to. Imperative animate() bypasses
+        // MotionConfig's reducedMotion (see the entrance above), so reduced
+        // motion jumps here instead.
         const prevListKeyRef = useRef<string | null>(null);
         useLayoutEffect(() => {
-            // Item ids are globally unique, so category id + first item id
-            // identifies the rendered list: category switches AND folder
-            // drills/backs swap it. A swap remounts the rows (fresh item.id
-            // keys), and the old rows mounted at their rest pose — so the
+            // Category id + folder path identifies the rendered level:
+            // category switches AND folder drills/backs change it. (Item
+            // ids are NOT globally unique — type-slug ids repeat across the
+            // Featured/tag/Recent/All folders — so keying on the first
+            // item's id could alias two different levels and let the cursor
+            // sweep across freshly remounted rows.) A level swap remounts
+            // the rows (fresh item.id keys) at their rest pose — so the
             // cursor must land instantly (the same situation where the
             // column's y does its duration-0 snap) rather than sweep the new
-            // rows in from the previous list's index.
-            const listKey = `${activeCategory.id}:${currentItems[0]?.id ?? ''}`;
+            // rows in from the previous level's index.
+            const listKey = `${activeCategory.id}:${navigationPath.join('/')}`;
             const isListSwap = prevListKeyRef.current !== listKey;
             prevListKeyRef.current = listKey;
             const selectionTarget = hasSelection ? 1 : 0;
@@ -616,9 +620,9 @@ const XMBVerticalList = React.memo(
                 selectionLevel.jump(selectionTarget);
                 return;
             }
-            animate(cursor, displayIndex, { ...XMB_ANIMATION.LIST_SPRING });
-            animate(selectionLevel, selectionTarget, { ...XMB_ANIMATION.LIST_SPRING });
-        }, [activeCategory.id, currentItems, cursor, displayIndex, hasSelection, reduceMotion, selectionLevel]);
+            animate(cursor, displayIndex, { ...XMB_ANIMATION.TWEEN });
+            animate(selectionLevel, selectionTarget, { ...XMB_ANIMATION.TWEEN });
+        }, [activeCategory.id, cursor, displayIndex, hasSelection, navigationPath, reduceMotion, selectionLevel]);
 
         // Halt any in-flight cursor animation when the list unmounts.
         useEffect(() => () => {
@@ -720,7 +724,7 @@ const XMBVerticalList = React.memo(
                             willChange: "transform",
                         }}
                         animate={{ y: containerOffset }}
-                        transition={columnPhase === 'snap' ? { duration: 0 } : XMB_ANIMATION.LIST_SPRING}
+                        transition={columnPhase === 'snap' ? { duration: 0 } : XMB_ANIMATION.TWEEN}
                     >
                         {currentItems.map((item, idx) => (
                             <XMBListItem

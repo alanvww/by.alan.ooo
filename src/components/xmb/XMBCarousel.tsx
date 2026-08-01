@@ -9,13 +9,13 @@ import {
   AnimatePresence,
   animate,
   useAnimationControls,
+  useFollowValue,
   useMotionValue,
   useMotionValueEvent,
   useReducedMotion,
-  useSpring,
   useTransform,
 } from "motion/react";
-import type { AnimationPlaybackControls, MotionValue } from "motion/react";
+import type { AnimationPlaybackControls, FollowValueOptions, MotionValue } from "motion/react";
 import { useXMBLoadingContext } from "@/lib/xmb-navigation-context";
 import { isExternalLink } from "@/lib/xmb-navigation";
 import { isStandaloneDocRoute } from "@/lib/xmb-routes";
@@ -52,7 +52,8 @@ interface XMBCarouselCardProps {
   setSize: number;
   /**
    * Frame-rate scroll position as a motion value. Cards subscribe via
-   * useTransform/useSpring, so wheel/touch/snap writes never re-render them.
+   * useTransform/useFollowValue, so wheel/touch/snap writes never re-render
+   * them.
    */
   scrollOffset: MotionValue<number>;
   /** Quantized selection: true when Math.round(scrollOffset) === index. */
@@ -101,29 +102,38 @@ const XMBCarouselCard = React.memo(({ item, index, setSize, scrollOffset, isActi
     Math.abs(index - offset) <= XMB_CAROUSEL.VISIBLE_ITEMS ? 'auto' : 'none'
   );
 
-  // The springs replace the old animate-prop retargeting one-for-one: the
-  // same SPRING_CONFIG chases the same per-frame targets, so keyboard jumps,
-  // the wheel trail and the settle snap keep their exact motion. useSpring
-  // initializes at the source's current value, so a card culled back into
-  // the mount window paints at its real transform on first render — the
-  // same no-ghost guarantee initial={false} gave the old animate props.
-  const ySpring = useSpring(yTarget, XMB_ANIMATION.SPRING_CONFIG);
-  const xSpring = useSpring(xTarget, XMB_ANIMATION.SPRING_CONFIG);
-  const scaleSpring = useSpring(scaleTarget, XMB_ANIMATION.SPRING_CONFIG);
-  const opacitySpring = useSpring(opacityTarget, XMB_ANIMATION.SPRING_CONFIG);
-
+  // The followers replace the old animate-prop retargeting one-for-one: the
+  // same 300ms ease-out tween chases the same per-frame targets, so keyboard
+  // jumps, the wheel trail and the settle snap keep the shipped motion. (The
+  // useSpring followers these replace were REAL springs — the only consumers
+  // of the old "spring" configs that ever sprang, since useSpring's
+  // attachFollow path defaults type:'spring' — and settled visibly slower
+  // than the shipped tween.) FOLLOW_TWEEN, not TWEEN: attachFollow takes
+  // durations in milliseconds, and its explicit `type` is load-bearing
+  // because attachFollow spreads options over a `type: "spring"` default
+  // (see XMB_ANIMATION). A follower initializes at the source's current
+  // value, so a card culled back into the mount window paints at its real
+  // transform on first render — the same no-ghost guarantee initial={false}
+  // gave the old animate props.
+  //
   // MotionConfig reducedMotion="user" (MotionProvider) only governs animate
   // props — it can't see style-driven motion values — so the gate is manual,
-  // same pattern as XMBVerticalList's entrance. This reproduces exactly what
-  // reducedMotion did to the old animate props: transform channels (y/x/
-  // scale) snap straight to their targets, while opacity keeps its spring
-  // (motion only makes positional/transform keys instant under reduced
-  // motion).
+  // same pattern as XMBVerticalList's entrance, and mirrors motion's
+  // reducedMotion="user" split: transform channels (y/x/scale) snap via a
+  // duration-0 follower (replacing the old raw-target style swap, and
+  // sparing reduce users the cost of dead per-frame animations), while
+  // opacity keeps the full tween. reduceMotion is constant for the life of
+  // a mounted component, so the ternary picks one stable options object —
+  // and useFollowValue re-attaches on JSON.stringify(options) changes, so
+  // even an OS-level flip mid-session resolves correctly.
   const reduceMotion = useReducedMotion();
-  const y = reduceMotion ? yTarget : ySpring;
-  const x = reduceMotion ? xTarget : xSpring;
-  const scale = reduceMotion ? scaleTarget : scaleSpring;
-  const opacity = opacitySpring;
+  const transformFollow: FollowValueOptions = reduceMotion
+    ? { type: 'keyframes', duration: 0 }
+    : XMB_ANIMATION.FOLLOW_TWEEN;
+  const y = useFollowValue(yTarget, transformFollow);
+  const x = useFollowValue(xTarget, transformFollow);
+  const scale = useFollowValue(scaleTarget, transformFollow);
+  const opacity = useFollowValue(opacityTarget, XMB_ANIMATION.FOLLOW_TWEEN);
 
   // Link cards render as real anchors (SPA <Link> internally, <a target=
   // _blank> externally); folders/actions stay divs so the window dispatcher
@@ -345,7 +355,7 @@ const XMBCarousel = ({ items, activeIndex, onSelect, onBack, onRestricted, restr
   // motion value, NOT React state: wheel/touch/settle write it at frame
   // rate, and routing those writes through setState re-rendered the whole
   // carousel (recomputing the culling and busting every card's memo) on
-  // every frame. Cards subscribe via useTransform/useSpring instead.
+  // every frame. Cards subscribe via useTransform/useFollowValue instead.
   const scrollOffset = useMotionValue(activeIndex);
 
   // Quantized mirror of scrollOffset for the few things that genuinely need
@@ -359,8 +369,8 @@ const XMBCarousel = ({ items, activeIndex, onSelect, onBack, onRestricted, restr
   // write (the old implementation recreated a setTimeout effect per frame).
   const commitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // The timer can fire up to 50ms after it was armed, so it reads its
-  // inputs from a ref kept fresh by render instead of a possibly stale
-  // closure (the old effect re-armed on dep changes to stay fresh).
+  // inputs from a ref refreshed by a passive effect instead of a possibly
+  // stale closure (the old effect re-armed on dep changes to stay fresh).
   const commitArgsRef = useRef({ itemCount: items.length, onSelect });
   useEffect(() => {
     commitArgsRef.current = { itemCount: items.length, onSelect };
@@ -372,8 +382,9 @@ const XMBCarousel = ({ items, activeIndex, onSelect, onBack, onRestricted, restr
   // rounded value when the parent re-syncs). The bezier (1/3, 1, 2/3, 1)
   // is the exact analytic form of the old hand-rolled ease-out cubic
   // 1-(1-t)^3 over the same 220ms. Like the old rAF loop, this imperative
-  // animation deliberately runs under reduced motion too: it only moves
-  // the offset, and reduced-motion users' cards track it without springs.
+  // animation deliberately runs under reduced motion too: it only moves the
+  // offset, and reduced-motion users' cards snap along via their duration-0
+  // followers.
   const snapScrollOffsetTo = useCallback((target: number) => {
     snapAnimationRef.current?.stop();
     snapAnimationRef.current = null;
@@ -385,8 +396,9 @@ const XMBCarousel = ({ items, activeIndex, onSelect, onBack, onRestricted, restr
   }, [scrollOffset]);
 
   // Sync scrollOffset with activeIndex when it changes externally (keyboard
-  // nav). The offset retargets instantly — each card's spring carries the
-  // visible motion, exactly as it did when this was a setState. Skip if the
+  // nav). The offset retargets instantly — each card's follower tween
+  // carries the visible motion, exactly as it did when this was a setState.
+  // Skip if the
   // change came from our own debounced commit — snapScrollOffsetTo is
   // already mid-flight and an instant reset would undo it.
   useEffect(() => {
@@ -530,14 +542,15 @@ const XMBCarousel = ({ items, activeIndex, onSelect, onBack, onRestricted, restr
   }, [handleWheel]);
 
   // Mount window is quantized to roundedIndex (culling shouldn't run per
-  // frame), so it's widened to ±(VISIBLE_ITEMS + 2): a strict superset of
-  // the old float-based ±(VISIBLE_ITEMS + 1) window at every offset —
-  // |i − offset| ≤ 5 implies |i − round(offset)| ≤ 5.5 — so a card can
-  // never pop in/out mid-spring.
+  // frame) at ±(VISIBLE_ITEMS + 1): a superset of the old float-based
+  // ±(VISIBLE_ITEMS + 1) window at every offset. For integer i,
+  // |i − offset| ≤ V+1 implies |i − round(offset)| ≤ V+1.5, and since the
+  // left side is an integer, ≤ V+1 — so a card can never pop in/out
+  // mid-flight.
   const visibleEntries = useMemo(() => {
     return items
       .map((item, index) => ({ item, index }))
-      .filter(({ index }) => Math.abs(index - roundedIndex) <= XMB_CAROUSEL.VISIBLE_ITEMS + 2);
+      .filter(({ index }) => Math.abs(index - roundedIndex) <= XMB_CAROUSEL.VISIBLE_ITEMS + 1);
   }, [items, roundedIndex]);
 
   return (

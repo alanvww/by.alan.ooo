@@ -1,7 +1,7 @@
 // src/components/xmb/XMBCategoryRow.tsx
 'use client';
 
-import React, { useEffect, useLayoutEffect } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence, animate, useMotionValue, useReducedMotion, useTransform } from 'motion/react';
 import type { MotionValue } from 'motion/react';
 import type { XMBCategory } from '@/lib/xmb-types';
@@ -21,15 +21,18 @@ interface XMBCategoryRowProps {
 // Icon pose falloffs.
 //
 // Scale and opacity of every cell are pure functions of
-// (index − categoryIndex), so instead of retargeting one animation per icon
-// per property on every switch, the row animates ONE `cursor` motion value
-// and each cell maps it through these falloffs with useTransform.
+// (index − categoryIndex) at rest. On a category switch each cell CROSSFADES
+// from its previous rest pose to its new one, driven by ONE `progress`
+// motion value (0 → 1) that the row animates — so a switch still costs a
+// single animation instead of one per icon per property, and cells whose
+// pose doesn't change (from == to) derive a constant and hold perfectly
+// still.
 //
-// The *At functions are the old discrete per-icon targets, verbatim, at
-// integer deltas; `sampleIconSteps` interpolates linearly between adjacent
-// integer samples, which keeps a one-step switch pixel-identical to the old
-// per-icon retargets (the same linearity argument spelled out in
-// XMBVerticalList's falloff block).
+// An earlier model swept a continuous cursor through these falloffs, which
+// made every icon BETWEEN the old and new selection pulse 0.8→1.2→0.8 on
+// multi-step switches (routine: ArrowLeft at index 0 wraps to the far end).
+// The crossfade instead reproduces the old per-icon animate-prop retargets:
+// only the outgoing and incoming icons move, tweening over the same 300ms.
 
 /** Discrete scale at an integer delta: 1.2 on the active cell, 0.8 elsewhere. */
 function iconScaleAt(delta: number): number {
@@ -43,23 +46,17 @@ function iconOpacityAt(delta: number): number {
   return Math.max(0.3, 1 - Math.abs(delta) * 0.3);
 }
 
-/** Piecewise-linear read of a discrete integer-delta map at a continuous
-    cursor position. */
-function sampleIconSteps(at: (delta: number) => number, delta: number): number {
-  const floor = Math.floor(delta);
-  const from = at(floor);
-  const t = delta - floor;
-  return t === 0 ? from : from + (at(floor + 1) - from) * t;
-}
-
 interface XMBCategoryCellProps {
   category: XMBCategory;
   index: number;
-  /** Continuous category cursor — cells derive scale/opacity from
-      (index − cursor) via useTransform, so cursor motion writes straight to
-      the DOM and never re-renders them. */
-  cursor: MotionValue<number>;
-  isActive: boolean;
+  /** Crossfade progress (0 → 1) of the latest category switch — cells
+      derive scale/opacity from it via useTransform, so the blend writes
+      straight to the DOM and never re-renders them mid-flight. */
+  progress: MotionValue<number>;
+  /** Rest-pose pair being blended: the cell sits at poseAt(index − prevIndex)
+      at progress 0 and poseAt(index − activeIndex) at progress 1. */
+  prevIndex: number;
+  activeIndex: number;
   /** Active cell with no item selected: show the floating title. */
   showTitle: boolean;
   onCategorySelect: (index: number) => void;
@@ -70,14 +67,23 @@ interface XMBCategoryCellProps {
 const XMBCategoryCell = React.memo(({
   category,
   index,
-  cursor,
-  isActive,
+  progress,
+  prevIndex,
+  activeIndex,
   showTitle,
   onCategorySelect,
   isPointerEvent,
 }: XMBCategoryCellProps) => {
-  const scale = useTransform(cursor, (c: number) => sampleIconSteps(iconScaleAt, index - c));
-  const opacity = useTransform(cursor, (c: number) => sampleIconSteps(iconOpacityAt, index - c));
+  const isActive = index === activeIndex;
+  // Linear blend between the two rest poses. At progress 1 this equals the
+  // discrete pose map exactly; when from == to (every icon not part of the
+  // switch) the blend is constant, so intermediate icons never ripple.
+  const scaleFrom = iconScaleAt(index - prevIndex);
+  const scaleTo = iconScaleAt(index - activeIndex);
+  const opacityFrom = iconOpacityAt(index - prevIndex);
+  const opacityTo = iconOpacityAt(index - activeIndex);
+  const scale = useTransform(progress, (p: number) => scaleFrom + (scaleTo - scaleFrom) * p);
+  const opacity = useTransform(progress, (p: number) => opacityFrom + (opacityTo - opacityFrom) * p);
 
   return (
     <div
@@ -149,27 +155,47 @@ const XMBCategoryRow = React.memo(({
   // Calculate the container offset to center the active category
   const containerOffset = -categoryIndex * XMB_LAYOUT.CATEGORY_WIDTH;
 
-  // ONE cursor motion value drives every cell's scale/opacity (each cell
-  // maps it through the falloffs above), so a category switch retargets a
-  // single animation instead of one per icon per property — and cells don't
-  // re-render at all while it's in flight. ICON_SPRING is passed VERBATIM
-  // (no added `type`): imperative animate() and the old per-icon transition
-  // prop share motion's animateMotionValue resolution, so whatever that
-  // config resolves to, the cursor moves exactly like the icons used to.
-  // Imperative animate() bypasses MotionConfig's reducedMotion, so it gates
-  // itself: reduced motion jumps instead of animating.
-  const cursor = useMotionValue(categoryIndex);
+  // (prevIndex, activeIndex) rest-pose pair for the cells' crossfade,
+  // adjusted during render (React's derive-state-from-props pattern) so the
+  // commit that changes categoryIndex delivers a coherent pair to every
+  // cell — a ref can't do this, since refs must not be read mid-render.
+  const [indices, setIndices] = useState({ prev: categoryIndex, active: categoryIndex });
+  if (indices.active !== categoryIndex) {
+    setIndices({ prev: indices.active, active: categoryIndex });
+  }
+
+  // ONE `progress` motion value drives every cell's scale/opacity crossfade
+  // (each cell blends its previous → active rest pose through it, see the
+  // falloff block above), so a category switch retargets a single animation
+  // instead of one per icon per property — cells re-render once per switch
+  // to receive the new pose pair, then the blend runs without them. TWEEN
+  // is the shipped 300ms ease-out made honest (the old ICON_SPRING config
+  // never sprang — see XMB_ANIMATION): imperative animate() and the old
+  // per-icon transition prop share motion's animateMotionValue resolution,
+  // so the two icons that move tween exactly like they used to. Accepted
+  // micro-delta: interrupting a switch mid-flight restarts the blend from
+  // the previous REST pose rather than the mid-flight value (the old
+  // per-icon retargets continued from the current value). Imperative
+  // animate() bypasses MotionConfig's reducedMotion, so it gates itself:
+  // reduced motion jumps straight to the new pose.
+  const progress = useMotionValue(1);
   const reduceMotion = useReducedMotion();
+  const blendedIndicesRef = useRef(indices);
   useLayoutEffect(() => {
+    const isNewBlend = blendedIndicesRef.current !== indices;
+    blendedIndicesRef.current = indices;
     if (reduceMotion) {
-      cursor.jump(categoryIndex);
+      progress.jump(1);
       return;
     }
-    animate(cursor, categoryIndex, { ...XMB_ANIMATION.ICON_SPRING });
-  }, [categoryIndex, cursor, reduceMotion]);
+    // Not a switch (e.g. reduce-motion flipped off mid-session): stay at rest.
+    if (!isNewBlend) return;
+    progress.jump(0);
+    animate(progress, 1, { ...XMB_ANIMATION.TWEEN });
+  }, [indices, progress, reduceMotion]);
 
-  // Halt any in-flight cursor animation when the row unmounts.
-  useEffect(() => () => cursor.stop(), [cursor]);
+  // Halt any in-flight crossfade when the row unmounts.
+  useEffect(() => () => progress.stop(), [progress]);
 
   return (
     // Idle vertical drift lives in CSS (xmb-row-sway) so the 8s ambient loop
@@ -206,7 +232,7 @@ const XMBCategoryRow = React.memo(({
       <motion.div
         className="absolute left-0 top-0 flex items-center h-full"
         animate={{ x: containerOffset }}
-        transition={XMB_ANIMATION.LIST_SPRING}
+        transition={XMB_ANIMATION.TWEEN}
         style={{ willChange: 'transform' }}
       >
         {categories.map((category, idx) => (
@@ -214,8 +240,9 @@ const XMBCategoryRow = React.memo(({
             key={category.id}
             category={category}
             index={idx}
-            cursor={cursor}
-            isActive={idx === categoryIndex}
+            progress={progress}
+            prevIndex={indices.prev}
+            activeIndex={indices.active}
             showTitle={idx === categoryIndex && itemIndex === -1}
             onCategorySelect={onCategorySelect}
             isPointerEvent={isPointerEvent}

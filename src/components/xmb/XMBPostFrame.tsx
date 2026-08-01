@@ -109,7 +109,7 @@ const XMBPostFrame = ({ children }: { children: React.ReactNode }): React.ReactE
                         )}
                     </div>
                     <span
-                        className={`text-xs font-mono uppercase tracking-[0.2em] transition duration-150 ${
+                        className={`text-xs font-mono uppercase tracking-[0.2em] transition-[opacity,translate] duration-150 ${
                             isCoarse
                                 ? 'opacity-100 translate-x-0'
                                 : 'opacity-0 motion-safe:-translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 group-focus-visible:opacity-100 group-focus-visible:translate-x-0'

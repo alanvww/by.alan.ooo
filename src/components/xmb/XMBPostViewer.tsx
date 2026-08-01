@@ -152,7 +152,7 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
                     <motion.header 
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.1, ...XMB_ANIMATION.SPRING_CONFIG }}
+                        transition={{ delay: 0.1, ...XMB_ANIMATION.TWEEN }}
                         className="mb-16 text-center"
                     >
                         <div className="flex items-center justify-center gap-4 mb-8">

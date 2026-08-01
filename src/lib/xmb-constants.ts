@@ -1,5 +1,7 @@
 // src/lib/xmb-constants.ts
 
+import type { Transition } from 'motion/react';
+
 export const XMB_LAYOUT = {
   CATEGORY_WIDTH: 120,
   VERTICAL_LIST_TOP: '8rem',
@@ -29,26 +31,45 @@ export const EASE = {
   FADE:  [0.42, 0, 0.58, 1]    as [number, number, number, number],
 };
 
+/**
+ * The one XMB motion timing: a 300ms ease-out tween.
+ *
+ * DISCOVERY (motion 12.43.0, verified in the installed motion-dom source):
+ * this used to be three "spring" configs (SPRING_CONFIG 380/30/0.8,
+ * LIST_SPRING 500/32/0.4, ICON_SPRING 550/25/0.2) that all omitted
+ * `type: 'spring'`. Every consumer — declarative transition props and
+ * imperative animate() on motion values — resolves through motion's
+ * animateMotionValue (animation/interfaces/motion-value.mjs), which seeds
+ * `ease: "easeOut"` and, with no `type`, falls through to JSAnimation's
+ * KEYFRAMES generator (JSAnimation.mjs `const { type = keyframes }`) and its
+ * 300ms default duration (generators/keyframes.mjs `duration = 300`). The
+ * stiffness/damping/mass numbers were read by nothing: all three configs had
+ * ALWAYS shipped as this same 300ms ease-out tween.
+ *
+ * TWEEN is that shipped feel made honest. Do NOT "fix" it by adding
+ * `type: 'spring'` — switching to real springs is a deliberate visual
+ * decision that needs design review, not a refactor.
+ */
+const XMB_TWEEN = {
+  type: 'keyframes',
+  duration: 0.3,
+  ease: 'easeOut',
+} satisfies Transition;
+
 export const XMB_ANIMATION = {
-  // ~150-200ms settle, ~90% critical damping → tiny bounce
-  SPRING_CONFIG: {
-    stiffness: 380,
-    damping: 30,
-    mass: 0.8,
+  /** For transition props and animate() calls — the animateMotionValue
+      paths, whose durations are in SECONDS. */
+  TWEEN: XMB_TWEEN,
+  /** The SAME tween for useFollowValue/attachFollow followers (XMBCarousel).
+      attachFollow builds a JSAnimation directly (value/follow-value.mjs),
+      skipping animateMotionValue's seconds→milliseconds conversion, so its
+      duration is in MILLISECONDS — and it spreads these options over a
+      `type: "spring"` default, so the explicit `type` is load-bearing. */
+  FOLLOW_TWEEN: {
+    ...XMB_TWEEN,
+    duration: XMB_TWEEN.duration * 1000,
   },
-  // ~100-150ms settle — list scroll feels instant
-  LIST_SPRING: {
-    stiffness: 500,
-    damping: 32,
-    mass: 0.4,
-  },
-  // ~80-120ms settle — icon scale snaps with micro-bounce
-  ICON_SPRING: {
-    stiffness: 550,
-    damping: 25,
-    mass: 0.2,
-  },
-};
+} satisfies Record<string, Transition>;
 
 export const XMB_CAROUSEL = {
   VISIBLE_ITEMS: 4,

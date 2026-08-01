@@ -502,8 +502,12 @@ code[data-theme] span {
 @media (prefers-reduced-motion: reduce) {
   .xmb-keycap {
     /* Scale snaps (matching MotionConfig reducedMotion="user", which
-       suppressed the spring); the colour/glow feedback still tweens. */
+       suppressed the spring); the colour/glow feedback still tweens.
+       transition-duration must be restated: overriding only the property
+       list re-pairs it index-wise with the base shorthand's durations,
+       which would hand background-color the transform's 250ms. */
     transition-property: background-color, color, box-shadow, border-color, border-width;
+    transition-duration: 150ms;
   }
 }
 
