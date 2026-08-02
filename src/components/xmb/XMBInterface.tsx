@@ -377,7 +377,6 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
           <XMBCategoryRow
             categories={categories}
             categoryIndex={categoryIndex}
-            itemIndex={itemIndex}
             onCategorySelect={handleCategorySelect}
             isPointerEvent={isPointerEvent}
           />
@@ -412,7 +411,6 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
             <XMBCategoryRow
               categories={categories}
               categoryIndex={categoryIndex}
-              itemIndex={itemIndex}
               onCategorySelect={handleCategorySelect}
               isPointerEvent={isPointerEvent}
             />

@@ -11,7 +11,6 @@ import { XMB_LAYOUT, XMB_ANIMATION, EASE } from '@/lib/xmb-constants';
 interface XMBCategoryRowProps {
   categories: XMBCategory[];
   categoryIndex: number;
-  itemIndex: number;
   onCategorySelect: (index: number) => void;
   /** True during a pointer press: focus events it causes must not drive selection. */
   isPointerEvent?: () => boolean;
@@ -57,7 +56,8 @@ interface XMBCategoryCellProps {
       at progress 0 and poseAt(index − activeIndex) at progress 1. */
   prevIndex: number;
   activeIndex: number;
-  /** Active cell with no item selected: show the floating title. */
+  /** Active cell: show the floating title (persistent — it stays up while
+      an item is selected; the item lane sits below it). */
   showTitle: boolean;
   onCategorySelect: (index: number) => void;
   /** True during a pointer press: focus events it causes must not drive selection. */
@@ -125,7 +125,9 @@ const XMBCategoryCell = React.memo(({
         />
       </motion.div>
 
-      {/* Category title - only show when active and no item selected */}
+      {/* Category title — always up for the active cell (XMB keeps the
+          column's name visible while browsing its items); enters/exits only
+          on category switches via this AnimatePresence. */}
       <AnimatePresence>
         {showTitle && (
           <motion.span
@@ -148,7 +150,6 @@ XMBCategoryCell.displayName = 'XMBCategoryCell';
 const XMBCategoryRow = React.memo(({
   categories,
   categoryIndex,
-  itemIndex,
   onCategorySelect,
   isPointerEvent,
 }: XMBCategoryRowProps) => {
@@ -243,7 +244,7 @@ const XMBCategoryRow = React.memo(({
             progress={progress}
             prevIndex={indices.prev}
             activeIndex={indices.active}
-            showTitle={idx === categoryIndex && itemIndex === -1}
+            showTitle={idx === categoryIndex}
             onCategorySelect={onCategorySelect}
             isPointerEvent={isPointerEvent}
           />
