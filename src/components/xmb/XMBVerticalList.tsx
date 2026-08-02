@@ -4,7 +4,7 @@
 import React, { useState, useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import Image from 'next/image';
 import Link from 'next/link';
-import { motion, AnimatePresence, animate, useAnimationControls, useMotionValue, useReducedMotion, useTransform } from "motion/react";
+import { motion, animate, useAnimationControls, useMotionValue, useReducedMotion, useTransform } from "motion/react";
 import type { MotionValue } from "motion/react";
 import { useRouter } from "next/navigation";
 import { useXMBLoadingContext } from "@/lib/xmb-navigation-context";
@@ -351,28 +351,31 @@ const XMBListItem = React.memo(
                     {/* Selected folders and external links park the
                         disclosure caret on the card's right edge (it leaves
                         the title line while selected so the title keeps the
-                        width). */}
-                    <AnimatePresence>
-                        {isItemSelected && (isFolder || isExternal) && (
-                            <motion.div
-                                key="drill-caret"
-                                initial={{ opacity: 0, x: -8 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                exit={{ opacity: 0, x: -8 }}
-                                transition={{ duration: 0.18, ease: EASE.ENTER }}
-                                className="shrink-0 pr-1"
-                                aria-hidden="true"
-                            >
-                                {/* CSS keyframe (xmb-caret-nudge, reduced-motion
-                                    gated in globals.css) — the old motion loop
-                                    held the entire frameloop awake whenever a
-                                    folder/external row sat selected. */}
-                                <div className="xmb-caret-nudge">
-                                    <XMBIcon name="CaretRight" size={18} />
-                                </div>
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
+                        width). No AnimatePresence/exit: both caret slots hang
+                        off the same isItemSelected boolean, so the swap must
+                        land in one commit — an exit kept this caret in flex
+                        flow (sync mode) while the title-line caret had already
+                        mounted, and the double-caret row squeezed the truncate
+                        span into a transient ellipsis. The mount glide
+                        (initial → animate) still runs. */}
+                    {isItemSelected && (isFolder || isExternal) && (
+                        <motion.div
+                            key="drill-caret"
+                            initial={{ opacity: 0, x: -8 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ duration: 0.18, ease: EASE.ENTER }}
+                            className="shrink-0 pr-1"
+                            aria-hidden="true"
+                        >
+                            {/* CSS keyframe (xmb-caret-nudge, reduced-motion
+                                gated in globals.css) — the old motion loop
+                                held the entire frameloop awake whenever a
+                                folder/external row sat selected. */}
+                            <div className="xmb-caret-nudge">
+                                <XMBIcon name="CaretRight" size={18} />
+                            </div>
+                        </motion.div>
+                    )}
                 </motion.div>
             </motion.div>
         );
@@ -581,6 +584,23 @@ const XMBVerticalList = React.memo(
             }
         }, [columnPhase]);
 
+        // The column's slide is a motion value for the same reason as the
+        // entrance above: animate-prop retargeting is applied from motion's
+        // rAF loop AFTER the swap commit paints, so even with the snap
+        // phase's duration-0 transition a category switch painted the
+        // incoming list for a frame or two at the outgoing list's scroll
+        // offset. jump() lands the reset in the same commit. Selection
+        // moves within a list keep the shared TWEEN; imperative animate()
+        // bypasses MotionConfig's reducedMotion, so this gates itself.
+        const columnY = useMotionValue(containerOffset);
+        useLayoutEffect(() => {
+            if (columnPhase === 'snap' || reduceMotion) {
+                columnY.jump(containerOffset);
+                return;
+            }
+            animate(columnY, containerOffset, { ...XMB_ANIMATION.TWEEN });
+        }, [columnPhase, columnY, containerOffset, reduceMotion]);
+
         // ONE cursor motion value drives every row's lift/opacity (each row
         // maps it through the falloffs at the top of this file), so a
         // selection move retargets a single animation instead of one per row
@@ -591,6 +611,35 @@ const XMBVerticalList = React.memo(
         const cursor = useMotionValue(displayIndex);
         const selectionLevel = useMotionValue(hasSelection ? 1 : 0);
 
+        // Category id + folder path identifies the rendered level: category
+        // switches AND folder drills/backs change it. (Item ids are NOT
+        // globally unique — type-slug ids repeat across the Featured/tag/
+        // Recent/All folders — so keying on the first item's id could alias
+        // two different levels and let the cursor sweep across freshly
+        // remounted rows.)
+        const prevListKeyRef = useRef<string | null>(null);
+        const listKey = `${activeCategory.id}:${navigationPath.join('/')}`;
+
+        // A level swap must land the cursor pose DURING RENDER, not in the
+        // layout effect below. The swap commit mounts fresh rows (new
+        // item.id keys), and each row bakes its initial style from
+        // cursor/selectionLevel synchronously in its own render — so the
+        // values have to be at their targets before the rows render, which
+        // parent-before-child render order gives us here. A jump() deferred
+        // to the layout effect never reaches those rows: their useTransform
+        // subscriptions are created in the same commit and the scheduled
+        // recompute is dropped (verified: cursor/selectionLevel land on
+        // their targets while every new row's derived pose stays stale), so
+        // the incoming list sat permanently in the outgoing list's pose —
+        // row 0 lifted and dimmed as if the old selection still existed —
+        // until the next selection change re-rendered the rows. Idempotent
+        // under StrictMode's double render: the ref only advances in the
+        // layout effect, after both renders.
+        if (prevListKeyRef.current !== listKey) {
+            cursor.jump(displayIndex);
+            selectionLevel.jump(hasSelection ? 1 : 0);
+        }
+
         // Both values are retargeted with the shared TWEEN — the honest
         // form of the 300ms ease-out these values have always shipped with
         // (the old LIST_SPRING config never sprang; see XMB_ANIMATION).
@@ -599,36 +648,28 @@ const XMBVerticalList = React.memo(
         // exactly like the rows used to. Imperative animate() bypasses
         // MotionConfig's reducedMotion (see the entrance above), so reduced
         // motion jumps here instead.
-        const prevListKeyRef = useRef<string | null>(null);
         useLayoutEffect(() => {
-            // Category id + folder path identifies the rendered level:
-            // category switches AND folder drills/backs change it. (Item
-            // ids are NOT globally unique — type-slug ids repeat across the
-            // Featured/tag/Recent/All folders — so keying on the first
-            // item's id could alias two different levels and let the cursor
-            // sweep across freshly remounted rows.) A level swap remounts
-            // the rows (fresh item.id keys) at their rest pose — so the
-            // cursor must land instantly (the same situation where the
-            // column's y does its duration-0 snap) rather than sweep the new
-            // rows in from the previous level's index.
-            const listKey = `${activeCategory.id}:${navigationPath.join('/')}`;
             const isListSwap = prevListKeyRef.current !== listKey;
             prevListKeyRef.current = listKey;
             const selectionTarget = hasSelection ? 1 : 0;
             if (isListSwap || reduceMotion) {
+                // The render-phase jump above already landed the swap pose;
+                // re-asserting is a no-op there. This branch is load-bearing
+                // only for reduced motion, where in-list moves snap too.
                 cursor.jump(displayIndex);
                 selectionLevel.jump(selectionTarget);
                 return;
             }
             animate(cursor, displayIndex, { ...XMB_ANIMATION.TWEEN });
             animate(selectionLevel, selectionTarget, { ...XMB_ANIMATION.TWEEN });
-        }, [activeCategory.id, cursor, displayIndex, hasSelection, navigationPath, reduceMotion, selectionLevel]);
+        }, [cursor, displayIndex, hasSelection, listKey, reduceMotion, selectionLevel]);
 
         // Halt any in-flight cursor animation when the list unmounts.
         useEffect(() => () => {
             cursor.stop();
             selectionLevel.stop();
-        }, [cursor, selectionLevel]);
+            columnY.stop();
+        }, [columnY, cursor, selectionLevel]);
 
         return (
             <motion.div
@@ -722,9 +763,8 @@ const XMBVerticalList = React.memo(
                         style={{
                             width: layoutMode === 'paged' ? '100%' : `${XMB_LAYOUT.LIST_FULL_WIDTH_PX}px`,
                             willChange: "transform",
+                            y: columnY,
                         }}
-                        animate={{ y: containerOffset }}
-                        transition={columnPhase === 'snap' ? { duration: 0 } : XMB_ANIMATION.TWEEN}
                     >
                         {currentItems.map((item, idx) => (
                             <XMBListItem
