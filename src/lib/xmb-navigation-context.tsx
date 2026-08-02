@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useMemo, useRef, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import type { XMBCategory, XMBItem } from './xmb-types';
 
 interface XMBSelectionContextType {
@@ -10,6 +10,11 @@ interface XMBSelectionContextType {
     setCategoryIndex: React.Dispatch<React.SetStateAction<number>>;
     setItemIndex: React.Dispatch<React.SetStateAction<number>>;
     setNavigationPath: React.Dispatch<React.SetStateAction<number[]>>;
+    /** XMB-style per-column cursor memory: the item index this category's
+        root list was last left at (clamped to its item count), or -1 for a
+        category never selected into. Category switchers pass this to
+        setItemIndex so each column keeps its own cursor. */
+    recallItemIndex: (categoryIndex: number) => number;
 }
 
 interface XMBDerivedContextType {
@@ -72,6 +77,33 @@ export const XMBNavigationProvider = ({
     const [isNavigating, setIsNavigating] = useState(false);
     const [pendingHref, setPendingHref] = useState<string | null>(null);
 
+    // Per-column cursor memory (XMB style). Mirrored continuously while
+    // browsing a category's ROOT list, so the outgoing category's latest
+    // cursor is already recorded by the time a switch commits — the switch
+    // itself never has to capture pre-switch state. Folder levels are
+    // excluded: itemIndex means an in-folder position there, and the root
+    // index that leads to the folder was mirrored before drilling in. An
+    // explicit deselect (Escape at root) mirrors -1, so a column the user
+    // backed out of is recalled deselected rather than re-highlighted.
+    // Keyed by category id and kept in a ref on the provider: it survives
+    // route changes (the menu remounts, the provider doesn't) without
+    // triggering renders.
+    const lastItemIndexRef = useRef(new Map<string, number>());
+    useEffect(() => {
+        if (navigationPath.length > 0) return;
+        const id = categories[categoryIndex]?.id;
+        if (id !== undefined) lastItemIndexRef.current.set(id, itemIndex);
+    }, [categories, categoryIndex, itemIndex, navigationPath]);
+
+    const recallItemIndex = useCallback((catIdx: number): number => {
+        const category = categories[catIdx];
+        if (!category) return -1;
+        const stored = lastItemIndexRef.current.get(category.id) ?? -1;
+        // Clamp against the current item count — content can shrink
+        // between visits (builds, dynamic folders).
+        return Math.min(stored, category.items.length - 1);
+    }, [categories]);
+
     const navTimerRef = useRef<NodeJS.Timeout | null>(null);
     const minDelayReachedRef = useRef(false);
     const finishPendingRef = useRef(false);
@@ -110,7 +142,8 @@ export const XMBNavigationProvider = ({
         setCategoryIndex,
         setItemIndex,
         setNavigationPath,
-    }), [categoryIndex, itemIndex, navigationPath, setCategoryIndex]);
+        recallItemIndex,
+    }), [categoryIndex, itemIndex, navigationPath, recallItemIndex, setCategoryIndex]);
 
     const derivedValue = useMemo<XMBDerivedContextType>(() => {
         const activeCategory = categories[categoryIndex] ?? null;

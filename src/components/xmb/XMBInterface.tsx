@@ -48,6 +48,7 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
     setCategoryIndex,
     setItemIndex,
     setNavigationPath,
+    recallItemIndex,
     finishNavigation
   } = useXMBNavigation(categories, layoutMode, handleRestricted);
 
@@ -303,19 +304,22 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
   // exactly the event the memo exists for.
   const categoryIndexRef = useRef(categoryIndex);
   const layoutModeRef = useRef(layoutMode);
+  const recallItemIndexRef = useRef(recallItemIndex);
   useLayoutEffect(() => {
     categoryIndexRef.current = categoryIndex;
     layoutModeRef.current = layoutMode;
+    recallItemIndexRef.current = recallItemIndex;
   });
 
   const handleCategorySelect = useCallback((idx: number) => {
     if (layoutModeRef.current === 'paged' && idx === categoryIndexRef.current) {
       // Tapping the already-active category ENTERS its list. (It used to
       // reset to the categories stage, which made the initially-active
-      // column impossible to open by touch.)
+      // column impossible to open by touch.) Enter at the column's
+      // remembered cursor; the floor of 0 is what derives the 'list' stage.
       playConfirm();
       setNavigationPath([]);
-      setItemIndex(0);
+      setItemIndex(Math.max(recallItemIndexRef.current(idx), 0));
       return;
     }
 
@@ -324,8 +328,12 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
     // Keyboard category switches reset the folder path — clicks must too,
     // or a stale path gets replayed inside the newly selected category.
     setNavigationPath([]);
-    // In paged mode, selecting item 0 is what derives the 'list' stage.
-    setItemIndex(layoutModeRef.current === 'paged' ? 0 : -1);
+    // XMB per-column memory: land on the column's remembered cursor. In
+    // paged mode an item must be selected for the 'list' stage to derive,
+    // so the recall floors at item 0 there.
+    setItemIndex(layoutModeRef.current === 'paged'
+      ? Math.max(recallItemIndexRef.current(idx), 0)
+      : recallItemIndexRef.current(idx));
   }, [setCategoryIndex, setItemIndex, setNavigationPath]);
 
   // Drag-with-snap on the paged list: vertical pan travel commits discrete

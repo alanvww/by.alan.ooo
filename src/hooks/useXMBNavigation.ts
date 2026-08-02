@@ -37,9 +37,9 @@ function isNativeActivationTarget(e: KeyboardEvent): boolean {
  * transitions, clamping, wrap-around, AND audio — holds by construction.
  */
 export interface XMBCommands {
-  /** ArrowLeft: prev category (wraps) at root; exit folder when inside one. */
+  /** ArrowLeft: prev category (wraps, recalls that column's cursor) at root; exit folder when inside one. */
   moveLeft: () => void;
-  /** ArrowRight: next category (wraps) at root; activate (links only) inside a folder. */
+  /** ArrowRight: next category (wraps, recalls that column's cursor) at root; activate (links only) inside a folder. */
   moveRight: () => void;
   /** ArrowUp: selection up one row; floors at the first item inside a folder or in the paged list, at -1 (deselected) at the full layout's root. */
   moveUp: () => void;
@@ -65,6 +65,7 @@ interface XMBNavigationResult {
   setCategoryIndex: (index: number) => void;
   setItemIndex: (index: number) => void;
   setNavigationPath: (path: number[]) => void;
+  recallItemIndex: (categoryIndex: number) => number;
 }
 
 export function useXMBNavigation(
@@ -80,6 +81,7 @@ export function useXMBNavigation(
     setItemIndex,
     navigationPath,
     setNavigationPath,
+    recallItemIndex,
   } = useXMBSelectionContext();
   const {
     activeCategory,
@@ -106,6 +108,7 @@ export function useXMBNavigation(
   const startNavigationRef = useRef(startNavigation);
   const layoutModeRef = useRef(layoutMode);
   const onRestrictedRef = useRef(onRestricted);
+  const recallItemIndexRef = useRef(recallItemIndex);
 
   useEffect(() => {
     categoriesRef.current = categories;
@@ -119,7 +122,8 @@ export function useXMBNavigation(
     startNavigationRef.current = startNavigation;
     layoutModeRef.current = layoutMode;
     onRestrictedRef.current = onRestricted;
-  }, [categories, categoryIndex, itemIndex, navigationPath, activeCategory, activeItem, currentItems, router, startNavigation, layoutMode, onRestricted]);
+    recallItemIndexRef.current = recallItemIndex;
+  }, [categories, categoryIndex, itemIndex, navigationPath, activeCategory, activeItem, currentItems, router, startNavigation, layoutMode, onRestricted, recallItemIndex]);
 
   const moveLeft = useCallback(() => {
     playNavigate();
@@ -129,9 +133,13 @@ export function useXMBNavigation(
       setNavigationPath(navigationPathRef.current.slice(0, -1));
       setItemIndex(parentFolderIndex);
     } else {
-      // Category level or item selected: switch to previous category
-      setCategoryIndex((categoryIndexRef.current > 0 ? categoryIndexRef.current - 1 : categoriesRef.current.length - 1));
-      setItemIndex(-1);
+      // Category level or item selected: switch to previous category and
+      // recall that column's own cursor (XMB per-column memory). Paged
+      // mode stays at -1: an itemIndex ≥ 0 derives the 'list' stage there,
+      // so recalling would yank a category browse into the list.
+      const next = categoryIndexRef.current > 0 ? categoryIndexRef.current - 1 : categoriesRef.current.length - 1;
+      setCategoryIndex(next);
+      setItemIndex(layoutModeRef.current === 'paged' ? -1 : recallItemIndexRef.current(next));
       setNavigationPath([]);
     }
   }, [setCategoryIndex, setItemIndex, setNavigationPath]);
@@ -154,9 +162,12 @@ export function useXMBNavigation(
       }
     } else {
       playNavigate();
-      // Category level or item selected: switch to next category
-      setCategoryIndex((categoryIndexRef.current < categoriesRef.current.length - 1 ? categoryIndexRef.current + 1 : 0));
-      setItemIndex(-1);
+      // Category level or item selected: switch to next category and
+      // recall that column's own cursor (XMB per-column memory). Paged
+      // mode stays at -1 — see moveLeft.
+      const next = categoryIndexRef.current < categoriesRef.current.length - 1 ? categoryIndexRef.current + 1 : 0;
+      setCategoryIndex(next);
+      setItemIndex(layoutModeRef.current === 'paged' ? -1 : recallItemIndexRef.current(next));
       setNavigationPath([]);
     }
   }, [setCategoryIndex, setItemIndex, setNavigationPath]);
@@ -301,5 +312,6 @@ export function useXMBNavigation(
     setCategoryIndex,
     setItemIndex,
     setNavigationPath,
+    recallItemIndex,
   };
 }
