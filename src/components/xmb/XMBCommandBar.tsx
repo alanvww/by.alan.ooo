@@ -79,8 +79,13 @@ const XMBCommandBar = ({ commands }: XMBCommandBarProps) => {
       ],
       action: 'Switch',
     });
+    // 'drill-in', not 'enter': the item stage also has an 'enter' hint, and
+    // sharing the id made AnimatePresence treat the ↓ keycap and the wide
+    // ENTER cap as one element — it jump-cut between them while the
+    // neighbouring hints crossfaded. Distinct ids keep the swap coherent
+    // (mirrors the coarse-pointer branch's 'enter'/'open' split).
     hints.push({
-      id: 'enter',
+      id: 'drill-in',
       keys: [{ label: '↓', pressedKey: 'ArrowDown' }],
       action: 'Enter',
     });

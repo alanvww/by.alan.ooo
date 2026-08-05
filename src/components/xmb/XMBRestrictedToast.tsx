@@ -50,7 +50,10 @@ const XMBRestrictedToast = ({ ping }: XMBRestrictedToastProps) => {
             key="restricted-toast"
             initial={{ opacity: 0, y: 14, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 8, scale: 0.98, transition: { duration: 0.15, ease: EASE.EXIT } }}
+            // EASE.MOVE, not EASE.EXIT: EXIT is a pure ease-in whose slowest
+            // stretch is the only visible part of an opacity exit — the toast
+            // should depart fast, not linger.
+            exit={{ opacity: 0, y: 8, scale: 0.98, transition: { duration: 0.15, ease: EASE.MOVE } }}
             transition={{ duration: 0.25, ease: EASE.ENTER }}
             className="flex items-center gap-3.5 rounded-full backdrop-blur-md bg-xmb-fg/10 border border-xmb-fg/20 px-6 py-3.5 shadow-[0_8px_30px_var(--color-xmb-shadow-glow)]"
           >

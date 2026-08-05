@@ -564,6 +564,10 @@ const XMBCarousel = ({ items, activeIndex, onSelect, onBack, onRestricted, restr
       // Exit is opacity-only and faster than the entrance: sliding this
       // 70%-viewport subtree of glowing cards out concurrently with a
       // category switch's springs causes jank, so it just fades.
+      // EASE.EXIT is deliberate here despite being an ease-in: its
+      // near-opaque hold (~68% at the midpoint) covers the parent list's
+      // concurrent entrance, so the handoff never opens a brightness hole.
+      // Swapping in an ease-out would fix the curve and break the cover.
       exit={{ opacity: 0, transition: { duration: 0.15, ease: EASE.EXIT } }}
       transition={{ duration: 0.25, ease: EASE.ENTER }}
       onTouchStart={handleTouchStart}

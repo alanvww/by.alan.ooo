@@ -148,10 +148,12 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
                 className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pt-32 pb-48 px-6 md:px-0 scroll-smooth motion-reduce:scroll-auto select-text"
             >
                 <div className="max-w-4xl mx-auto">
-                    {/* Header Section */}
-                    <motion.header 
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
+                    {/* Header Section — position only: the root above owns the
+                        opacity fade, and stacking a second fade here multiplied
+                        the two curves (ease², a visibly soft arrival). */}
+                    <motion.header
+                        initial={{ y: 20 }}
+                        animate={{ y: 0 }}
                         transition={{ delay: 0.1, ...XMB_ANIMATION.TWEEN }}
                         className="mb-16 text-center"
                     >
@@ -190,8 +192,9 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
                     {/* Featured Image */}
                     {frontmatter.coverImage && (
                         <motion.div
-                            initial={{ opacity: 0, y: 40, scale: 0.98 }}
-                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            // Position only — root owns opacity (see header note).
+                            initial={{ y: 40, scale: 0.98 }}
+                            animate={{ y: 0, scale: 1 }}
                             transition={{ delay: 0.15, duration: 0.4, ease: EASE.MOVE }}
                             className="relative aspect-video rounded-2xl overflow-hidden border border-xmb-fg/10 shadow-[0_0_80px_var(--color-xmb-shadow-glow)] mb-24"
                         >
@@ -297,7 +300,7 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
                     </button>
                 </div>
             ) : (
-                <div className="absolute right-12 top-1/2 -translate-y-1/2 flex flex-col items-center gap-4 z-40 opacity-30 hover:opacity-100 transition-opacity duration-250">
+                <div className="absolute right-12 top-1/2 -translate-y-1/2 flex flex-col items-center gap-4 z-40 opacity-30 hover:opacity-100 transition-opacity">
                     <div className="w-px h-32 bg-linear-to-b from-transparent via-xmb-fg/50 to-transparent" />
                     <span className="[writing-mode:vertical-rl] text-[10px] font-mono uppercase tracking-widest">Scroll</span>
                     <div className="w-px h-32 bg-linear-to-t from-transparent via-xmb-fg/50 to-transparent" />
