@@ -37,6 +37,14 @@ const PINNED_TAG_FOLDERS: {
     restrictItems: true,
     extraItems: [
       {
+        id: 'gcl-gemma-translator',
+        title: 'Gemma Translator',
+        description: 'A completely offline, DIY translation device powered by Gemma 4 and built with Antigravity — open-source hardware and code',
+        image: '/assets/projects/google-creative-lab/gemma-translator.jpg',
+        link: 'https://www.youtube.com/watch?v=4dNry5zP0Jo',
+        type: 'link',
+      },
+      {
         id: 'gcl-little-language-lessons',
         title: 'Little Language Lessons',
         description: 'Bite-sized language-learning experiments built with Gemini',
