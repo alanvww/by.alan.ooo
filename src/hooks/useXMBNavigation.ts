@@ -82,6 +82,7 @@ export function useXMBNavigation(
     navigationPath,
     setNavigationPath,
     recallItemIndex,
+    rememberItemIndex,
   } = useXMBSelectionContext();
   const {
     activeCategory,
@@ -95,6 +96,27 @@ export function useXMBNavigation(
   } = useXMBLoadingContext();
 
   const router = useRouter();
+
+  // Per-column cursor memory. Mirrored continuously while browsing a
+  // category's ROOT list, so the outgoing category's latest cursor is
+  // already recorded by the time a switch commits — the switch itself never
+  // has to capture pre-switch state. Folder levels are excluded: itemIndex
+  // means an in-folder position there, and the root index that leads to the
+  // folder was mirrored before drilling in.
+  //
+  // -1 is mirrored only in the full layout, where it is an explicit deselect
+  // (Escape at root) and a column the user backed out of should be recalled
+  // deselected rather than re-highlighted. In the paged layout -1 is just
+  // the 'categories' stage: every category switch parks there (moveLeft/
+  // moveRight) and lands in the same commit as setCategoryIndex, so
+  // mirroring it would overwrite the DESTINATION column's cursor with -1 on
+  // every swipe. Re-entering a paged list always floors the recall at 0
+  // anyway, so skipping -1 there loses nothing.
+  useEffect(() => {
+    if (navigationPath.length > 0) return;
+    if (itemIndex === -1 && layoutMode === 'paged') return;
+    rememberItemIndex(categoryIndex, itemIndex);
+  }, [categoryIndex, itemIndex, navigationPath, layoutMode, rememberItemIndex]);
 
   // Use refs to prevent handler recreation
   const categoriesRef = useRef(categories);

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import React, { createContext, useContext, useMemo, useRef, useState, useCallback } from 'react';
 import type { XMBCategory, XMBItem } from './xmb-types';
 
 interface XMBSelectionContextType {
@@ -15,6 +15,10 @@ interface XMBSelectionContextType {
         category never selected into. Category switchers pass this to
         setItemIndex so each column keeps its own cursor. */
     recallItemIndex: (categoryIndex: number) => number;
+    /** Record a category's root cursor. Called from the mirror effect in
+        useXMBNavigation, which owns the layout-mode gating; the Map lives
+        here so it survives the menu remounting across route changes. */
+    rememberItemIndex: (categoryIndex: number, itemIndex: number) => void;
 }
 
 interface XMBDerivedContextType {
@@ -77,23 +81,16 @@ export const XMBNavigationProvider = ({
     const [isNavigating, setIsNavigating] = useState(false);
     const [pendingHref, setPendingHref] = useState<string | null>(null);
 
-    // Per-column cursor memory (XMB style). Mirrored continuously while
-    // browsing a category's ROOT list, so the outgoing category's latest
-    // cursor is already recorded by the time a switch commits — the switch
-    // itself never has to capture pre-switch state. Folder levels are
-    // excluded: itemIndex means an in-folder position there, and the root
-    // index that leads to the folder was mirrored before drilling in. An
-    // explicit deselect (Escape at root) mirrors -1, so a column the user
-    // backed out of is recalled deselected rather than re-highlighted.
-    // Keyed by category id and kept in a ref on the provider: it survives
-    // route changes (the menu remounts, the provider doesn't) without
-    // triggering renders.
+    // Per-column cursor memory (XMB style), keyed by category id and kept
+    // in a ref on the provider: it survives route changes (the menu
+    // remounts, the provider doesn't) without triggering renders. The
+    // mirroring itself lives in useXMBNavigation — see rememberItemIndex.
     const lastItemIndexRef = useRef(new Map<string, number>());
-    useEffect(() => {
-        if (navigationPath.length > 0) return;
-        const id = categories[categoryIndex]?.id;
-        if (id !== undefined) lastItemIndexRef.current.set(id, itemIndex);
-    }, [categories, categoryIndex, itemIndex, navigationPath]);
+
+    const rememberItemIndex = useCallback((catIdx: number, idx: number): void => {
+        const id = categories[catIdx]?.id;
+        if (id !== undefined) lastItemIndexRef.current.set(id, idx);
+    }, [categories]);
 
     const recallItemIndex = useCallback((catIdx: number): number => {
         const category = categories[catIdx];
@@ -143,7 +140,8 @@ export const XMBNavigationProvider = ({
         setItemIndex,
         setNavigationPath,
         recallItemIndex,
-    }), [categoryIndex, itemIndex, navigationPath, recallItemIndex, setCategoryIndex]);
+        rememberItemIndex,
+    }), [categoryIndex, itemIndex, navigationPath, recallItemIndex, rememberItemIndex, setCategoryIndex]);
 
     const derivedValue = useMemo<XMBDerivedContextType>(() => {
         const activeCategory = categories[categoryIndex] ?? null;
