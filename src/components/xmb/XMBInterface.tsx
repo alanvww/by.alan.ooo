@@ -159,28 +159,46 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
   // focusWithinRef tracks whether focus is inside the menu: mouse/touch users
   // who never focused it must never have focus yanked by selection changes.
   const focusWithinRef = useRef(false);
-  // True for the microtask window around a pointer press: Chrome focuses
-  // links/buttons on mousedown, and that focus event must not drive selection
-  // (the two-click model owns pointer selection via onClick).
+  // True from a pointer press until the press's trailing `click`: browsers
+  // focus links/buttons on mousedown, and that focus event must not drive
+  // selection (the two-click model owns pointer selection via onClick).
+  // On touch the compatibility mousedown — and so the focus — is dispatched
+  // after touchend, tens of ms after pointerdown and in a separate task, so
+  // a timer-based window can't cover it; `click` is the last event of both
+  // the mouse and touch sequences and is the reliable disarm point. The
+  // timeout only catches presses that never click (pans, drags, cancels).
   const pointerDownRef = useRef(false);
+  const pointerDownTimerRef = useRef<number | null>(null);
 
   const isPointerEvent = useCallback(() => pointerDownRef.current, []);
 
+  const disarmPointer = useCallback(() => {
+    pointerDownRef.current = false;
+    if (pointerDownTimerRef.current !== null) {
+      window.clearTimeout(pointerDownTimerRef.current);
+      pointerDownTimerRef.current = null;
+    }
+  }, []);
+
   const handlePointerDownCapture = useCallback(() => {
     pointerDownRef.current = true;
-    window.setTimeout(() => {
-      pointerDownRef.current = false;
-    }, 0);
-  }, []);
+    if (pointerDownTimerRef.current !== null) {
+      window.clearTimeout(pointerDownTimerRef.current);
+    }
+    pointerDownTimerRef.current = window.setTimeout(disarmPointer, 500);
+  }, [disarmPointer]);
+
+  useEffect(() => disarmPointer, [disarmPointer]);
 
   const handleFocusCapture = useCallback(() => {
     focusWithinRef.current = true;
   }, []);
 
   const handleBlurCapture = useCallback((event: React.FocusEvent) => {
-    // relatedTarget null means focus fell to body (an AnimatePresence unmount
-    // or a window blur) — keep the flag armed so the sync effect below can
-    // reclaim focus for the current selection.
+    // relatedTarget null means focus fell to body (an AnimatePresence unmount,
+    // a window blur, or a click on non-focusable chrome outside the menu) —
+    // keep the flag armed so the sync effect below can reclaim focus for the
+    // current selection on the next cursor move.
     const next = event.relatedTarget;
     if (next instanceof Node && !containerRef.current?.contains(next)) {
       focusWithinRef.current = false;
@@ -363,6 +381,8 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
       onFocusCapture={handleFocusCapture}
       onBlurCapture={handleBlurCapture}
       onPointerDownCapture={handlePointerDownCapture}
+      onPointerCancelCapture={disarmPointer}
+      onClickCapture={disarmPointer}
     >
       {/* Screen Reader Live Region — transition announcements while focus is
           outside the menu; empty (silent) once real focus takes over. */}
