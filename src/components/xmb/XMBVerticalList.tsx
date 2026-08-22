@@ -12,10 +12,10 @@ import type { XMBCategory, XMBItem } from "@/lib/xmb-types";
 import XMBIcon from "./XMBIcon";
 import XMBBackPill from "./XMBBackPill";
 import { XMB_LAYOUT, XMB_ANIMATION, EASE, XMB_SHAKE } from "@/lib/xmb-constants";
-import { activateItem, isExternalLink } from "@/lib/xmb-navigation";
+import { activateItem, isActivatable, isExternalLink } from "@/lib/xmb-navigation";
 import { isStandaloneDocRoute } from "@/lib/xmb-routes";
 import { focusListSibling } from "@/lib/focus";
-import { playNavigate, playConfirm } from "@/hooks/useKeyAudioFx";
+import { playNavigate, playConfirm, playDeny } from "@/hooks/useKeyAudioFx";
 import type { RestrictedPing } from "./XMBRestrictedToast";
 
 interface XMBVerticalListProps {
@@ -218,6 +218,12 @@ const XMBListItem = React.memo(
                 // owns the sound, shake, and toast — no confirm bloom.
                 e.preventDefault();
                 onRowActivate(index);
+                return;
+            }
+            if (!isActivatable(item)) {
+                // Dead row (empty folder, link-less link): deny cue, no bloom.
+                e.preventDefault();
+                playDeny();
                 return;
             }
             playConfirm();

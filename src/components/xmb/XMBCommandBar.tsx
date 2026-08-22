@@ -108,11 +108,13 @@ const XMBCommandBar = ({ commands }: XMBCommandBarProps) => {
       action: 'Navigate',
     });
 
-    if (activeItem) {
+    // Null label = ENTER would do nothing on this row; advertise nothing.
+    const enterLabel = activeItem ? getEnterActionLabel(activeItem) : null;
+    if (enterLabel) {
       hints.push({
         id: 'enter',
         keys: [{ label: 'ENTER', pressedKey: 'Enter', wide: true }],
-        action: getEnterActionLabel(activeItem),
+        action: enterLabel,
       });
     }
 
@@ -130,12 +132,12 @@ const XMBCommandBar = ({ commands }: XMBCommandBarProps) => {
       ],
       action: 'Navigate',
     });
-    if (activeItem) {
+    if (enterLabel) {
       controls.push({
         id: 'open',
         buttons: [{
-          label: getEnterActionLabel(activeItem).toUpperCase(),
-          ariaLabel: getEnterActionLabel(activeItem),
+          label: enterLabel.toUpperCase(),
+          ariaLabel: enterLabel,
           onCommand: commands.confirm,
           wide: true,
         }],

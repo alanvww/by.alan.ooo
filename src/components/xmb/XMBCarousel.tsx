@@ -17,14 +17,14 @@ import {
 } from "motion/react";
 import type { AnimationPlaybackControls, FollowValueOptions, MotionValue } from "motion/react";
 import { useXMBLoadingContext } from "@/lib/xmb-navigation-context";
-import { isExternalLink } from "@/lib/xmb-navigation";
+import { isExternalLink, isActivatable } from "@/lib/xmb-navigation";
 import { isStandaloneDocRoute } from "@/lib/xmb-routes";
 import { focusListSibling } from "@/lib/focus";
 import type { XMBItem } from "@/lib/xmb-types";
 import XMBIcon from "./XMBIcon";
 import XMBBackPill from "./XMBBackPill";
 import { XMB_CAROUSEL, XMB_ANIMATION, EASE, XMB_SHAKE } from "@/lib/xmb-constants";
-import { playNavigate, playConfirm } from "@/hooks/useKeyAudioFx";
+import { playNavigate, playConfirm, playDeny } from "@/hooks/useKeyAudioFx";
 import type { RestrictedPing } from "./XMBRestrictedToast";
 
 // motion-wrapped next/link so internal link cards keep SPA navigation while
@@ -178,6 +178,12 @@ const XMBCarouselCard = React.memo(({ item, index, setSize, scrollOffset, isActi
     if (item.restricted) {
       // Deny: the handler owns the sound, shake, and toast.
       onRestricted?.(item, index);
+      return;
+    }
+    if (!isActivatable(item)) {
+      // Dead card (empty folder, link-less link): deny cue, nothing else.
+      e.preventDefault();
+      playDeny();
       return;
     }
     if (isLinkCard) {

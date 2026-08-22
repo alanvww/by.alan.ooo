@@ -83,6 +83,27 @@ function groupItemsIntoFolders(
   const folders: XMBItem[] = [];
   const singular = config.singularLabel ?? type.replace(/s$/, '');
 
+  // `restrictItems` is a property of the tag folder, but the same content
+  // item is also listed in Featured and "All". Stamp it there too, from one
+  // tag set, so a restricted item can't be opened one folder over.
+  const restrictedTags = new Set(
+    PINNED_TAG_FOLDERS.filter((p) => p.restrictItems).map((p) => p.slug),
+  );
+  // Same rule that places an item in a tag folder: the primary (first) tag,
+  // with any "/sub" suffix dropped.
+  const isRestrictedByTag = (item: BaseFrontmatter): boolean =>
+    restrictedTags.has((item.tags?.[0] ?? '').split('/')[0]);
+  const toItem = (item: BaseFrontmatter): XMBItem => ({
+    id: `${type}-${item.slug}`,
+    title: item.title,
+    description: item.excerpt || '',
+    image: item.coverImage,
+    link: `/${type}/${item.slug}`,
+    type: type.replace(/s$/, '') as 'project' | 'post',
+    meta: item,
+    ...(isRestrictedByTag(item) ? { restricted: true } : {}),
+  });
+
   // Featured folder (if enabled and items exist)
   if (config.showFeatured) {
     const featured = getFeatured(items);
@@ -92,15 +113,7 @@ function groupItemsIntoFolders(
         title: 'Featured',
         description: `${featured.length} featured ${featured.length === 1 ? singular : type}`,
         type: 'folder',
-        items: featured.map((item) => ({
-          id: `${type}-${item.slug}`,
-          title: item.title,
-          description: item.excerpt || '',
-          image: item.coverImage,
-          link: `/${type}/${item.slug}`,
-          type: type.replace(/s$/, '') as 'project' | 'post',
-          meta: item
-        }))
+        items: featured.map(toItem)
       });
     }
   }
@@ -149,19 +162,16 @@ function groupItemsIntoFolders(
       if (categoryItems.length < 2 && !pinned) return;
 
       let folderItems: XMBItem[] = [
-        ...categoryItems.map((item) => ({
-          id: `${type}-${item.slug}`,
-          title: item.title,
-          description: item.excerpt || '',
-          image: item.coverImage,
-          link: `/${type}/${item.slug}`,
-          type: type.replace(/s$/, '') as 'project' | 'post',
-          meta: item
-        })),
+        ...categoryItems.map(toItem),
         ...(pinned?.extraItems ?? []),
       ];
       if (pinned?.restrictItems) {
         folderItems = folderItems.map((item) => ({ ...item, restricted: true }));
+      }
+      if (pinned && folderItems.length === 0) {
+        // Still rendered (pinned), but activation is a no-op until it has
+        // tagged projects or extraItems — surface that at build time.
+        console.warn(`[xmb-data] pinned folder "${pinned.slug}" has no items`);
       }
 
       tagFolderItems.push({
@@ -196,15 +206,7 @@ function groupItemsIntoFolders(
         title: 'Recent',
         description: `Latest ${recentItems.length} ${recentItems.length === 1 ? singular : type}`,
         type: 'folder',
-        items: recentItems.map((item) => ({
-          id: `${type}-${item.slug}`,
-          title: item.title,
-          description: item.excerpt || '',
-          image: item.coverImage,
-          link: `/${type}/${item.slug}`,
-          type: type.replace(/s$/, '') as 'project' | 'post',
-          meta: item
-        }))
+        items: recentItems.map(toItem)
       });
     }
   }
@@ -216,15 +218,7 @@ function groupItemsIntoFolders(
       title: `All ${config.title}`,
       description: `View all ${items.length} ${items.length === 1 ? singular : type}`,
       type: 'folder',
-      items: items.map((item) => ({
-        id: `${type}-${item.slug}`,
-        title: item.title,
-        description: item.excerpt || '',
-        image: item.coverImage,
-        link: `/${type}/${item.slug}`,
-        type: type.replace(/s$/, '') as 'project' | 'post',
-        meta: item
-      }))
+      items: items.map(toItem)
     });
   }
 

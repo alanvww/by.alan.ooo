@@ -3,8 +3,8 @@ import { useEffect, useCallback, useMemo, useRef } from 'react';
 import type { XMBCategory, XMBItem } from '@/lib/xmb-types';
 import { useRouter } from 'next/navigation';
 import { useXMBDerivedContext, useXMBLoadingContext, useXMBSelectionContext } from '@/lib/xmb-navigation-context';
-import { playConfirm, playCancel, playNavigate } from '@/hooks/useKeyAudioFx';
-import { activateItem } from '@/lib/xmb-navigation';
+import { playConfirm, playCancel, playNavigate, playDeny } from '@/hooks/useKeyAudioFx';
+import { activateItem, isActivatable } from '@/lib/xmb-navigation';
 
 // Holding ArrowLeft/Right auto-repeats at the OS rate (~30ms), which queues
 // category switches (and their exit animations) faster than they can render.
@@ -172,6 +172,10 @@ export function useXMBNavigation(
       // `drillIntoFolder` is intentionally omitted so folders are no-ops
       // here — Enter is required to drill into nested folders. Restricted
       // items skip the navigate tick (the deny path owns its own sound).
+      if (activeItemRef.current && !isActivatable(activeItemRef.current)) {
+        playDeny();
+        return;
+      }
       if (!activeItemRef.current?.restricted) {
         playNavigate();
       }
@@ -222,6 +226,12 @@ export function useXMBNavigation(
   }, [setItemIndex]);
 
   const confirm = useCallback(() => {
+    // Dead rows (empty folder, link-less link) get the deny cue, not a
+    // confirm bloom followed by nothing.
+    if (activeItemRef.current && !isActivatable(activeItemRef.current)) {
+      playDeny();
+      return;
+    }
     // Restricted items swap the confirm bloom for the deny path's own cue.
     if (!activeItemRef.current?.restricted) {
       playConfirm();
