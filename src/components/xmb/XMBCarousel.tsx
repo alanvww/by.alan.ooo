@@ -562,8 +562,6 @@ const XMBCarousel = ({ items, activeIndex, onSelect, onBack, onRestricted, restr
   return (
     <motion.div
       ref={containerRef}
-      role="listbox"
-      aria-label="Folder contents"
       className="absolute top-0 right-0 w-full md:w-[70%] h-dvh flex items-center justify-center pointer-events-auto overflow-clip touch-none"
       initial={{ opacity: 0, x: 100 }}
       animate={{ opacity: 1, x: 0 }}
@@ -591,6 +589,11 @@ const XMBCarousel = ({ items, activeIndex, onSelect, onBack, onRestricted, restr
               <XMBBackPill onBack={onBack} />
             </motion.div>
           )}
+          {/* The listbox is the cards' DIRECT parent, and the back pill
+              (a button) stays outside it — a button is not valid listbox
+              content. Cards are absolutely positioned, so this wrapper is
+              a zero-impact inset-0 box. */}
+          <div role="listbox" aria-label="Folder contents" className="absolute inset-0">
           {visibleEntries.map(({ item, index }) => {
             return (
               <XMBCarouselCard
@@ -608,6 +611,7 @@ const XMBCarousel = ({ items, activeIndex, onSelect, onBack, onRestricted, restr
               />
             );
           })}
+          </div>
         </div>
       </div>
     </motion.div>

@@ -66,6 +66,11 @@ const XMBCommandBar = ({ commands }: XMBCommandBarProps) => {
   const { activeItem } = useXMBDerivedContext();
 
   const onCategoryRow = itemIndex === -1 && navigationPath.length === 0;
+  // ←/→ switch categories from anywhere at the root (see moveLeft/moveRight),
+  // not only while the category row is focused — the hint, and the touch
+  // buttons that are a paged-layout user's only visible way to change
+  // column, must stay up while an item is selected.
+  const atRoot = navigationPath.length === 0;
 
   const hints: Hint[] = [];
   const controls: TouchControl[] = [];
@@ -99,6 +104,16 @@ const XMBCommandBar = ({ commands }: XMBCommandBarProps) => {
       action: 'Enter',
     });
   } else {
+    if (atRoot) {
+      hints.push({
+        id: 'switch',
+        keys: [
+          { label: '←', pressedKey: 'ArrowLeft' },
+          { label: '→', pressedKey: 'ArrowRight' },
+        ],
+        action: 'Switch',
+      });
+    }
     hints.push({
       id: 'navigate',
       keys: [
@@ -124,6 +139,16 @@ const XMBCommandBar = ({ commands }: XMBCommandBarProps) => {
       action: navigationPath.length > 0 ? 'Up' : 'Reset',
     });
 
+    if (atRoot) {
+      controls.push({
+        id: 'switch',
+        buttons: [
+          { label: '◀', ariaLabel: 'Previous category', onCommand: commands.moveLeft },
+          { label: '▶', ariaLabel: 'Next category', onCommand: commands.moveRight },
+        ],
+        action: 'Switch',
+      });
+    }
     controls.push({
       id: 'navigate',
       buttons: [

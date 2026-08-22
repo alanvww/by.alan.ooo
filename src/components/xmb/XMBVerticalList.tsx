@@ -754,17 +754,18 @@ const XMBVerticalList = React.memo(
                             </motion.div>
                         )}
                     </div>
-                    <div
-                        role="listbox"
-                        aria-label={`Items in ${activeCategory.title}`}
-                        className="relative z-0"
-                    >
+                    <div className="relative z-0">
 
                     {/* Sliding container - Flexbox layout.
                         Width is pinned here so every row in the column is the
-                        same width regardless of which one is selected. */}
+                        same width regardless of which one is selected.
+                        This is the listbox: the role must sit on the option
+                        rows' DIRECT parent or strict AT implementations
+                        won't own them. */}
                     <motion.div
                         ref={columnRef}
+                        role="listbox"
+                        aria-label={`Items in ${activeCategory.title}`}
                         className="flex flex-col"
                         style={{
                             width: layoutMode === 'paged' ? '100%' : `${XMB_LAYOUT.LIST_FULL_WIDTH_PX}px`,

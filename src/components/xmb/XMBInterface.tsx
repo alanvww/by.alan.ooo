@@ -2,6 +2,7 @@
 'use client';
 
 import React, { useMemo, useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
+import { useXMBLayoutMode } from '@/hooks/useXMBLayoutMode';
 import { motion, AnimatePresence } from 'motion/react';
 import type { XMBCategory, XMBItem } from '@/lib/xmb-types';
 import { useXMBNavigation } from '@/hooks/useXMBNavigation';
@@ -25,7 +26,7 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
-  const [layoutMode, setLayoutMode] = useState<'full' | 'paged'>('full');
+  const layoutMode = useXMBLayoutMode();
 
   // Restricted-item deny: every activation attempt bumps the nonce so the
   // matching row/card re-shakes and the toast timer resets. The handler owns
@@ -55,26 +56,6 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
   useEffect(() => {
     finishNavigation();
   }, [finishNavigation]);
-
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) {
-      return;
-    }
-
-    const handleResize = (entries: ResizeObserverEntry[]) => {
-      const entry = entries[0];
-      const width = entry?.contentRect.width ?? window.innerWidth;
-      setLayoutMode(width < 1024 ? 'paged' : 'full');
-    };
-
-    const resizeObserver = new ResizeObserver(handleResize);
-    resizeObserver.observe(container);
-
-    return () => {
-      resizeObserver.disconnect();
-    };
-  }, []);
 
   // The paged stage is fully derived from navigation state: a selection or an
   // open folder means the list is showing, otherwise the category row is.
@@ -392,8 +373,11 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
 
       <XMBHeader />
 
+      {/* max-lg:hidden: SSR always emits the full layout (the server snapshot
+          of useXMBLayoutMode), so a phone must not paint it during the
+          hydration window — it stays blank over the header instead. */}
       {layoutMode === 'full' && (
-        <div className="absolute left-[15%] top-[30%] overflow-visible">
+        <div className="absolute left-[15%] top-[30%] overflow-visible max-lg:hidden">
           <XMBCategoryRow
             categories={categories}
             categoryIndex={categoryIndex}
@@ -417,9 +401,15 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
         </div>
       )}
 
-      {/* Paged layout */}
+      {/* Paged layout. The AnimatePresence itself is gated on the layout
+          mode: its stage crossfades are wanted, but a paged→full flip must
+          drop the paged tree at once — letting it play its exit would keep
+          `xmb-category-N` / `xmb-item-N` ids mounted twice for the exit
+          duration, and getElementById-driven focus would pick one by DOM
+          order. */}
+      {layoutMode === 'paged' && (
       <AnimatePresence mode="popLayout">
-        {layoutMode === 'paged' && pagedStage === 'categories' && (
+        {pagedStage === 'categories' && (
           <motion.div
             key="paged-categories"
             className="absolute inset-x-0 top-[30%] flex justify-center"
@@ -437,7 +427,7 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
           </motion.div>
         )}
 
-        {layoutMode === 'paged' && pagedStage === 'list' && (
+        {pagedStage === 'list' && (
           <motion.div
             key="paged-list"
             className="absolute inset-x-0 top-[22%] flex justify-center"
@@ -479,6 +469,7 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
           </motion.div>
         )}
       </AnimatePresence>
+      )}
 
       {/* Carousel View - Shows when inside a folder */}
       <AnimatePresence>

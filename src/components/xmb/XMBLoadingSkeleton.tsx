@@ -365,8 +365,8 @@ export const XMBMenuLoadingSkeleton = () => (
         <div role="status" aria-label="Loading menu">
             <span className="sr-only">Loading menu</span>
 
-            {/* Full layout — XMBInterface flips layouts with a ResizeObserver
-                at 1024px; lg: matches that threshold statically. */}
+            {/* Full layout — XMBInterface picks its layout from the lg
+                media query (useXMBLayoutMode); lg: is the same threshold. */}
             <div className="absolute left-[15%] top-[30%] hidden overflow-visible lg:block">
                 <MenuSkeletonCategoryStrip />
                 {/* VERTICAL_LIST_TOP (8rem) = the real list's top 4rem +
