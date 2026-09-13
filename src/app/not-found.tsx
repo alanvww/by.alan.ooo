@@ -14,6 +14,9 @@ export default function NotFound() {
     // keycap below needs its own.
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
+            // Modified keys are browser affordances — same rule as the
+            // menu dispatcher and XMBPostFrame.
+            if (e.metaKey || e.ctrlKey || e.altKey) return;
             if (e.key !== 'Escape') return;
             playCancel();
             router.push('/');

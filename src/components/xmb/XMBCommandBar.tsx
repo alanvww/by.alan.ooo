@@ -84,9 +84,14 @@ const XMBCommandBar = ({ commands }: XMBCommandBarProps) => {
       ],
       action: 'Switch',
     });
+    // ENTER also enters the column (confirm() selects item 0) — advertise
+    // it, same two-glyph shape as "← ESC" inside a folder.
     hints.push({
       id: 'enter',
-      keys: [{ label: '↓', pressedKey: 'ArrowDown' }],
+      keys: [
+        { label: '↓', pressedKey: 'ArrowDown' },
+        { label: 'ENTER', pressedKey: 'Enter', wide: true },
+      ],
       action: 'Enter',
     });
 
@@ -135,8 +140,16 @@ const XMBCommandBar = ({ commands }: XMBCommandBarProps) => {
 
     hints.push({
       id: 'back',
-      keys: [{ label: 'ESC', pressedKey: 'Escape', wide: true }],
-      action: navigationPath.length > 0 ? 'Up' : 'Reset',
+      // Inside a folder ArrowLeft also exits one level (moveLeft), so it
+      // is advertised next to ESC there; at the root ← switches category
+      // (already shown under Switch) and ESC alone resets.
+      keys: atRoot
+        ? [{ label: 'ESC', pressedKey: 'Escape', wide: true }]
+        : [
+            { label: '←', pressedKey: 'ArrowLeft' },
+            { label: 'ESC', pressedKey: 'Escape', wide: true },
+          ],
+      action: atRoot ? 'Reset' : 'Up',
     });
 
     if (atRoot) {
@@ -168,6 +181,10 @@ const XMBCommandBar = ({ commands }: XMBCommandBarProps) => {
         }],
       });
     }
+    // One BACK button at every depth. A second "◀ exit folder" button was
+    // tried next to it: the same ◀ glyph means "previous category" at the
+    // root in this very slot, so its meaning would change by depth, and
+    // BACK already exits one level.
     controls.push({
       id: 'back',
       buttons: [{ label: 'BACK', ariaLabel: 'Back', onCommand: commands.back, wide: true }],

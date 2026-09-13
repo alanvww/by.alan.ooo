@@ -79,6 +79,10 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
             // Shift+arrows = text selection, Cmd/Ctrl combos = shortcuts) —
             // never hijack them. Same for keys typed into editable UI.
             if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+            // A held ← re-pushed the same slug on every OS repeat: the
+            // closure's siblings can't refresh until the pushed route
+            // renders. Deliberate taps stay instant; only repeats are dropped.
+            if (e.repeat) return;
             const target = e.target;
             if (target instanceof Element && target.closest('input, textarea, select, [contenteditable="true"]')) {
                 return;
@@ -236,7 +240,7 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
                             >
                                 <span className="text-[10px] font-mono uppercase tracking-widest">Previous</span>
                                 <span className="text-sm font-light tracking-wide flex items-center gap-2">
-                                    <XMBIcon name="ArrowLeft" size={12} className="group-hover:-translate-x-1 group-active:-translate-x-1 transition-transform" />
+                                    <XMBIcon name="ArrowLeft" size={12} className="motion-safe:group-hover:-translate-x-1 motion-safe:group-active:-translate-x-1 transition-transform" />
                                     {!isCoarse && <XMBKeycap label="←" hoverable pressed={prevPressed} />}
                                     <span className="max-w-[32vw] truncate">{siblings.prev.title}</span>
                                 </span>
@@ -258,7 +262,7 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
                                 <span className="text-sm font-light tracking-wide flex items-center gap-2">
                                     <span className="max-w-[32vw] truncate">{siblings.next.title}</span>
                                     {!isCoarse && <XMBKeycap label="→" hoverable pressed={nextPressed} />}
-                                    <XMBIcon name="CaretRight" size={12} className="group-hover:translate-x-1 group-active:translate-x-1 transition-transform" />
+                                    <XMBIcon name="CaretRight" size={12} className="motion-safe:group-hover:translate-x-1 motion-safe:group-active:translate-x-1 transition-transform" />
                                 </span>
                             </button>
                         )}

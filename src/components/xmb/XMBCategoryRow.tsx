@@ -92,7 +92,9 @@ const XMBCategoryCell = React.memo(({
       aria-label={category.title}
       id={`xmb-category-${index}`}
       tabIndex={isActive ? 0 : -1}
-      className="flex flex-col items-center gap-2 cursor-pointer relative focus-visible:outline-none"
+      // outline-hidden, not outline-none: forced-colors mode keeps a
+      // system-drawn focus indicator.
+      className="flex flex-col items-center gap-2 cursor-pointer relative focus-visible:outline-hidden"
       style={{ width: `${XMB_LAYOUT.CATEGORY_WIDTH}px` }}
       onClick={() => {
         // Sound is owned by handleCategorySelect (navigate on switch,

@@ -4,18 +4,20 @@
 import React, { useState, useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import Image from 'next/image';
 import Link from 'next/link';
-import { motion, animate, useAnimationControls, useMotionValue, useReducedMotion, useTransform } from "motion/react";
+import { motion, animate, useAnimationControls, useMotionValue, useMotionValueEvent, useReducedMotion, useTransform } from "motion/react";
 import type { MotionValue } from "motion/react";
 import { useRouter } from "next/navigation";
 import { useXMBLoadingContext } from "@/lib/xmb-navigation-context";
 import type { XMBCategory, XMBItem } from "@/lib/xmb-types";
 import XMBIcon from "./XMBIcon";
 import XMBBackPill from "./XMBBackPill";
-import { XMB_LAYOUT, XMB_ANIMATION, EASE, XMB_SHAKE } from "@/lib/xmb-constants";
+import { XMB_LAYOUT, XMB_ANIMATION, EASE, XMB_SHAKE, XMB_WHEEL } from "@/lib/xmb-constants";
 import { activateItem, isActivatable, isExternalLink } from "@/lib/xmb-navigation";
 import { isStandaloneDocRoute } from "@/lib/xmb-routes";
 import { focusListSibling } from "@/lib/focus";
 import { playNavigate, playConfirm, playDeny } from "@/hooks/useKeyAudioFx";
+import { itemFloor } from "@/hooks/useXMBNavigation";
+import type { XMBWheelDriver } from "@/hooks/useWheelCursor";
 import type { RestrictedPing } from "./XMBRestrictedToast";
 
 interface XMBVerticalListProps {
@@ -40,6 +42,13 @@ interface XMBVerticalListProps {
     layoutMode?: 'full' | 'paged';
     /** True during a pointer press: focus events it causes must not drive selection. */
     isPointerEvent?: () => boolean;
+    /** Registered with the list's cursor/geometry so XMBInterface's root
+        wheel listener (useWheelCursor) can steer it. */
+    wheelDriverRef?: React.RefObject<XMBWheelDriver | null>;
+    /** Accessible name of the listbox. Defaults to the category; the paged
+        list inside a folder shows the folder's rows, so its caller names
+        the folder instead. */
+    listLabel?: string;
 }
 
 interface XMBListItemProps {
@@ -53,7 +62,21 @@ interface XMBListItemProps {
         Animated by the parent with the same transition as the cursor so the
         row-0 crossfade (1 ⇄ 0.7) keeps its old animate-prop timing. */
     selection: MotionValue<number>;
+    /** The COMMITTED selection (itemIndex): aria-selected, the tab stop,
+        the carets, the click model. */
     isItemSelected: boolean;
+    /** The highlight chrome's row. Equal to isItemSelected at rest; during
+        a wheel gesture it hops with the rounded cursor while the committed
+        row keeps its semantics — a legible "steering toward this row, not
+        landed yet" state, bounded by the settle. */
+    isActive: boolean;
+    /** Selected AND no wheel gesture open: the description is unmounted
+        for a gesture so row pitch stays constant while the column slides. */
+    showDescription: boolean;
+    /** Selected AND no wheel gesture open: the parked, nudging drill caret
+        leaves with the description, so a coast never shows the highlight
+        on one row and an animated "press right" cue on another. */
+    showCaret: boolean;
     /** False only at category level (itemIndex −1). */
     hasSelection: boolean;
     /** In-folder context sidebar: rows are inert and unfocusable. */
@@ -132,7 +155,7 @@ function sampleRowSteps(at: (delta: number) => number, delta: number): number {
 }
 
 const XMBListItem = React.memo(
-    ({ item, index, cursor, selection, isItemSelected, hasSelection, isContextView, onRowSelect, onRowActivate, onRowFocus, onRowNode, shakeNonce, startNavigation }: XMBListItemProps) => {
+    ({ item, index, cursor, selection, isItemSelected, isActive, showDescription, showCaret, hasSelection, isContextView, onRowSelect, onRowActivate, onRowFocus, onRowNode, shakeNonce, startNavigation }: XMBListItemProps) => {
         const [imgError, setImgError] = useState(false);
         const reduceMotion = useReducedMotion();
         const isFolder = item.type === 'folder';
@@ -249,8 +272,9 @@ const XMBListItem = React.memo(
         const handleTabKeyDown = (e: React.KeyboardEvent<HTMLElement>): void => {
             if (e.key !== 'Tab') return;
             if (focusListSibling('xmb-item-', index, e.shiftKey ? -1 : 1)) {
+                // The tick plays where the selection changes (onRowFocus),
+                // so the first Tab INTO the list sounds like every later one.
                 e.preventDefault();
-                playNavigate();
             }
         };
 
@@ -258,13 +282,20 @@ const XMBListItem = React.memo(
         // handler: links and buttons activate natively (the window
         // dispatcher's guard stands down for them), so exactly one
         // activation fires per keypress.
-        const rowClassName = 'relative block w-full cursor-pointer mb-6 md:mb-8 focus-visible:outline-none overflow-visible';
+        // outline-hidden, not outline-none: forced-colors mode keeps a
+        // system-drawn focus indicator (the global ring is a box-shadow,
+        // which forced colors discards).
+        const rowClassName = 'relative block w-full cursor-pointer mb-6 md:mb-8 focus-visible:outline-hidden overflow-visible';
         const sharedProps: React.HTMLAttributes<HTMLElement> = {
             role: 'option',
             'aria-selected': isItemSelected,
             id: `xmb-item-${index}`,
             className: rowClassName,
             style: { contain: 'layout style' },
+            // Link rows are real anchors and carry an image: without this a
+            // drag on a title drags the URL and a drag on the thumbnail
+            // drags a ghost image (select-none only blocks text).
+            draggable: false,
             onClick: handleClick,
             onFocus: handleFocus,
             onKeyDown: handleTabKeyDown,
@@ -275,11 +306,11 @@ const XMBListItem = React.memo(
             <motion.div animate={shakeControls}>
                 {/* Item lift/opacity are cursor-driven motion values (see the
                     falloffs above) with the highlight chrome swapped by
-                    class. */}
+                    class — on isActive, the gesture-rounded row. */}
                 <motion.div
                     className={`flex items-center gap-3 md:gap-4 w-full py-3 md:py-4 px-3 md:px-4 rounded-lg xmb-row-chrome ${
-                        isItemSelected
-                            ? "bg-xmb-fg/20 ring-1 ring-xmb-fg/40 shadow-[0_0_20px_var(--color-xmb-shadow-glow)]"
+                        isActive
+                            ? "xmb-row-chrome-active bg-xmb-fg/20 ring-1 ring-xmb-fg/40 shadow-[0_0_20px_var(--color-xmb-shadow-glow)]"
                             : "hover:bg-xmb-fg/5"
                     }`}
                     style={{ y, opacity }}
@@ -287,7 +318,7 @@ const XMBListItem = React.memo(
                     {/* Thumbnail */}
                     <div
                         className={`w-16 h-10 md:w-24 md:h-14 bg-xmb-fg/5 rounded flex items-center justify-center overflow-hidden border shrink-0 ${
-                            isItemSelected
+                            isActive
                                 ? "border-xmb-fg/50"
                                 : "border-xmb-fg/10"
                         }`}
@@ -328,6 +359,17 @@ const XMBListItem = React.memo(
                             {item.restricted && (
                                 <span className="sr-only"> — under wraps, activate for info</span>
                             )}
+                            {/* The carets and badges below are decorative
+                                (XMBIcon is aria-hidden), so folder-ness and
+                                dead rows would otherwise announce exactly
+                                like openable rows. Sighted users get this
+                                from the command bar's ENTER hint. */}
+                            {!item.restricted && isFolder && isActivatable(item) && (
+                                <span className="sr-only">, folder</span>
+                            )}
+                            {!item.restricted && !isActivatable(item) && (
+                                <span className="sr-only">, unavailable</span>
+                            )}
                             {/* External rows carry a chain-link badge; the
                                 caret matches the folder affordance (in the
                                 title line while unselected, parked on the
@@ -346,9 +388,11 @@ const XMBListItem = React.memo(
                             by the stage's 0.12s fade. Plain element opacity:
                             stacking 0.6 on the /60 color token landed at
                             ~0.36 effective (~3.2:1, a WCAG AA failure); /70
-                            alone is ~9.7:1. */}
-                        {isItemSelected && item.description && (
-                            <p className="text-xs md:text-sm text-xmb-fg/70 mt-1 line-clamp-2">
+                            alone is ~9.7:1. Unmounted for the length of a
+                            wheel gesture (showDescription) so the pitch the
+                            column slides through stays constant. */}
+                        {showDescription && item.description && (
+                            <p data-xmb-desc className="text-xs md:text-sm text-xmb-fg/70 mt-1 line-clamp-2">
                                 {item.description}
                             </p>
                         )}
@@ -364,7 +408,7 @@ const XMBListItem = React.memo(
                         mounted, and the double-caret row squeezed the truncate
                         span into a transient ellipsis. The mount glide
                         (initial → animate) still runs. */}
-                    {isItemSelected && (isFolder || isExternal) && (
+                    {showCaret && (isFolder || isExternal) && (
                         <motion.div
                             key="drill-caret"
                             initial={{ opacity: 0, x: -8 }}
@@ -428,9 +472,30 @@ const XMBVerticalList = React.memo(
         onHeaderClick,
         layoutMode = 'full',
         isPointerEvent,
+        wheelDriverRef,
+        listLabel,
     }: XMBVerticalListProps) => {
         const router = useRouter();
         const { startNavigation } = useXMBLoadingContext();
+
+        // Wheel gesture state (useWheelCursor writes these through the
+        // driver). While a gesture is open the selected row's description is
+        // unmounted and the highlight follows the rounded cursor; both
+        // collapse back onto itemIndex the moment the gesture settles.
+        const [wheelActive, setWheelActive] = useState(false);
+        const [gestureIndex, setGestureIndex] = useState(itemIndex);
+        const activeIndex = wheelActive ? gestureIndex : itemIndex;
+        // Read by the cursor effect below: while a gesture is open the hook
+        // owns the cursor, and an animation started here would fight its
+        // per-frame writes (the settle of an isolated notch could start
+        // AFTER the next stream event had already taken over).
+        const wheelActiveRef = useRef(wheelActive);
+        useLayoutEffect(() => {
+            wheelActiveRef.current = wheelActive;
+        });
+        // Set by the hook right before it commits, so the cursor effect
+        // below settles with the carousel's SNAP instead of the 300ms TWEEN.
+        const selfCommitRef = useRef(false);
 
         // First click on a different row = move the cursor.
         const handleRowSelect = useCallback((idx: number) => {
@@ -458,14 +523,20 @@ const XMBVerticalList = React.memo(
         // The check reads itemIndex through a ref so this callback keeps ONE
         // identity for the life of the list — closing over itemIndex would
         // mint a new callback per keypress and re-render every memoized row
-        // just to refresh a guard value.
+        // just to refresh a guard value. (The wheel driver below reads the
+        // same ref for the committed index.)
         const itemIndexRef = useRef(itemIndex);
         useLayoutEffect(() => {
             itemIndexRef.current = itemIndex;
         });
         const handleRowFocus = useCallback((idx: number) => {
             if (isPointerEvent?.()) return;
-            if (idx !== itemIndexRef.current) onItemSelect(idx);
+            if (idx !== itemIndexRef.current) {
+                // Sound follows the state change: Tab into or along the
+                // list ticks here, never in the Tab handler.
+                playNavigate();
+                onItemSelect(idx);
+            }
         }, [isPointerEvent, onItemSelect]);
 
         const hasSelection = itemIndex !== -1;
@@ -492,45 +563,104 @@ const XMBVerticalList = React.memo(
             }
         }, []);
 
-        // Measured slide offset for the column. Row pitch is content-driven
-        // (responsive padding/margins, description expansion), so it must be
-        // read from the DOM rather than a constant — a fixed per-row step
-        // drifts further from the focus anchor with every index. offsetTop
-        // ignores CSS transforms, so the above-row lift translate (rowLiftAt)
-        // on earlier rows never pollutes the measurement.
-        const [containerOffset, setContainerOffset] = useState(0);
+        // ONE cursor motion value drives every row's lift/opacity (each row
+        // maps it through the falloffs at the top of this file), so a
+        // selection move retargets a single animation instead of one per row
+        // per property — and rows don't re-render at all while it's in
+        // flight. `selectionLevel` (1 = a row is selected, 0 = category
+        // level) rides the same transition so the row-0 idle⇄selected
+        // crossfade keeps its old animate-prop timing.
+        const cursor = useMotionValue(displayIndex);
+        const selectionLevel = useMotionValue(hasSelection ? 1 : 0);
 
-        const measureOffset = useCallback(() => {
-            const firstId = currentItems[0]?.id;
-            const selectedId = currentItems[displayIndex]?.id;
-            const first = firstId ? rowRefs.current.get(firstId) : undefined;
-            const selected = selectedId ? rowRefs.current.get(selectedId) : undefined;
-            if (!first || !selected) {
+        // Column geometry: every row's offsetTop relative to row 0, in a REF
+        // (no React render per measurement). Row pitch is content-driven
+        // (responsive padding/margins, the selected row's description), so
+        // it must be read from the DOM rather than a constant — a fixed
+        // per-row step drifts further from the focus anchor with every
+        // index. offsetTop ignores CSS transforms, so the above-row lift
+        // translate (rowLiftAt) on earlier rows never pollutes it.
+        const geomRef = useRef<number[]>([0]);
+
+        // The column's slide is a pure function of the cursor and that
+        // geometry: sampled piecewise-linearly between adjacent row offsets
+        // (the same shape as sampleRowSteps), so a fractional cursor — the
+        // wheel's — has a column position between rows, and a keyboard move
+        // rides the cursor's own tween. columnY stays a PLAIN motion value,
+        // never a useTransform or a follower: a value the rows read must
+        // land synchronously with the commit (motion applies transform and
+        // follower updates from its rAF loop after paint), which is the
+        // one-frame wrong-pose bug the old `columnPhase` snap existed to
+        // prevent. With columnY derived, that machinery is gone: on a list
+        // swap the render-phase cursor.jump() below notifies the change
+        // subscription synchronously and the measurement layout effect
+        // re-syncs on the new rows in the same pass, so columnY is correct
+        // before paint by both routes.
+        const columnY = useMotionValue(0);
+
+        const syncColumnY = useCallback(() => {
+            const offsets = geomRef.current;
+            const last = offsets.length - 1;
+            const at = (k: number): number => offsets[Math.max(0, Math.min(last, k))] ?? 0;
+            const c = cursor.get();
+            const f = Math.floor(c);
+            const t = c - f;
+            columnY.set(-(at(f) + (at(f + 1) - at(f)) * t));
+        }, [columnY, cursor]);
+
+        // The table is description-FREE by construction. The selected row's
+        // description sits inside that row and displaces only the rows
+        // below it, so a table measured with it in place moves under a
+        // constant cursor in the commit that moves the description — on
+        // every upward move the rows above would kick up by its height and
+        // glide back. Subtracting it for k > selected gives a table that
+        // never moves under the cursor: -offsets[k] is still row k's exact
+        // resting position (a row's own description never shifts its own
+        // offsetTop), and it is the same table a wheel gesture measures
+        // with the description unmounted. The selected index is read
+        // through itemIndexRef (fresh: its layout effect is declared above)
+        // rather than closed over, so this keeps one identity and the
+        // observer below is not rebuilt per selection change.
+        const measureOffsets = useCallback(() => {
+            const first = currentItems[0] ? rowRefs.current.get(currentItems[0].id) : undefined;
+            if (!first) {
                 return;
             }
-            // Diff of offsetTops: exact regardless of offsetParent.
-            setContainerOffset(-(selected.offsetTop - first.offsetTop));
-        }, [currentItems, displayIndex]);
+            const base = first.offsetTop;
+            const sel = Math.max(itemIndexRef.current, 0);
+            const selNode = currentItems[sel] ? rowRefs.current.get(currentItems[sel].id) : undefined;
+            const desc = selNode?.querySelector<HTMLElement>('[data-xmb-desc]') ?? null;
+            const descShift = desc ? desc.offsetHeight + parseFloat(getComputedStyle(desc).marginTop || '0') : 0;
+            geomRef.current = currentItems.map((item, k) => {
+                const node = rowRefs.current.get(item.id);
+                return (node ? node.offsetTop - base : 0) - (k > sel ? descShift : 0);
+            });
+            syncColumnY();
+        }, [currentItems, syncColumnY]);
 
-        // Re-measure before paint whenever selection or the item set changes
-        // (both are inputs of measureOffset, so its identity tracks them).
+        // Re-measure before paint whenever the item set changes, and in the
+        // same commit the description moves (displayIndex) or unmounts for
+        // a wheel gesture (wheelActive) — rather than a frame later via the
+        // observer below.
         useLayoutEffect(() => {
-            measureOffset();
-        }, [measureOffset]);
+            measureOffsets();
+        }, [measureOffsets, displayIndex, wheelActive]);
+
+        // Every cursor write — keyboard tween frames, wheel writes, the
+        // render-phase list-swap jump — re-derives the column.
+        useMotionValueEvent(cursor, 'change', syncColumnY);
 
         // Re-measure whenever the column's size changes: breakpoint/viewport
-        // resizes AND the selected row's description mounting/unmounting
-        // (it appears and collapses instantly, shifting lower rows).
-        // Retargeting the y tween mid-flight is fine in motion.
+        // resizes and any late content reflow.
         useEffect(() => {
             const column = columnRef.current;
             if (!column) {
                 return;
             }
-            const resizeObserver = new ResizeObserver(() => measureOffset());
+            const resizeObserver = new ResizeObserver(() => measureOffsets());
             resizeObserver.observe(column);
             return () => resizeObserver.disconnect();
-        }, [measureOffset]);
+        }, [measureOffsets]);
 
         // What the back pill does here: exit the folder when inside one,
         // otherwise (paged top level) fall back to the header's
@@ -561,10 +691,6 @@ const XMBVerticalList = React.memo(
         // Imperative animate() on motion values bypasses MotionConfig's
         // reducedMotion, so the entrance gates itself.
         const reduceMotion = useReducedMotion();
-        // 'snap' for the commit that swaps categories: the column's y then
-        // retargets with duration 0 instead of springing the previous
-        // category's scroll offset into the incoming list.
-        const [columnPhase, setColumnPhase] = useState<'snap' | 'settled'>('snap');
 
         useLayoutEffect(() => {
             if (prevCategoryIdRef.current === activeCategory.id) {
@@ -580,42 +706,7 @@ const XMBVerticalList = React.memo(
                 animate(entranceOpacity, 1, { duration: 0.15, ease: EASE.MOVE });
                 animate(entranceX, 0, { duration: 0.15, ease: EASE.MOVE });
             }
-            setColumnPhase('snap');
         }, [activeCategory.id, entranceOpacity, entranceX, reduceMotion]);
-
-        // Follow-up commit restores the column's selection-move spring.
-        useEffect(() => {
-            if (columnPhase === 'snap') {
-                setColumnPhase('settled');
-            }
-        }, [columnPhase]);
-
-        // The column's slide is a motion value for the same reason as the
-        // entrance above: animate-prop retargeting is applied from motion's
-        // rAF loop AFTER the swap commit paints, so even with the snap
-        // phase's duration-0 transition a category switch painted the
-        // incoming list for a frame or two at the outgoing list's scroll
-        // offset. jump() lands the reset in the same commit. Selection
-        // moves within a list keep the shared TWEEN; imperative animate()
-        // bypasses MotionConfig's reducedMotion, so this gates itself.
-        const columnY = useMotionValue(containerOffset);
-        useLayoutEffect(() => {
-            if (columnPhase === 'snap' || reduceMotion) {
-                columnY.jump(containerOffset);
-                return;
-            }
-            animate(columnY, containerOffset, { ...XMB_ANIMATION.TWEEN });
-        }, [columnPhase, columnY, containerOffset, reduceMotion]);
-
-        // ONE cursor motion value drives every row's lift/opacity (each row
-        // maps it through the falloffs at the top of this file), so a
-        // selection move retargets a single animation instead of one per row
-        // per property — and rows don't re-render at all while it's in
-        // flight. `selectionLevel` (1 = a row is selected, 0 = category
-        // level) rides the same transition so the row-0 idle⇄selected
-        // crossfade keeps its old animate-prop timing.
-        const cursor = useMotionValue(displayIndex);
-        const selectionLevel = useMotionValue(hasSelection ? 1 : 0);
 
         // Category id + folder path identifies the rendered level: category
         // switches AND folder drills/backs change it. (Item ids are NOT
@@ -653,11 +744,22 @@ const XMBVerticalList = React.memo(
         // motion's animateMotionValue resolution, so the cursor moves
         // exactly like the rows used to. Imperative animate() bypasses
         // MotionConfig's reducedMotion (see the entrance above), so reduced
-        // motion jumps here instead.
+        // motion jumps here instead. A change the wheel hook committed
+        // itself (selfCommitRef) settles the remaining fraction with the
+        // carousel's SNAP instead, so a wheel settle lands like a carousel
+        // settle; the list's own cursor tween IS the snap.
         useLayoutEffect(() => {
             const isListSwap = prevListKeyRef.current !== listKey;
             prevListKeyRef.current = listKey;
             const selectionTarget = hasSelection ? 1 : 0;
+            const selfCommit = selfCommitRef.current;
+            selfCommitRef.current = false;
+            // A gesture is open: the hook owns the cursor and will settle it
+            // itself (its commit closes the gesture in the same batch as
+            // the index change, so a settle never lands here with the flag
+            // still up; an external change aborts the gesture, and that
+            // abort snaps the cursor to the new index).
+            if (wheelActiveRef.current && !isListSwap) return;
             if (isListSwap || reduceMotion) {
                 // The render-phase jump above already landed the swap pose;
                 // re-asserting is a no-op there. This branch is load-bearing
@@ -666,16 +768,44 @@ const XMBVerticalList = React.memo(
                 selectionLevel.jump(selectionTarget);
                 return;
             }
-            animate(cursor, displayIndex, { ...XMB_ANIMATION.TWEEN });
-            animate(selectionLevel, selectionTarget, { ...XMB_ANIMATION.TWEEN });
+            const transition = selfCommit ? XMB_WHEEL.SNAP : XMB_ANIMATION.TWEEN;
+            animate(cursor, displayIndex, { ...transition });
+            animate(selectionLevel, selectionTarget, { ...transition });
         }, [cursor, displayIndex, hasSelection, listKey, reduceMotion, selectionLevel]);
 
         // Halt any in-flight cursor animation when the list unmounts.
         useEffect(() => () => {
             cursor.stop();
             selectionLevel.stop();
-            columnY.stop();
-        }, [columnY, cursor, selectionLevel]);
+        }, [cursor, selectionLevel]);
+
+        // Register the wheel driver (re-registered whenever one of its
+        // inputs changes; the committed index is read through itemIndexRef
+        // so it is always fresh) and null it on unmount, so a paged/full
+        // flip never leaves a stale driver behind. Layout effect: the
+        // parent's own layout effect (notifySelection) runs after this one.
+        const inFolder = navigationPath.length > 0;
+        const itemCount = currentItems.length;
+        useLayoutEffect(() => {
+            if (!wheelDriverRef) return;
+            wheelDriverRef.current = {
+                cursor,
+                selectionLevel,
+                syncColumnY,
+                setWheelActive,
+                setGestureIndex,
+                getCommitted: () => itemIndexRef.current,
+                getFloor: () => itemFloor(layoutMode, inFolder, itemIndexRef.current),
+                getMax: () => itemCount - 1,
+                markSelfCommit: () => {
+                    selfCommitRef.current = true;
+                },
+                commit: onItemSelect,
+            };
+            return () => {
+                wheelDriverRef.current = null;
+            };
+        }, [wheelDriverRef, cursor, selectionLevel, syncColumnY, onItemSelect, layoutMode, inFolder, itemCount]);
 
         return (
             <motion.div
@@ -735,7 +865,8 @@ const XMBVerticalList = React.memo(
                                 onClick={onHeaderClick}
                                 initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
-                                className="mb-4 text-lg md:text-xl font-light tracking-wide text-xmb-fg/80 focus-visible:outline-none"
+                                data-xmb-chrome=""
+                                className="mb-4 text-lg md:text-xl font-light tracking-wide text-xmb-fg/80 focus-visible:outline-hidden"
                             >
                                 {activeCategory.title}
                             </motion.button>
@@ -765,8 +896,14 @@ const XMBVerticalList = React.memo(
                     <motion.div
                         ref={columnRef}
                         role="listbox"
-                        aria-label={`Items in ${activeCategory.title}`}
+                        aria-label={listLabel ?? `Items in ${activeCategory.title}`}
                         className="flex flex-col"
+                        // data-wheeling (globals.css): shortens the row chrome's
+                        // 853ms background spring so a fast flick leaves no
+                        // fading highlight trail, and mutes the hover tint on
+                        // non-active rows, which would otherwise land on
+                        // whichever row slides under a stationary pointer.
+                        data-wheeling={wheelActive || undefined}
                         style={{
                             width: layoutMode === 'paged' ? '100%' : `${XMB_LAYOUT.LIST_FULL_WIDTH_PX}px`,
                             willChange: "transform",
@@ -781,6 +918,9 @@ const XMBVerticalList = React.memo(
                                 cursor={cursor}
                                 selection={selectionLevel}
                                 isItemSelected={idx === itemIndex}
+                                isActive={idx === activeIndex}
+                                showDescription={idx === itemIndex && !wheelActive}
+                                showCaret={idx === itemIndex && !wheelActive}
                                 hasSelection={hasSelection}
                                 isContextView={isContextView}
                                 onRowSelect={handleRowSelect}

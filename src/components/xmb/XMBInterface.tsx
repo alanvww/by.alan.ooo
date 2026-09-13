@@ -3,12 +3,15 @@
 
 import React, { useMemo, useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
 import { useXMBLayoutMode } from '@/hooks/useXMBLayoutMode';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import type { XMBCategory, XMBItem } from '@/lib/xmb-types';
 import { useXMBNavigation } from '@/hooks/useXMBNavigation';
 import { useIndexPan } from '@/hooks/useIndexPan';
-import { playConfirm, playNavigate, playCancel, playDeny } from '@/hooks/useKeyAudioFx';
+import { useWheelCursor } from '@/hooks/useWheelCursor';
+import type { XMBWheelDriver } from '@/hooks/useWheelCursor';
+import { playConfirm, playNavigate, playDeny } from '@/hooks/useKeyAudioFx';
 import { focusSilently } from '@/lib/focus';
+import { isChromeTarget } from '@/lib/xmb-chrome';
 import { EASE, XMB_GESTURE } from '@/lib/xmb-constants';
 import XMBCategoryRow from './XMBCategoryRow';
 import XMBVerticalList from './XMBVerticalList';
@@ -21,6 +24,9 @@ import XMBRestrictedToast, { type RestrictedPing } from './XMBRestrictedToast';
 interface XMBInterfaceProps {
   categories: XMBCategory[];
 }
+
+/** "1 item" / "N items" for the live region (the data layer pluralizes the same way). */
+const countItems = (n: number): string => `${n} ${n === 1 ? 'item' : 'items'}`;
 
 const XMBInterface = ({ categories }: XMBInterfaceProps) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -38,6 +44,14 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
     setRestrictedPing((prev) => ({ id: item.id, nonce: (prev?.nonce ?? 0) + 1 }));
   }, []);
 
+  // The row a wheel coast is visibly on (null at rest): published by
+  // useWheelCursor below, read first by the vertical commands so a key
+  // pressed mid-coast acts on the highlighted row.
+  const liveIndexRef = useRef<number | null>(null);
+  // Filled once the wheel hook exists (below); the commands end an open
+  // gesture through it before acting.
+  const wheelAbortRef = useRef<(() => void) | null>(null);
+
   const {
     categoryIndex,
     itemIndex,
@@ -46,12 +60,13 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
     activeItem,
     currentItems,
     commands,
+    isNavigating,
     setCategoryIndex,
     setItemIndex,
     setNavigationPath,
     recallItemIndex,
     finishNavigation
-  } = useXMBNavigation(categories, layoutMode, handleRestricted);
+  } = useXMBNavigation(categories, layoutMode, handleRestricted, liveIndexRef, wheelAbortRef);
 
   useEffect(() => {
     finishNavigation();
@@ -71,26 +86,36 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
     setItemIndex(0);
   }, [navigationPath, setItemIndex, setNavigationPath]);
 
-  // Mouse/touch equivalent of Escape inside a folder: exit one level and
-  // restore the cursor to the folder row we drilled in from.
-  const handleFolderBack = useCallback(() => {
-    if (navigationPath.length === 0) return;
-    const parentFolderIndex = navigationPath[navigationPath.length - 1];
-    setNavigationPath(navigationPath.slice(0, -1));
-    setItemIndex(parentFolderIndex);
-  }, [navigationPath, setItemIndex, setNavigationPath]);
+  // Mouse/touch exits (back pills, the in-folder swipe, the carousel's
+  // pill) all run the shared `back` command, which owns the cancel cue —
+  // so every path out of a folder sounds the same.
+
+  const clearTouch = useCallback(() => {
+    touchStartX.current = null;
+    touchStartY.current = null;
+  }, []);
 
   const handleTouchStart = useCallback((event: React.TouchEvent) => {
+    // Never a swipe: a second finger (a pinch), or a press on pressable
+    // chrome (command-bar keycaps, back pills, the header widget). The
+    // keycap already fired its command on pointerdown, so a slide off it
+    // must not ALSO read as a category switch.
+    if (event.touches.length > 1 || isChromeTarget(event.target)) {
+      clearTouch();
+      return;
+    }
     const touch = event.touches[0];
     touchStartX.current = touch?.clientX ?? null;
     touchStartY.current = touch?.clientY ?? null;
-  }, []);
+  }, [clearTouch]);
 
   const handleTouchEnd = useCallback((event: React.TouchEvent) => {
     const startX = touchStartX.current;
     const startY = touchStartY.current;
-    touchStartX.current = null;
-    touchStartY.current = null;
+    clearTouch();
+
+    // Other fingers still down: not a clean single-finger swipe end.
+    if (event.touches.length > 0) return;
 
     const endX = event.changedTouches[0]?.clientX;
     const endY = event.changedTouches[0]?.clientY;
@@ -111,13 +136,22 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
       return;
     }
 
+    // Swipes starting at a screen edge belong to the browser (iOS back
+    // from the left edge, forward from the right): a switch there would
+    // tick over a navigation the user is making away from the page. The
+    // guard applies at every depth, not only inside folders.
+    if (
+      (dx > 0 && startX < XMB_GESTURE.EDGE_GUARD_PX) ||
+      (dx < 0 && startX > window.innerWidth - XMB_GESTURE.EDGE_GUARD_PX)
+    ) {
+      return;
+    }
+
     if (navigationPath.length > 0) {
-      // Inside a folder: swipe right steps back one level. Swipes starting
-      // at the left screen edge are ignored so this never races the
-      // browser's own edge-back gesture.
-      if (dx > 0 && startX >= XMB_GESTURE.EDGE_GUARD_PX) {
-        playCancel();
-        handleFolderBack();
+      // Inside a folder: swipe right steps back one level; the shared
+      // command owns the cancel cue. Swipe left is a no-op there.
+      if (dx > 0) {
+        commands.back();
       }
       return;
     }
@@ -130,7 +164,7 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
     } else {
       commands.moveLeft();
     }
-  }, [commands, handleFolderBack, navigationPath]);
+  }, [clearTouch, commands, navigationPath]);
 
   // Check if we're inside a folder (drilled down)
   const isInsideFolder = navigationPath.length > 0;
@@ -144,10 +178,14 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
   // focus links/buttons on mousedown, and that focus event must not drive
   // selection (the two-click model owns pointer selection via onClick).
   // On touch the compatibility mousedown — and so the focus — is dispatched
-  // after touchend, tens of ms after pointerdown and in a separate task, so
-  // a timer-based window can't cover it; `click` is the last event of both
-  // the mouse and touch sequences and is the reliable disarm point. The
-  // timeout only catches presses that never click (pans, drags, cancels).
+  // after touchend, tens of ms after pointerdown and in a separate task;
+  // `click` is the last event of both the mouse and touch sequences and is
+  // the reliable disarm point. The watchdog that catches releases which
+  // never click (pans, drags) starts at the RELEASE, not the press: a timer
+  // started at pointerdown expired under any press held past it, so the
+  // touch focus then landed with the guard down, selected the row with a
+  // tick, and the trailing click read as the SECOND click and activated —
+  // one long press did what the two-click model requires two taps for.
   const pointerDownRef = useRef(false);
   const pointerDownTimerRef = useRef<number | null>(null);
 
@@ -165,8 +203,23 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
     pointerDownRef.current = true;
     if (pointerDownTimerRef.current !== null) {
       window.clearTimeout(pointerDownTimerRef.current);
+      pointerDownTimerRef.current = null;
     }
-    pointerDownTimerRef.current = window.setTimeout(disarmPointer, 500);
+  }, []);
+
+  // Window-level, not a capture prop on the root: a mouse released outside
+  // the fixed-inset-0 root would never deliver the root's pointerup and the
+  // guard would stay armed forever.
+  useEffect(() => {
+    const armWatchdog = (): void => {
+      if (!pointerDownRef.current) return;
+      if (pointerDownTimerRef.current !== null) {
+        window.clearTimeout(pointerDownTimerRef.current);
+      }
+      pointerDownTimerRef.current = window.setTimeout(disarmPointer, 500);
+    };
+    window.addEventListener('pointerup', armWatchdog, true);
+    return () => window.removeEventListener('pointerup', armWatchdog, true);
   }, [disarmPointer]);
 
   useEffect(() => disarmPointer, [disarmPointer]);
@@ -265,7 +318,12 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
   // ONLY while DOM focus is outside the menu (arrows-on-body console mode).
   // Once focus roves with the selection, the focused row/tab/card announces
   // itself — speaking here too would read everything twice.
-  const [announcement, setAnnouncement] = useState('');
+  // Nonce alongside the text: React bails on an unchanged string and an
+  // unchanged polite region says nothing, so "Category: Projects, 8 items"
+  // spoken twice in a row (Escape, ArrowDown, Escape) was silent the
+  // second time. The keyed span below remounts per announcement.
+  const [announcement, setAnnouncement] = useState<{ text: string; nonce: number }>({ text: '', nonce: 0 });
+  const announceNonceRef = useRef(0);
   const prevAnnouncedRef = useRef<{ categoryIndex: number; itemIndex: number; pathLength: number } | null>(null);
 
   useEffect(() => {
@@ -276,16 +334,17 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
     let next = '';
     if (navigationPath.length > prev.pathLength) {
       const folderTitle = parentItems[parentIndex]?.title ?? activeCategory.title;
-      next = `Entered folder ${folderTitle}, ${currentItems.length} items`;
+      next = `Entered folder ${folderTitle}, ${countItems(currentItems.length)}`;
     } else if (navigationPath.length < prev.pathLength) {
       next = 'Exited folder';
     } else if (categoryIndex !== prev.categoryIndex || (itemIndex === -1 && prev.itemIndex !== -1)) {
-      next = `Category: ${activeCategory.title}, ${currentItems.length} items`;
+      next = `Category: ${activeCategory.title}, ${countItems(currentItems.length)}`;
     } else if (itemIndex !== prev.itemIndex && activeItem) {
       next = `${activeItem.title}, ${itemIndex + 1} of ${currentItems.length}`;
     }
     if (next) {
-      setAnnouncement(next);
+      announceNonceRef.current += 1;
+      setAnnouncement({ text: next, nonce: announceNonceRef.current });
     }
   }, [categoryIndex, itemIndex, navigationPath, activeCategory, activeItem, currentItems, parentItems, parentIndex]);
 
@@ -338,12 +397,61 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
   // Drag-with-snap on the paged list: vertical pan travel commits discrete
   // index steps (clamped at 0 — deselect-to-categories stays on the visible
   // BACK controls so a flick can't pop the stage under the user's finger).
+  // A pan that starts on pressable chrome (the header title, the back
+  // pill) belongs to that control, not to the list. The press target is
+  // captured at pointerdown because motion's onPanStart arrives with a
+  // pointermove.
+  const panChromeOriginRef = useRef(false);
+  const handlePagedPointerDownCapture = useCallback((event: React.PointerEvent) => {
+    panChromeOriginRef.current = isChromeTarget(event.target);
+  }, []);
   const listPanHandlers = useIndexPan({
     getIndex: () => Math.max(itemIndex, 0),
     getMin: () => 0,
     getMax: () => Math.max(currentItems.length - 1, 0),
     onCommit: setItemIndex,
+    isSuppressed: () => panChromeOriginRef.current,
   });
+
+  // Mouse wheel / trackpad on the whole menu root (the way the arrow keys
+  // already work from anywhere): a continuous float cursor on the vertical
+  // list, quantized detents on the category row. Inside a folder in the
+  // full layout the carousel owns the wheel (its listener sits on this
+  // same root and the hook stands down via `enabled`); inside a folder the
+  // horizontal branch is inert because moveRight ACTIVATES there. The list
+  // registers its driver through listDriverRef; between lists (paged
+  // categories stage) wheel-down enters the active column.
+  const listDriverRef = useRef<XMBWheelDriver | null>(null);
+  const reduceMotion = useReducedMotion();
+  const atRoot = navigationPath.length === 0;
+  const wheel = useWheelCursor({
+    surfaceRef: containerRef,
+    driverRef: listDriverRef,
+    enabled: !(showCarousel && layoutMode === 'full') && currentItems.length > 0,
+    isPointerEvent,
+    isNavigating,
+    reduceMotion: reduceMotion ?? false,
+    categoryCount: categories.length,
+    stepPrev: atRoot ? commands.moveLeft : null,
+    stepNext: atRoot ? commands.moveRight : null,
+    enterList: layoutMode === 'paged' && pagedStage === 'categories' ? commands.moveDown : null,
+    liveIndexRef,
+  });
+  // Any committed selection change the hook did not make itself (keypress,
+  // click, pan, category switch, folder drill, layout flip) aborts an open
+  // gesture, or a momentum tail would commit an index from the previous
+  // state. Layout effect: the list's own layout effects (driver
+  // registration, itemIndexRef) have already run.
+  const wheelListKey = `${categoryIndex}:${navigationPath.join('/')}`;
+  useLayoutEffect(() => {
+    wheel.notifySelection(itemIndex, wheelListKey);
+  }, [wheel, itemIndex, wheelListKey]);
+  useLayoutEffect(() => {
+    wheelAbortRef.current = wheel.abort;
+    return () => {
+      wheelAbortRef.current = null;
+    };
+  }, [wheel]);
 
   // Early return after all hooks have been called
   if (categories.length === 0 || !activeCategory) return null;
@@ -359,6 +467,7 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
       style={{ contain: 'layout style' }}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
+      onTouchCancel={clearTouch}
       onFocusCapture={handleFocusCapture}
       onBlurCapture={handleBlurCapture}
       onPointerDownCapture={handlePointerDownCapture}
@@ -368,7 +477,7 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
       {/* Screen Reader Live Region — transition announcements while focus is
           outside the menu; empty (silent) once real focus takes over. */}
       <div aria-live="polite" role="status" className="sr-only">
-        {announcement}
+        <span key={announcement.nonce}>{announcement.text}</span>
       </div>
 
       <XMBHeader />
@@ -397,6 +506,7 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
             onRestricted={handleRestricted}
             restrictedPing={restrictedPing}
             isPointerEvent={isPointerEvent}
+            wheelDriverRef={listDriverRef}
           />
         </div>
       )}
@@ -431,11 +541,15 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
           <motion.div
             key="paged-list"
             className="absolute inset-x-0 top-[22%] flex justify-center"
-            style={{ touchAction: 'none' }}
+            // pinch-zoom, not none: the app wants both pan axes for its own
+            // detents and swipes, but the layout's viewport meta promises
+            // pinch zoom stays available (no maximumScale/userScalable).
+            style={{ touchAction: 'pinch-zoom' }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.12, ease: EASE.MOVE }}
+            onPointerDownCapture={handlePagedPointerDownCapture}
             onPanStart={listPanHandlers.onPanStart}
             onPan={listPanHandlers.onPan}
             onPanEnd={listPanHandlers.onPanEnd}
@@ -450,20 +564,22 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
               isContextView={false}
               onItemSelect={setItemIndex}
               onFolderDrill={handleFolderDrill}
-              onBack={handleFolderBack}
+              onBack={commands.back}
               onRestricted={handleRestricted}
               restrictedPing={restrictedPing}
               isPointerEvent={isPointerEvent}
+              wheelDriverRef={listDriverRef}
               listClassName="w-[88vw] max-w-2xl"
+              listLabel={
+                isInsideFolder
+                  ? `Items in ${parentItems[parentIndex]?.title ?? activeCategory.title}`
+                  : undefined
+              }
               showHeader
-              onHeaderClick={() => {
-                // Returning to the categories stage must be a clean root
-                // state — a stale folder path desyncs the command bar and
-                // kills root swipes (same reason handleCategorySelect
-                // clears it). Clean root state IS the 'categories' stage.
-                setNavigationPath([]);
-                setItemIndex(-1);
-              }}
+              // Returning to the categories stage is the shared resetToRoot
+              // command: clean root state (no path, no selection) IS the
+              // 'categories' stage, and the command owns the cancel cue.
+              onHeaderClick={commands.resetToRoot}
               layoutMode="paged"
             />
           </motion.div>
@@ -478,10 +594,12 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
             items={currentItems}
             activeIndex={itemIndex >= 0 ? itemIndex : 0}
             onSelect={setItemIndex}
-            onBack={handleFolderBack}
+            onBack={commands.back}
+            label={parentItems[parentIndex]?.title}
             onRestricted={handleRestricted}
             restrictedPing={restrictedPing}
             isPointerEvent={isPointerEvent}
+            wheelSurfaceRef={containerRef}
           />
         )}
       </AnimatePresence>

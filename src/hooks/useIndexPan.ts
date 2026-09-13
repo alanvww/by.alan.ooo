@@ -14,6 +14,10 @@ interface UseIndexPanOptions {
   getMax: () => number;
   /** Commit a new (already clamped) index. */
   onCommit: (index: number) => void;
+  /** Read once per gesture at pan start: true when the press began on
+      pressable chrome, so this pan commits nothing (and swallows no click —
+      a press that starts and ends on the header must still reset). */
+  isSuppressed?: () => boolean;
 }
 
 export interface IndexPanHandlers {
@@ -37,7 +41,7 @@ export interface IndexPanHandlers {
  *
  * All refs are mutated inside event handlers only (React Compiler safe).
  */
-export function useIndexPan({ getIndex, getMin, getMax, onCommit }: UseIndexPanOptions): IndexPanHandlers {
+export function useIndexPan({ getIndex, getMin, getMax, onCommit, isSuppressed }: UseIndexPanOptions): IndexPanHandlers {
   // Index the gesture believes is current — commits are async React state,
   // so tracking our own pending value keeps multi-detent pans consistent
   // within a single event.
@@ -50,6 +54,7 @@ export function useIndexPan({ getIndex, getMin, getMax, onCommit }: UseIndexPanO
   // A wobbly horizontal category swipe must not commit item detents (or
   // flick bonus steps) that the switch immediately discards.
   const axisRef = useRef<'x' | 'y' | null>(null);
+  const suppressedRef = useRef(false);
 
   const clearFlickTimers = useCallback(() => {
     for (const timer of flickTimersRef.current) {
@@ -76,9 +81,11 @@ export function useIndexPan({ getIndex, getMin, getMax, onCommit }: UseIndexPanO
     accumulatedRef.current = 0;
     panConsumedRef.current = false;
     axisRef.current = null;
-  }, [clearFlickTimers, getIndex]);
+    suppressedRef.current = isSuppressed?.() ?? false;
+  }, [clearFlickTimers, getIndex, isSuppressed]);
 
   const onPan = useCallback((_event: PointerEvent, info: PanInfo) => {
+    if (suppressedRef.current) return;
     if (
       axisRef.current === null &&
       (Math.abs(info.offset.x) > XMB_GESTURE.PAN_SLOP_PX || Math.abs(info.offset.y) > XMB_GESTURE.PAN_SLOP_PX)
@@ -112,9 +119,20 @@ export function useIndexPan({ getIndex, getMin, getMax, onCommit }: UseIndexPanO
     }
   }, [step]);
 
-  const onPanEnd = useCallback((_event: PointerEvent, info: PanInfo) => {
+  const onPanEnd = useCallback((event: PointerEvent, info: PanInfo) => {
     if (panConsumedRef.current) {
       panEndedAtRef.current = performance.now();
+    }
+
+    if (suppressedRef.current) return;
+
+    // The browser took the pointer (a pinch under touch-action: pinch-zoom,
+    // a system edge gesture, the pointer leaving the window) — that is not
+    // a release, so the finger's last velocity is an artefact, never a
+    // flick. Detents already committed during the pan stand.
+    if (event.type === 'pointercancel') {
+      accumulatedRef.current = 0;
+      return;
     }
 
     // A horizontal fling can release with enough stray y velocity to pass

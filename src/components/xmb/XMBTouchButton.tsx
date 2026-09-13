@@ -67,7 +67,15 @@ const XMBTouchButton = ({
 
   useEffect(() => clearTimers, [clearTimers]);
 
-  const handlePointerDown = useCallback(() => {
+  // One pointer at a time: a second finger's pointerup must not end the
+  // first finger's hold-repeat (and its pointerdown must not double-fire).
+  const activePointerRef = useRef<number | null>(null);
+
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    // Primary button only — a pen barrel press is button 2 and used to
+    // fire the command AND open the context menu.
+    if (e.button !== 0 || activePointerRef.current !== null) return;
+    activePointerRef.current = e.pointerId;
     setPressed(true);
     fire();
     if (holdRepeat) {
@@ -78,7 +86,9 @@ const XMBTouchButton = ({
     }
   }, [clearTimers, fire, holdRepeat]);
 
-  const handlePointerEnd = useCallback(() => {
+  const handlePointerEnd = useCallback((e: React.PointerEvent) => {
+    if (activePointerRef.current !== null && e.pointerId !== activePointerRef.current) return;
+    activePointerRef.current = null;
     setPressed(false);
     clearTimers();
   }, [clearTimers]);
@@ -87,8 +97,11 @@ const XMBTouchButton = ({
     <button
       type="button"
       aria-label={ariaLabel}
+      // Pressable chrome: the root swipe handler ignores touches that start
+      // here, so a slide off a keycap can't also switch category.
+      data-xmb-chrome=""
       className={cn(
-        'min-w-11 min-h-11 flex items-center justify-center touch-manipulation select-none focus-visible:outline-none',
+        'min-w-11 min-h-11 flex items-center justify-center touch-manipulation select-none focus-visible:outline-hidden',
         className,
       )}
       onPointerDown={handlePointerDown}
@@ -103,11 +116,10 @@ const XMBTouchButton = ({
         }
       }}
       onContextMenu={(e) => {
-        // Long-press on the repeat paddles must keep repeating, not open
-        // the context menu.
-        if (holdRepeat) {
-          e.preventDefault();
-        }
+        // A long press on any keycap (the repeat paddles must keep
+        // repeating; BACK must not raise the platform callout) never
+        // opens the context menu.
+        e.preventDefault();
       }}
     >
       <XMBKeycap

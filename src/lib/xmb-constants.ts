@@ -113,11 +113,112 @@ export const XMB_GESTURE = {
   /** Hold-to-repeat on ▲▼ paddles, emulating keyboard auto-repeat. */
   HOLD_REPEAT_DELAY_MS: 350,
   HOLD_REPEAT_INTERVAL_MS: 150,
-  /** Swipes starting this close to the left screen edge are ignored so the
-      in-folder swipe-back never races the browser's own edge-back gesture. */
+  /** Swipes starting within this many px of EITHER screen edge are ignored,
+      at every depth: those pixels belong to the browser (iOS left-back /
+      right-forward, Android gesture-nav back on both edges), and neither a
+      category switch nor a folder exit may tick over a navigation the user
+      is making away from the page. */
   EDGE_GUARD_PX: 30,
   /** How long after a pan a stray trailing click is still swallowed. */
   TAP_SUPPRESS_WINDOW_MS: 150,
+};
+
+/**
+ * Keyboard auto-repeat throttles (useXMBNavigation). Holding an arrow key
+ * auto-repeats at the OS rate (~30ms), which queues moves — and their
+ * 300ms tweens — faster than they can render. Repeat events are rate
+ * limited to one move per interval; the first (non-repeat) press is always
+ * instant. Both axes share the touch paddles' HOLD_REPEAT_INTERVAL_MS so
+ * every hold-to-scroll path has one rhythm.
+ */
+export const XMB_KEY_REPEAT = {
+  /** ArrowLeft/Right: category switches replay the whole list entrance. */
+  HORIZONTAL_INTERVAL_MS: 150,
+  /** ArrowUp/Down: at the OS rate the cursor tween settles rows behind the
+      highlight ring and the list swoops on release. */
+  VERTICAL_INTERVAL_MS: 150,
+};
+
+/**
+ * Mouse-wheel / trackpad tuning for useWheelCursor (the vertical list and
+ * the category row) and the shared normalizer in lib/wheel.ts (which the
+ * carousel also uses). Two branches share one listener: the vertical list
+ * is a CONTINUOUS float cursor that coasts on trackpad momentum and settles
+ * like the carousel; the category row takes quantized detents routed
+ * through the shared commands (a continuous cursor there was built and
+ * removed — see XMBCategoryRow's falloff comment).
+ */
+export const XMB_WHEEL = {
+  /** Rows (or cards) per normalized pixel — imported from the carousel so
+      one flick moves the same number of items on both surfaces. */
+  SENSITIVITY: XMB_CAROUSEL.SCROLL_SENSITIVITY,
+  /** deltaMode 1 (lines, Firefox wheel mice) → px per line. A 3-line notch
+      becomes 120px, matching a Chrome pixel notch. */
+  LINE_PX: 40,
+  /** deltaMode 2 (pages) fallback when the surface's clientHeight is 0. */
+  PAGE_PX: 480,
+  /** Per-event, per-axis cap: some drivers / remote-desktop stacks emit a
+      single 1000px+ delta, an eight-row teleport with one tick. */
+  EVENT_CAP_PX: 240,
+  /** Banked vertical travel before the gesture arms (~0.19 rows). Kills
+      the description flash on a micro-scroll; one mouse notch clears it. */
+  ARM_PX: 24,
+  /** Accumulated travel on either axis before the gesture locks its axis. */
+  AXIS_LOCK_PX: 24,
+  /** Silence that ends a gesture session: separates trackpad streams
+      (8-16ms) and notch trains (30-80ms) from a finished gesture. */
+  GESTURE_IDLE_MS: 140,
+  /** Quiet time before the float cursor commits — matches the carousel. */
+  SETTLE_MS: 50,
+  /** The carousel's settle snap (its exact analytic ease-out cubic),
+      used in place of the 300ms TWEEN only for a wheel settle. */
+  SNAP: { type: 'keyframes', duration: 0.22, ease: [1 / 3, 1, 2 / 3, 1] } satisfies Transition,
+  /** Sub-notch (trackpad) travel past row 0 toward the −1 deselect is
+      damped by this so a stray upward flick or momentum tail at the top
+      of a list can't drop the user out to the category row (~178px to
+      commit vs 62px undamped). A discrete mouse notch is a step, like
+      ArrowUp, and deselects outright. */
+  DESELECT_RESISTANCE: 0.35,
+  /** Floor between per-row ticks during a fast flick (playNavigate has no
+      internal rate limit). */
+  TICK_MIN_GAP_MS: 45,
+  /** At or above this, an event isolated by NOTCH_GAP_MS of silence is a
+      discrete mouse notch (a step, on both axes); also the ceiling below
+      which the horizontal momentum-tail latch may arm, so a mouse never
+      latches. A Windows mouse set to "one line at a time" (16-33px) falls
+      below it and takes the continuous path, where a lone notch is too
+      small to cross a row — a known, rare degradation. */
+  NOTCH_MIN_PX: 40,
+  /** Temporal isolation for the notch test; a fast spin falls below it. */
+  NOTCH_GAP_MS: 50,
+  /** Once a horizontal trackpad gesture has decayed past half its session
+      peak, at most this many further category switches land — equal to
+      the finger flick's bonus so a wheel flick and a finger flick coast
+      the same distance. Never applied to the vertical float branch: the
+      coast IS the feel there. */
+  TAIL_MAX_STEPS: XMB_GESTURE.FLICK_MAX_STEPS,
+  TAIL_MAX_STEPS_REDUCED: 0,
+  /** Horizontal travel per category step (~one notch). */
+  CATEGORY_DETENT_PX: 120,
+  /** Stream cooldown between category switches — a wheel-specific rate
+      limit (the keyboard throttles only OS auto-repeat), borrowing the
+      keyboard's interval so a held key and a driven trackpad switch at
+      the same rhythm. */
+  CATEGORY_COOLDOWN_MS: XMB_KEY_REPEAT.HORIZONTAL_INTERVAL_MS,
+  /** Deliberate notches bypass the stream cooldown (two quick notches are
+      two switches, like two key taps) behind this floor, which still keeps
+      a free-spin wheel from firing twenty switches a second. */
+  CATEGORY_NOTCH_FLOOR_MS: 80,
+  /** Reduced motion: a trackpad stream never translates the list; it
+      accumulates into discrete row steps instead. 1 / SENSITIVITY, so a
+      stream covers rows at the same gain as the float branch. (Isolated
+      notches step one row directly and never touch this.) */
+  REDUCED_DETENT_PX: 125,
+  /** With the tween gone the rate IS the motion: ~8 rows/second ceiling. */
+  REDUCED_STEP_COOLDOWN_MS: 120,
+  /** Paged categories stage: sub-notch (trackpad) travel that enters the
+      list; a discrete notch enters at once, like ArrowDown. */
+  ENTER_LIST_PX: 120,
 };
 
 /**

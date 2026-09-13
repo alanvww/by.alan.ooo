@@ -54,7 +54,12 @@ const XMBPostFrame = ({ children }: { children: React.ReactNode }): React.ReactE
     // per-post content so it keeps working while the next post streams in.
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent): void => {
+            // Modified keys are browser affordances — same rule as the
+            // menu dispatcher and XMBPostViewer.
+            if (e.metaKey || e.ctrlKey || e.altKey) return;
             if (e.key !== 'Escape' && e.key !== 'Backspace') return;
+            // A held Escape must not queue a cancel cue per OS repeat.
+            if (e.repeat) return;
             // Prevent backspace from navigating back if focused on an input
             if (e.key === 'Backspace' && ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName || '')) {
                 return;
@@ -95,7 +100,7 @@ const XMBPostFrame = ({ children }: { children: React.ReactNode }): React.ReactE
                     // below) is the indicator — the global ring would double
                     // up, so suppress it (ring-0 alone leaves the 2px offset
                     // halo).
-                    className="group flex items-center gap-3 text-xmb-fg/50 hover:text-xmb-fg transition-colors duration-150 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:text-xmb-fg touch-manipulation"
+                    className="group flex items-center gap-3 text-xmb-fg/50 hover:text-xmb-fg transition-colors duration-150 focus-visible:outline-hidden focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:text-xmb-fg touch-manipulation"
                 >
                     <div className="flex items-center gap-2 min-h-11 rounded-full border border-xmb-fg/10 bg-xmb-fg/5 px-3 py-2 transition-colors group-hover:border-xmb-fg/30 group-hover:bg-xmb-fg/10 group-focus-visible:border-xmb-fg/40 group-focus-visible:bg-xmb-fg/10 group-active:border-xmb-fg/40 group-active:bg-xmb-fg/15">
                         <XMBIcon name="ArrowLeft" size={18} />

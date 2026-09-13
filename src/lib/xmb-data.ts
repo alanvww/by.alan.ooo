@@ -200,7 +200,10 @@ function groupItemsIntoFolders(
   } else {
     // Simple grouping: Recent + All (like the old posts folders)
     const recentItems = items.slice(0, 5);
-    if (recentItems.length > 0) {
+    // Only when Recent is a genuine subset: with 1-5 items it would be the
+    // same list as "All" under a second name (the tag branch has the same
+    // instinct with its < 2 guard).
+    if (items.length > recentItems.length) {
       folders.push({
         id: `folder-recent-${type}`,
         title: 'Recent',

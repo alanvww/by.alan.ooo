@@ -63,16 +63,24 @@ const XMBProgressIndicator = () => {
     const filledSegments = Math.floor((progress.value / 100) * totalSegments);
 
     return (
-        <div
-            className="flex items-center gap-3 cursor-pointer group pointer-events-auto"
+        // A real button: the widget was a click-only div with a title
+        // tooltip (invisible on touch, unreachable by keyboard). The window
+        // key dispatcher stands down for native buttons, so Enter/Space
+        // produce exactly one activation. The hand cursor comes from the
+        // base button rule in globals.css.
+        <button
+            type="button"
+            className="flex items-center gap-3 group pointer-events-auto appearance-none bg-transparent p-0 text-left"
+            data-xmb-chrome=""
             onClick={cycleMode}
-            title="Click to cycle progress mode"
+            aria-label={`${progress.label}: ${progress.value.toFixed(3)}% — cycle progress mode`}
         >
             {/* Keyed by mode: cycling remounts the row so the segments'
                 staggered entrance replays. A bare keyed swap happens within a
                 single React commit — old and new rows never coexist in the
-                DOM, so the header layout can't jump. */}
-            <div key={mode} className="flex items-center gap-0.5">
+                DOM, so the header layout can't jump. Decorative: the label
+                above carries the value. */}
+            <div key={mode} className="flex items-center gap-0.5" aria-hidden="true">
                 {Array.from({ length: totalSegments }).map((_, i) => {
                     const isFilled = i < filledSegments;
                     return (
@@ -109,7 +117,7 @@ const XMBProgressIndicator = () => {
                 <div className="text-[10px] leading-none mb-0.5 text-xmb-fg/60">{progress.label}</div>
                 <div className="text-xmb-fg font-semibold">{progress.value.toFixed(3)}%</div>
             </div>
-        </div>
+        </button>
     );
 };
 

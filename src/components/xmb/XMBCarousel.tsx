@@ -1,7 +1,7 @@
 // src/components/xmb/XMBCarousel.tsx
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from "react";
 import Image from 'next/image';
 import Link from 'next/link';
 import {
@@ -10,6 +10,7 @@ import {
   animate,
   useAnimationControls,
   useFollowValue,
+  useIsPresent,
   useMotionValue,
   useMotionValueEvent,
   useReducedMotion,
@@ -19,6 +20,8 @@ import type { AnimationPlaybackControls, FollowValueOptions, MotionValue } from 
 import { useXMBLoadingContext } from "@/lib/xmb-navigation-context";
 import { isExternalLink, isActivatable } from "@/lib/xmb-navigation";
 import { isStandaloneDocRoute } from "@/lib/xmb-routes";
+import { normalizeWheelDelta } from "@/lib/wheel";
+import { isChromeTarget } from "@/lib/xmb-chrome";
 import { focusListSibling } from "@/lib/focus";
 import type { XMBItem } from "@/lib/xmb-types";
 import XMBIcon from "./XMBIcon";
@@ -43,6 +46,17 @@ interface XMBCarouselProps {
   restrictedPing?: RestrictedPing | null;
   /** True during a pointer press: focus events it causes must not drive selection. */
   isPointerEvent?: () => boolean;
+  /**
+   * Element the wheel listener attaches to. XMBInterface passes its
+   * `fixed inset-0` root so the whole screen steers the cards (the way the
+   * arrow keys already do) — on its own 70%-wide container the inert
+   * context list on the left was a wheel-dead zone. Defaults to the
+   * carousel's own container.
+   */
+  wheelSurfaceRef?: React.RefObject<HTMLElement | null>;
+  /** Accessible name of the listbox — the folder's title, so AT names
+      which folder is open rather than a generic "Folder contents". */
+  label?: string;
 }
 
 interface XMBCarouselCardProps {
@@ -65,10 +79,13 @@ interface XMBCarouselCardProps {
   shakeNonce: number;
   /** Shows the loading skeleton ahead of internal link navigation. */
   startNavigation: (href?: string) => void;
-  isPointerEvent?: () => boolean;
+  /** Keyboard/AT focus landed on this card: sync the selection (parent-owned
+      so it compares against a layout-effect-fresh index, not this card's
+      render-stale isActive). */
+  onCardFocus: (index: number) => void;
 }
 
-const XMBCarouselCard = React.memo(({ item, index, setSize, scrollOffset, isActive, onSelect, onRestricted, shakeNonce, startNavigation, isPointerEvent }: XMBCarouselCardProps) => {
+const XMBCarouselCard = React.memo(({ item, index, setSize, scrollOffset, isActive, onSelect, onRestricted, shakeNonce, startNavigation, onCardFocus }: XMBCarouselCardProps) => {
   // Every positional channel is a pure function of (index − scrollOffset),
   // computed as motion-value transforms so frame-rate scrolling stays out of
   // React entirely. Continuous falloff so cards don't snap their
@@ -197,13 +214,7 @@ const XMBCarouselCard = React.memo(({ item, index, setSize, scrollOffset, isActi
     // dispatcher; clicking the active card keeps its status-quo no-op.
   };
 
-  const handleFocus = (): void => {
-    // Keyboard/AT focus centers the card; pointer focus defers to onClick.
-    if (isPointerEvent?.()) return;
-    if (!isActive) {
-      onSelect(index);
-    }
-  };
+  const handleFocus = (): void => onCardFocus(index);
 
   // Tab walks the carousel: the adjacent card takes focus loudly (ring
   // shows — browser-style traversal) and selection follows via onFocus; at
@@ -215,13 +226,14 @@ const XMBCarouselCard = React.memo(({ item, index, setSize, scrollOffset, isActi
     if (e.key !== 'Tab') return;
     if (focusListSibling('carousel-item-', index, e.shiftKey ? -1 : 1)) {
       e.preventDefault();
-      playNavigate();
     }
   };
 
   const sharedProps = {
     role: 'option',
     'aria-selected': isActive,
+    // Link cards are real anchors around an image: no URL / ghost drags.
+    draggable: false,
     // Culling mounts only cards near the scroll offset; setsize/posinset keep
     // screen readers announcing the true "n of N" position regardless.
     'aria-setsize': setSize,
@@ -261,11 +273,11 @@ const XMBCarouselCard = React.memo(({ item, index, setSize, scrollOffset, isActi
       >
         <div
           className={`
-            w-64 h-36 sm:w-[24rem] sm:h-[14rem] md:w-[28rem] md:h-[16rem] shrink-0 rounded-xl overflow-hidden border shadow-2xl dark:bg-black/85 bg-white/90
+            xmb-card-chrome w-64 h-36 sm:w-[24rem] sm:h-[14rem] md:w-[28rem] md:h-[16rem] shrink-0 rounded-xl overflow-hidden border shadow-2xl dark:bg-black/85 bg-white/90
             transition-[border-color,box-shadow,transform] duration-200
             group-focus-visible:ring-2 group-focus-visible:ring-ring
             ${isActive
-              ? 'border-xmb-fg/80 ring-1 ring-xmb-fg/50 shadow-[0_0_35px_var(--color-xmb-shadow-glow)] hover:scale-[1.02] hover:shadow-[0_0_50px_var(--color-xmb-shadow-glow)]'
+              ? 'border-xmb-fg/80 ring-1 ring-xmb-fg/50 shadow-[0_0_35px_var(--color-xmb-shadow-glow)] motion-safe:hover:scale-[1.02] hover:shadow-[0_0_50px_var(--color-xmb-shadow-glow)]'
               : 'border-xmb-fg/20'
             }
           `}
@@ -344,7 +356,7 @@ const XMBCarouselCard = React.memo(({ item, index, setSize, scrollOffset, isActi
 
 XMBCarouselCard.displayName = 'XMBCarouselCard';
 
-const XMBCarousel = ({ items, activeIndex, onSelect, onBack, onRestricted, restrictedPing, isPointerEvent }: XMBCarouselProps) => {
+const XMBCarousel = ({ items, activeIndex, onSelect, onBack, onRestricted, restrictedPing, isPointerEvent, wheelSurfaceRef, label }: XMBCarouselProps) => {
   const { startNavigation } = useXMBLoadingContext();
   const containerRef = useRef<HTMLDivElement>(null);
   const touchStartY = useRef<number>(0);
@@ -371,6 +383,26 @@ const XMBCarousel = ({ items, activeIndex, onSelect, onBack, onRestricted, restr
   const [roundedIndex, setRoundedIndex] = useState<number>(activeIndex);
   const roundedIndexRef = useRef<number>(activeIndex);
 
+  // Keyboard/AT focus landed on a card: sync the selection cursor, with
+  // the tick (sound follows the state change, so the first Tab into the
+  // carousel sounds like every later one). Pointer-driven focus defers to
+  // onClick (the two-click model). The idempotence check reads the
+  // committed index through a LAYOUT-effect-fresh ref, like the vertical
+  // list's itemIndexRef: the parent's index→focus sync is a passive effect
+  // that runs after this component's, so a card's own render-stale
+  // `isActive` still shows the PREVIOUS selection and ticked a second time
+  // on every arrow key.
+  const activeIndexRef = useRef(activeIndex);
+  useLayoutEffect(() => {
+    activeIndexRef.current = activeIndex;
+  });
+  const handleCardFocus = useCallback((index: number) => {
+    if (isPointerEvent?.()) return;
+    if (index === activeIndexRef.current) return; // app-driven sync: the command already ticked
+    playNavigate();
+    onSelect(index);
+  }, [isPointerEvent, onSelect]);
+
   // Debounce timer for the settle commit, armed imperatively on each offset
   // write (the old implementation recreated a setTimeout effect per frame).
   const commitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -381,6 +413,30 @@ const XMBCarousel = ({ items, activeIndex, onSelect, onBack, onRestricted, restr
   useEffect(() => {
     commitArgsRef.current = { itemCount: items.length, onSelect };
   }, [items.length, onSelect]);
+
+  // While this carousel plays its AnimatePresence exit (folder exit) it is
+  // a frozen clone: props are pinned at the folder's item set, but its
+  // wheel listener on the shared root and its 50ms settle timer are still
+  // live. Both must stand down the moment presence is lost, or a wheel
+  // (or a trackpad momentum tail) inside the 150ms fade would commit a
+  // FOLDER-scoped index onto the root list. Read through a ref so
+  // handleWheel's identity — and the listener registration — stay put.
+  const isPresent = useIsPresent();
+  const isPresentRef = useRef(true);
+  useEffect(() => {
+    isPresentRef.current = isPresent;
+    if (isPresent) return;
+    if (commitTimerRef.current !== null) {
+      clearTimeout(commitTimerRef.current);
+      commitTimerRef.current = null;
+    }
+    snapAnimationRef.current?.stop();
+    snapAnimationRef.current = null;
+    if (animationFrameRef.current !== null) {
+      window.cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+  }, [isPresent]);
 
   // Smoothly ease scrollOffset to an integer index. Used after a
   // wheel/touch scroll settles so cards drift the last fractional step
@@ -438,6 +494,7 @@ const XMBCarousel = ({ items, activeIndex, onSelect, onBack, onRestricted, restr
     }
     commitTimerRef.current = setTimeout(() => {
       commitTimerRef.current = null;
+      if (!isPresentRef.current) return; // exiting: never commit into the root list
       const { itemCount, onSelect: commitSelect } = commitArgsRef.current;
       const settledIndex = Math.round(scrollOffset.get());
       if (
@@ -468,6 +525,17 @@ const XMBCarousel = ({ items, activeIndex, onSelect, onBack, onRestricted, restr
 
   // Mouse wheel handler - smooth continuous scrolling
   const handleWheel = useCallback((e: WheelEvent) => {
+    // Browser zoom is never consumed: ctrl+wheel and a trackpad pinch both
+    // arrive as wheel events with ctrlKey set. Read as a scrub they were
+    // also misinterpreted — the pinch deltas scrubbed the card selection.
+    if (e.ctrlKey || e.metaKey) return;
+    // Exiting (see isPresentRef above): the root list owns the wheel again.
+    if (!isPresentRef.current) return;
+    // Another consumer on the shared root already took this event. The
+    // vertical list's hook registers its listener in a layout effect so it
+    // always sits ahead of this one; it yields to us via `enabled` while
+    // we are live, and we yield to it via this flag while we exit.
+    if (e.defaultPrevented) return;
     e.preventDefault();
 
     // User is steering again — abort any settle-snap in progress so the
@@ -475,7 +543,10 @@ const XMBCarousel = ({ items, activeIndex, onSelect, onBack, onRestricted, restr
     snapAnimationRef.current?.stop();
     snapAnimationRef.current = null;
 
-    wheelDeltaRef.current += e.deltaY * XMB_CAROUSEL.SCROLL_SENSITIVITY;
+    // Normalized: a Firefox wheel mouse reports deltaMode 1 / deltaY 3,
+    // which read as pixels was 0.024 cards per notch.
+    const { dy } = normalizeWheelDelta(e, containerRef.current);
+    wheelDeltaRef.current += dy * XMB_CAROUSEL.SCROLL_SENSITIVITY;
 
     if (animationFrameRef.current !== null) {
       return;
@@ -493,11 +564,19 @@ const XMBCarousel = ({ items, activeIndex, onSelect, onBack, onRestricted, restr
 
   // Touch handlers for mobile swipe support
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    // A second finger is a pinch (touch-action pinch-zoom lets the browser
+    // have it), never a scrub — and a touch that starts on pressable chrome
+    // (the back pill) belongs to that button, not to the scrub, the same
+    // rule the root swipe handler applies.
+    if (e.touches.length !== 1 || isChromeTarget(e.target)) {
+      touchStartY.current = 0;
+      return;
+    }
     touchStartY.current = e.touches[0].clientY;
   }, []);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!touchStartY.current) return;
+    if (!touchStartY.current || e.touches.length !== 1) return;
 
     snapAnimationRef.current?.stop();
     snapAnimationRef.current = null;
@@ -529,9 +608,10 @@ const XMBCarousel = ({ items, activeIndex, onSelect, onBack, onRestricted, restr
     touchStartY.current = 0;
   }, []);
 
-  // Attach wheel event listener
+  // Attach wheel event listener — non-passive (React's onWheel is passive,
+  // so preventDefault from it is a no-op), on the shared root when given.
   useEffect(() => {
-    const container = containerRef.current;
+    const container = wheelSurfaceRef?.current ?? containerRef.current;
     if (!container) return;
 
     const wheelHandler = (e: WheelEvent) => handleWheel(e);
@@ -545,7 +625,7 @@ const XMBCarousel = ({ items, activeIndex, onSelect, onBack, onRestricted, restr
         animationFrameRef.current = null;
       }
     };
-  }, [handleWheel]);
+  }, [handleWheel, wheelSurfaceRef]);
 
   // Mount window is quantized to roundedIndex (culling shouldn't run per
   // frame) at ±(VISIBLE_ITEMS + 1): a superset of the old float-based
@@ -562,7 +642,9 @@ const XMBCarousel = ({ items, activeIndex, onSelect, onBack, onRestricted, restr
   return (
     <motion.div
       ref={containerRef}
-      className="absolute top-0 right-0 w-full md:w-[70%] h-dvh flex items-center justify-center pointer-events-auto overflow-clip touch-none"
+      // touch-pinch-zoom, not touch-none: the scrub owns both pan axes,
+      // but pinch zoom must stay available (the viewport meta promises it).
+      className="absolute top-0 right-0 w-full md:w-[70%] h-dvh flex items-center justify-center pointer-events-auto overflow-clip touch-pinch-zoom"
       initial={{ opacity: 0, x: 100 }}
       animate={{ opacity: 1, x: 0 }}
       // Exit is opacity-only and faster than the entrance: sliding this
@@ -593,7 +675,7 @@ const XMBCarousel = ({ items, activeIndex, onSelect, onBack, onRestricted, restr
               (a button) stays outside it — a button is not valid listbox
               content. Cards are absolutely positioned, so this wrapper is
               a zero-impact inset-0 box. */}
-          <div role="listbox" aria-label="Folder contents" className="absolute inset-0">
+          <div role="listbox" aria-label={label ?? 'Folder contents'} className="absolute inset-0">
           {visibleEntries.map(({ item, index }) => {
             return (
               <XMBCarouselCard
@@ -607,7 +689,7 @@ const XMBCarousel = ({ items, activeIndex, onSelect, onBack, onRestricted, restr
                 onRestricted={onRestricted}
                 shakeNonce={restrictedPing?.id === item.id ? restrictedPing.nonce : 0}
                 startNavigation={startNavigation}
-                isPointerEvent={isPointerEvent}
+                onCardFocus={handleCardFocus}
               />
             );
           })}

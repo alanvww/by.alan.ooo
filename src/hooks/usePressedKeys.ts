@@ -15,12 +15,24 @@ const notifyStore = (): void => {
 };
 
 const onStoreKeyDown = (event: KeyboardEvent): void => {
+  // Chords (Cmd+←, Alt+←) are browser affordances the dispatchers ignore,
+  // so the matching cap must not light for them either.
+  if (event.metaKey || event.ctrlKey || event.altKey) return;
   if (heldKeys.has(event.key)) return;
   heldKeys.add(event.key);
   notifyStore();
 };
 
 const onStoreKeyUp = (event: KeyboardEvent): void => {
+  // macOS swallows the keyup of any key released while Cmd is held, so a
+  // chord would leave its cap lit until the next press of that key —
+  // releasing Meta flushes the whole set instead.
+  if (event.key === 'Meta') {
+    if (heldKeys.size === 0) return;
+    heldKeys.clear();
+    notifyStore();
+    return;
+  }
   if (!heldKeys.has(event.key)) return;
   heldKeys.delete(event.key);
   notifyStore();
