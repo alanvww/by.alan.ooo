@@ -67,9 +67,11 @@ const XMBCommandBar = ({ commands }: XMBCommandBarProps) => {
 
   const onCategoryRow = itemIndex === -1 && navigationPath.length === 0;
   // ←/→ switch categories from anywhere at the root (see moveLeft/moveRight),
-  // not only while the category row is focused — the hint, and the touch
-  // buttons that are a paged-layout user's only visible way to change
-  // column, must stay up while an item is selected.
+  // not only while the category row is focused — so the keyboard hint stays
+  // up while an item is selected. The touch bar deliberately does NOT repeat
+  // ◀ ▶ there: a fourth group made the pill 470px wide, clipping ◀ and BACK
+  // off both edges of every phone. On touch a sideways swipe switches column
+  // in place, and BACK returns to the category row where ◀ ▶ live.
   const atRoot = navigationPath.length === 0;
 
   const hints: Hint[] = [];
@@ -152,16 +154,6 @@ const XMBCommandBar = ({ commands }: XMBCommandBarProps) => {
       action: atRoot ? 'Reset' : 'Up',
     });
 
-    if (atRoot) {
-      controls.push({
-        id: 'switch',
-        buttons: [
-          { label: '◀', ariaLabel: 'Previous category', onCommand: commands.moveLeft },
-          { label: '▶', ariaLabel: 'Next category', onCommand: commands.moveRight },
-        ],
-        action: 'Switch',
-      });
-    }
     controls.push({
       id: 'navigate',
       buttons: [
@@ -182,9 +174,9 @@ const XMBCommandBar = ({ commands }: XMBCommandBarProps) => {
       });
     }
     // One BACK button at every depth. A second "◀ exit folder" button was
-    // tried next to it: the same ◀ glyph means "previous category" at the
-    // root in this very slot, so its meaning would change by depth, and
-    // BACK already exits one level.
+    // tried next to it: the same ◀ glyph means "previous category" on the
+    // category row, so its meaning would change by depth, and BACK already
+    // exits one level.
     controls.push({
       id: 'back',
       buttons: [{ label: 'BACK', ariaLabel: 'Back', onCommand: commands.back, wide: true }],
