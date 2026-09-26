@@ -25,7 +25,6 @@ import { isChromeTarget } from "@/lib/xmb-chrome";
 import { focusListSibling } from "@/lib/focus";
 import type { XMBItem } from "@/lib/xmb-types";
 import XMBIcon from "./XMBIcon";
-import XMBBackPill from "./XMBBackPill";
 import { XMB_CAROUSEL, XMB_ANIMATION, EASE, XMB_SHAKE } from "@/lib/xmb-constants";
 import { playNavigate, playConfirm, playDeny } from "@/hooks/useKeyAudioFx";
 import type { RestrictedPing } from "./XMBRestrictedToast";
@@ -38,8 +37,6 @@ interface XMBCarouselProps {
   items: XMBItem[];
   activeIndex: number;
   onSelect: (index: number) => void;
-  /** Exit the folder (mouse/touch equivalent of Escape). */
-  onBack?: () => void;
   /** Restricted item activated by click: shake + toast owner. */
   onRestricted?: (item: XMBItem, index: number) => void;
   /** Latest deny ping — the matching card runs the shake. */
@@ -356,7 +353,7 @@ const XMBCarouselCard = React.memo(({ item, index, setSize, scrollOffset, isActi
 
 XMBCarouselCard.displayName = 'XMBCarouselCard';
 
-const XMBCarousel = ({ items, activeIndex, onSelect, onBack, onRestricted, restrictedPing, isPointerEvent, wheelSurfaceRef, label }: XMBCarouselProps) => {
+const XMBCarousel = ({ items, activeIndex, onSelect, onRestricted, restrictedPing, isPointerEvent, wheelSurfaceRef, label }: XMBCarouselProps) => {
   const { startNavigation } = useXMBLoadingContext();
   const containerRef = useRef<HTMLDivElement>(null);
   const touchStartY = useRef<number>(0);
@@ -566,8 +563,8 @@ const XMBCarousel = ({ items, activeIndex, onSelect, onBack, onRestricted, restr
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     // A second finger is a pinch (touch-action pinch-zoom lets the browser
     // have it), never a scrub — and a touch that starts on pressable chrome
-    // (the back pill) belongs to that button, not to the scrub, the same
-    // rule the root swipe handler applies.
+    // belongs to that control, not to the scrub, the same rule the root
+    // swipe handler applies.
     if (e.touches.length !== 1 || isChromeTarget(e.target)) {
       touchStartY.current = 0;
       return;
@@ -658,23 +655,10 @@ const XMBCarousel = ({ items, activeIndex, onSelect, onBack, onRestricted, restr
     >
       <div className="relative w-full h-full flex items-center justify-center">
         <div className="relative w-full max-w-6xl h-full px-6 md:pl-12">
-          {/* Back pill above the folder's item list — sits over the faded
-              outermost cards, never the active one. */}
-          {onBack && (
-            <motion.div
-              className="absolute top-[8%] left-6 md:left-12 z-[110]"
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2, ease: EASE.ENTER }}
-            >
-              <XMBBackPill onBack={onBack} />
-            </motion.div>
-          )}
-          {/* The listbox is the cards' DIRECT parent, and the back pill
-              (a button) stays outside it — a button is not valid listbox
-              content. Cards are absolutely positioned, so this wrapper is
-              a zero-impact inset-0 box. */}
+          {/* The listbox is the cards' DIRECT parent. No back pill here:
+              the open folder's row in the context sidebar is the exit
+              (XMBVerticalList). Cards are absolutely positioned, so this
+              wrapper is a zero-impact inset-0 box. */}
           <div role="listbox" aria-label={label ?? 'Folder contents'} className="absolute inset-0">
           {visibleEntries.map(({ item, index }) => {
             return (

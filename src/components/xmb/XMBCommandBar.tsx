@@ -144,14 +144,15 @@ const XMBCommandBar = ({ commands }: XMBCommandBarProps) => {
       id: 'back',
       // Inside a folder ArrowLeft also exits one level (moveLeft), so it
       // is advertised next to ESC there; at the root ← switches category
-      // (already shown under Switch) and ESC alone resets.
+      // (already shown under Switch) and ESC alone resets. "Back" in a
+      // folder matches the "← Back" folder row and the touch BACK button.
       keys: atRoot
         ? [{ label: 'ESC', pressedKey: 'Escape', wide: true }]
         : [
             { label: '←', pressedKey: 'ArrowLeft' },
             { label: 'ESC', pressedKey: 'Escape', wide: true },
           ],
-      action: atRoot ? 'Reset' : 'Up',
+      action: atRoot ? 'Reset' : 'Back',
     });
 
     controls.push({

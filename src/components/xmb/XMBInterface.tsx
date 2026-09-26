@@ -86,9 +86,9 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
     setItemIndex(0);
   }, [navigationPath, setItemIndex, setNavigationPath]);
 
-  // Mouse/touch exits (back pills, the in-folder swipe, the carousel's
-  // pill) all run the shared `back` command, which owns the cancel cue —
-  // so every path out of a folder sounds the same.
+  // Mouse/touch exits (the paged back pill, the in-folder swipe, the full
+  // layout's "← Back" folder row) all run the shared `back` command, which
+  // owns the cancel cue — so every path out of a folder sounds the same.
 
   const clearTouch = useCallback(() => {
     touchStartX.current = null;
@@ -503,6 +503,8 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
             isContextView={isInsideFolder}
             onItemSelect={setItemIndex}
             onFolderDrill={handleFolderDrill}
+            // Inside a folder the open folder's row becomes the exit.
+            onBack={commands.back}
             onRestricted={handleRestricted}
             restrictedPing={restrictedPing}
             isPointerEvent={isPointerEvent}
@@ -594,7 +596,6 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
             items={currentItems}
             activeIndex={itemIndex >= 0 ? itemIndex : 0}
             onSelect={setItemIndex}
-            onBack={commands.back}
             label={parentItems[parentIndex]?.title}
             onRestricted={handleRestricted}
             restrictedPing={restrictedPing}

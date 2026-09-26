@@ -81,6 +81,11 @@ interface XMBListItemProps {
     hasSelection: boolean;
     /** In-folder context sidebar: rows are inert and unfocusable. */
     isContextView: boolean;
+    /** The open folder's row in the context sidebar, which doubles as the
+        exit: it reads "← Back" with the folder's title demoted to the meta
+        line. Purely visual — the row stays inert; the list's exit button
+        overlays it and owns the click. */
+    asBack: boolean;
     /** First click / keyboard focus: move the cursor to this row. */
     onRowSelect: (index: number) => void;
     /** Second click on the selected row (folders/actions): activate it. */
@@ -89,6 +94,9 @@ interface XMBListItemProps {
     onRowFocus: (index: number) => void;
     /** Registers/unregisters this row's DOM node for offset measurement. */
     onRowNode: (id: string, node: HTMLElement | null) => void;
+    /** True for the trailing clicks of a multi-click whose first click hit
+        the exit button — they land on this same row, now live again. */
+    isExitEcho: (e: React.MouseEvent) => boolean;
     /** 0 when this row isn't the deny target; bumps to re-run the shake. */
     shakeNonce: number;
     /** Shows the loading skeleton ahead of internal link navigation. */
@@ -113,6 +121,11 @@ interface XMBListItemProps {
 // a + (b − a)·p(t). (A closed-form continuous falloff would drift mid-flight
 // wherever the discrete map is non-linear: the 0.62^n above-fade and both
 // opacity floors.)
+
+/** How long after a pointer exit the folder row drops a multi-click's
+    trailing clicks — comfortably past any OS double-click interval (a
+    click's `detail` only climbs within that interval anyway). */
+const EXIT_ECHO_WINDOW_MS = 1000;
 
 /** Discrete lift (px) at an integer delta — rows above the selection rise
     into the narrow lane above the active row so they don't collide with its
@@ -155,7 +168,7 @@ function sampleRowSteps(at: (delta: number) => number, delta: number): number {
 }
 
 const XMBListItem = React.memo(
-    ({ item, index, cursor, selection, isItemSelected, isActive, showDescription, showCaret, hasSelection, isContextView, onRowSelect, onRowActivate, onRowFocus, onRowNode, shakeNonce, startNavigation }: XMBListItemProps) => {
+    ({ item, index, cursor, selection, isItemSelected, isActive, showDescription, showCaret, hasSelection, isContextView, asBack, onRowSelect, onRowActivate, onRowFocus, onRowNode, isExitEcho, shakeNonce, startNavigation }: XMBListItemProps) => {
         const [imgError, setImgError] = useState(false);
         const reduceMotion = useReducedMotion();
         const isFolder = item.type === 'folder';
@@ -228,6 +241,13 @@ const XMBListItem = React.memo(
             // Modified clicks on links (cmd/ctrl/shift/middle) are pure
             // browser affordances — no selection change, no preventDefault.
             if (isLinkRow && (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0)) {
+                return;
+            }
+            // A double-click on "← Back" exits on its first click; the
+            // second lands here, on the selected folder row, and must not
+            // drill straight back in.
+            if (isExitEcho(e)) {
+                e.preventDefault();
                 return;
             }
             if (!isItemSelected) {
@@ -323,7 +343,19 @@ const XMBListItem = React.memo(
                                 : "border-xmb-fg/10"
                         }`}
                     >
-                        {isFolder ? (
+                        {/* Back mode fades in (the arrow drifting left) and
+                            cuts hard on exit, like the rest of the XMB. */}
+                        {asBack ? (
+                            <motion.div
+                                key="back-icon"
+                                initial={{ opacity: 0, x: 6 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ duration: 0.18, ease: EASE.ENTER }}
+                                className="flex items-center justify-center w-full h-full"
+                            >
+                                <XMBIcon name="ArrowLeft" size={24} />
+                            </motion.div>
+                        ) : isFolder ? (
                             <div className="flex items-center justify-center w-full h-full">
                                 <XMBIcon name={item.icon ?? "Folder"} size={24} />
                             </div>
@@ -350,9 +382,21 @@ const XMBListItem = React.memo(
                     {/* Title and Description */}
                     <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                            <span className="text-lg md:text-xl font-light whitespace-nowrap truncate">
-                                {item.title}
-                            </span>
+                            {asBack ? (
+                                <motion.span
+                                    key="back-title"
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    transition={{ duration: 0.18, ease: EASE.ENTER }}
+                                    className="text-lg md:text-xl font-light whitespace-nowrap truncate"
+                                >
+                                    Back
+                                </motion.span>
+                            ) : (
+                                <span className="text-lg md:text-xl font-light whitespace-nowrap truncate">
+                                    {item.title}
+                                </span>
+                            )}
                             {/* Pre-activation cue for AT: restricted rows
                                 otherwise announce identically to openable
                                 ones (WCAG 4.1.2 name/role clarity). */}
@@ -390,10 +434,22 @@ const XMBListItem = React.memo(
                             ~0.36 effective (~3.2:1, a WCAG AA failure); /70
                             alone is ~9.7:1. Unmounted for the length of a
                             wheel gesture (showDescription) so the pitch the
-                            column slides through stays constant. */}
-                        {showDescription && item.description && (
+                            column slides through stays constant. In back
+                            mode the line names the open folder instead. */}
+                        {showDescription && (asBack || item.description) && (
                             <p data-xmb-desc className="text-xs md:text-sm text-xmb-fg/70 mt-1 line-clamp-2">
-                                {item.description}
+                                {asBack ? (
+                                    <motion.span
+                                        key="back-meta"
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        transition={{ duration: 0.18, ease: EASE.ENTER }}
+                                    >
+                                        {item.title}
+                                    </motion.span>
+                                ) : (
+                                    item.description
+                                )}
                             </p>
                         )}
                     </div>
@@ -407,8 +463,9 @@ const XMBListItem = React.memo(
                         flow (sync mode) while the title-line caret had already
                         mounted, and the double-caret row squeezed the truncate
                         span into a transient ellipsis. The mount glide
-                        (initial → animate) still runs. */}
-                    {showCaret && (isFolder || isExternal) && (
+                        (initial → animate) still runs. A back-mode row drops
+                        it: "drill in" is the opposite of what it does. */}
+                    {showCaret && !asBack && (isFolder || isExternal) && (
                         <motion.div
                             key="drill-caret"
                             initial={{ opacity: 0, x: -8 }}
@@ -598,6 +655,16 @@ const XMBVerticalList = React.memo(
         // before paint by both routes.
         const columnY = useMotionValue(0);
 
+        // Exit button geometry (full layout, inside a folder): the button
+        // overlays the open folder's row, riding columnY like the column
+        // itself, so these are the row's column-relative box plus the rows
+        // layer's offset in the list. Motion values, not state — measured
+        // in the same pass as the offsets table, with no React render.
+        const rowsLayerRef = useRef<HTMLDivElement | null>(null);
+        const exitTop = useMotionValue(0);
+        const exitWidth = useMotionValue(0);
+        const exitHeight = useMotionValue(0);
+
         const syncColumnY = useCallback(() => {
             const offsets = geomRef.current;
             const last = offsets.length - 1;
@@ -635,8 +702,20 @@ const XMBVerticalList = React.memo(
                 const node = rowRefs.current.get(item.id);
                 return (node ? node.offsetTop - base : 0) - (k > sel ? descShift : 0);
             });
+            // Rect deltas, not offsetTop, for the exit button: which element
+            // counts as a row's offsetParent under the column's transform
+            // varies by engine, but both rects carry the same column
+            // translate, so their difference is the row's layout offset.
+            const column = columnRef.current;
+            if (selNode && column) {
+                const selRect = selNode.getBoundingClientRect();
+                const columnRect = column.getBoundingClientRect();
+                exitTop.set((rowsLayerRef.current?.offsetTop ?? 0) + selRect.top - columnRect.top);
+                exitWidth.set(selRect.width);
+                exitHeight.set(selRect.height);
+            }
             syncColumnY();
-        }, [currentItems, syncColumnY]);
+        }, [currentItems, syncColumnY, exitTop, exitWidth, exitHeight]);
 
         // Re-measure before paint whenever the item set changes, and in the
         // same commit the description moves (displayIndex) or unmounts for
@@ -670,6 +749,25 @@ const XMBVerticalList = React.memo(
             : layoutMode === 'paged'
             ? onHeaderClick
             : undefined;
+        // The open folder's row, which the context view turns into the exit.
+        const exitItem = isContextView ? currentItems[itemIndex] : undefined;
+
+        // The exit button and the folder row share one rect, so a double
+        // click would toggle: drill in then exit, or exit then drill back
+        // in. The button ignores a multi-click's trailing clicks (they
+        // belong to a double-click that started on the row and drilled
+        // in), and a pointer exit is stamped so the row can drop the
+        // trailing clicks that land on it once it goes live again.
+        // Keyboard activation clicks carry detail 0 and pass both checks.
+        const lastExitAtRef = useRef(Number.NEGATIVE_INFINITY);
+        const handleExitClick = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+            if (e.detail > 1) return;
+            lastExitAtRef.current = e.timeStamp;
+            onBack?.();
+        }, [onBack]);
+        const isExitEcho = useCallback((e: React.MouseEvent) => (
+            e.detail > 1 && e.timeStamp - lastExitAtRef.current < EXIT_ECHO_WINDOW_MS
+        ), []);
 
         // The wrapper stays mounted across category switches — remounting it
         // (the old keyed-AnimatePresence approach) rebuilt the whole list and
@@ -810,12 +908,6 @@ const XMBVerticalList = React.memo(
         return (
             <motion.div
                 className="absolute overflow-visible"
-                // In the folder context view the carousel is the live listbox;
-                // this parent list is background chrome — hidden from AT and
-                // inert so its rows can't be focused or clicked, leaving
-                // exactly one listbox exposed at a time.
-                aria-hidden={isContextView || undefined}
-                inert={isContextView || undefined}
                 style={{
                     opacity: entranceOpacity,
                     x: entranceX,
@@ -847,6 +939,8 @@ const XMBVerticalList = React.memo(
                               // Combined with top: 4rem the list sits 8rem below
                               // the wrapper top.
                               marginTop: "4rem",
+                              // The exit button opts back in with its own
+                              // pointer-events-auto.
                               pointerEvents: isContextView ? 'none' : 'auto',
                           }),
                 }}
@@ -873,8 +967,9 @@ const XMBVerticalList = React.memo(
                         )}
                         {/* Back pill above the item list. In a folder it exits
                             one level; at the top level (paged mode) it returns
-                            to the categories stage. The full layout keeps the
-                            pill folder-only — the carousel owns it there. */}
+                            to the categories stage. The full layout has no
+                            pill: inside a folder the open folder's row is the
+                            exit (see the exit button below). */}
                         {backPillAction && !isContextView && (
                             <motion.div
                                 initial={{ opacity: 0, y: -10 }}
@@ -885,7 +980,17 @@ const XMBVerticalList = React.memo(
                             </motion.div>
                         )}
                     </div>
-                    <div className="relative z-0">
+                    {/* In the folder context view the carousel is the live
+                        listbox; the rows are background chrome — hidden from
+                        AT and inert so they can't be focused or clicked,
+                        leaving exactly one listbox exposed at a time. The
+                        exit button below sits outside this layer. */}
+                    <div
+                        ref={rowsLayerRef}
+                        className="relative z-0"
+                        aria-hidden={isContextView || undefined}
+                        inert={isContextView || undefined}
+                    >
 
                     {/* Sliding container - Flexbox layout.
                         Width is pinned here so every row in the column is the
@@ -923,16 +1028,41 @@ const XMBVerticalList = React.memo(
                                 showCaret={idx === itemIndex && !wheelActive}
                                 hasSelection={hasSelection}
                                 isContextView={isContextView}
+                                asBack={isContextView && idx === itemIndex}
                                 onRowSelect={handleRowSelect}
                                 onRowActivate={handleRowActivate}
                                 onRowFocus={handleRowFocus}
                                 onRowNode={handleRowNode}
+                                isExitEcho={isExitEcho}
                                 shakeNonce={restrictedPing?.id === item.id ? restrictedPing.nonce : 0}
                                 startNavigation={startNavigation}
                             />
                         ))}
                     </motion.div>
                     </div>
+                    {/* Exit button (full layout, inside a folder): a
+                        transparent hit target over the open folder's row,
+                        which reads "← Back" (asBack). It lives outside the
+                        inert rows layer so it stays focusable and exposed
+                        while the listbox is hidden, and z-20 lifts it over
+                        the carousel's container where the two overlap — at
+                        rest the cards stack higher still (during the
+                        carousel's entrance its container is a stacking
+                        context, so the button briefly tops the incoming
+                        card's edge). Runs the shared back command, which
+                        owns the cancel cue. Deliberately NOT chrome
+                        (data-xmb-chrome): it acts on click, not pointerdown,
+                        so a swipe-right that starts on it must still reach
+                        the root's swipe-to-go-back. */}
+                    {isContextView && onBack && exitItem && (
+                        <motion.button
+                            type="button"
+                            onClick={handleExitClick}
+                            aria-label={`Back, exit ${exitItem.title}`}
+                            className="absolute left-0 z-20 rounded-lg cursor-pointer pointer-events-auto transition-colors duration-150 hover:bg-xmb-fg/5 active:bg-xmb-fg/10 touch-manipulation"
+                            style={{ top: exitTop, width: exitWidth, height: exitHeight, y: columnY }}
+                        />
+                    )}
                 </div>
             </motion.div>
         );
