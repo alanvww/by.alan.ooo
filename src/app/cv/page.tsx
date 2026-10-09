@@ -1,9 +1,13 @@
 import fs from 'fs';
 import path from 'path';
+import matter from 'gray-matter';
 import type { Metadata } from 'next';
 import { MDXRemote, type MDXRemoteProps } from 'next-mdx-remote/rsc';
 import remarkGfm from 'remark-gfm';
 import rehypeSlug from 'rehype-slug';
+import rehypeAutolinkHeadings from 'rehype-autolink-headings';
+import rehypeExternalLinks from 'rehype-external-links';
+import { siteConfig } from '@/lib/site-config';
 import { xmbMdxComponents } from '@/components/xmb/XMBMdxComponents';
 import XMBContentLayout from '@/components/xmb/XMBContentLayout';
 import XMBPostFrame from '@/components/xmb/XMBPostFrame';
@@ -12,17 +16,49 @@ import { CVEntry } from '@/components/mdx/CVEntry';
 export const metadata: Metadata = {
   title: 'CV',
   description: 'Curriculum vitae of Alan Yam — creative technologist and design engineer.',
+  openGraph: {
+    title: 'CV',
+    description: 'Curriculum vitae of Alan Yam — creative technologist and design engineer.',
+    siteName: siteConfig.name,
+    locale: 'en_US',
+    type: 'website',
+    url: '/cv',
+  },
 };
 
 export default function CVPage(): React.ReactElement {
   // Standalone document: cv.mdx lives at the root of src/content (not inside
   // a type folder), so it never appears in the XMB menu or the [type] routes.
   // No wikilinks here — the file is compiled on its own, outside src/lib/mdx.
-  const source = fs.readFileSync(path.join(process.cwd(), 'src/content/cv.mdx'), 'utf8');
+  const rawSource = fs.readFileSync(path.join(process.cwd(), 'src/content/cv.mdx'), 'utf8');
+  const { content: source } = matter(rawSource);
 
   const mdxOptions: NonNullable<MDXRemoteProps['options']>['mdxOptions'] = {
     remarkPlugins: [remarkGfm],
-    rehypePlugins: [rehypeSlug],
+    rehypePlugins: [
+      rehypeSlug,
+      [
+        rehypeAutolinkHeadings,
+        {
+          behavior: 'append',
+          properties: { className: 'heading-anchor', ariaHidden: true, tabIndex: -1 },
+          content: { type: 'text', value: '#' },
+        },
+      ],
+      [
+        rehypeExternalLinks,
+        {
+          target: '_blank',
+          rel: ['noopener', 'noreferrer'],
+          content: {
+            type: 'element',
+            tagName: 'span',
+            properties: { className: ['sr-only'] },
+            children: [{ type: 'text', value: ' (opens in new tab)' }],
+          },
+        },
+      ],
+    ],
   };
 
   // XMBPostFrame supplies the frosted backdrop, back button, and

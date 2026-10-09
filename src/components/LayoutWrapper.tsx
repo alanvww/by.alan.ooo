@@ -56,7 +56,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3, ease: EASE.FADE }}
-            className="z-[100]"
+            className="z-[100] pointer-events-none"
           >
             {skeletonForHref(pendingHref)}
           </motion.div>

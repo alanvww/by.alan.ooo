@@ -27,6 +27,7 @@ function StackItem({ item }: { item: StackGearItem }): ReactElement {
         <div className="flex items-start justify-between gap-2">
           <h3 className="text-base font-light tracking-tight text-xmb-fg/90 break-words">
             {item.name}
+            <span className="sr-only"> (opens in new tab)</span>
           </h3>
           <ArrowUpRight
             size={14}

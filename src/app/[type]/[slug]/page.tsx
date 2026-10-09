@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { getFileData, getContentManifest, getContentTypes, getWikilinkIndex } from '@/lib/mdx';
 import { getContentSiblings } from '@/lib/get-content-siblings';
+import { siteConfig } from '@/lib/site-config';
 import { remarkWikilinks } from '@/lib/remark-wikilinks';
 import { MDXRemote, type MDXRemoteProps } from 'next-mdx-remote/rsc';
 import remarkGfm from 'remark-gfm';
@@ -30,23 +31,29 @@ export async function generateStaticParams(): Promise<PageParams[]> {
 export async function generateMetadata({ params }: { params: Promise<PageParams> }): Promise<Metadata> {
   const { type, slug } = await params;
   if (!getContentTypes().includes(type)) {
-    return {};
+    notFound();
   }
+  let frontmatter;
   try {
-    const { frontmatter } = await getFileData(type, slug);
-    return {
+    ({ frontmatter } = await getFileData(type, slug));
+  } catch {
+    notFound();
+  }
+  return {
+    title: frontmatter.title,
+    description: frontmatter.excerpt,
+    openGraph: {
       title: frontmatter.title,
       description: frontmatter.excerpt,
-      openGraph: {
-        title: frontmatter.title,
-        description: frontmatter.excerpt,
-        images: frontmatter.coverImage ? [frontmatter.coverImage] : undefined,
-      },
-    };
-  } catch {
-    // The page itself resolves this to notFound() with full logging.
-    return {};
-  }
+      siteName: siteConfig.name,
+      locale: 'en_US',
+      type: 'article',
+      publishedTime: frontmatter.date,
+      modifiedTime: frontmatter.updatedDate,
+      url: `/${type}/${slug}`,
+      ...(frontmatter.coverImage ? { images: [frontmatter.coverImage] } : {}),
+    },
+  };
 }
 
 export default async function ContentPage({ params }: { params: Promise<PageParams> }) {
@@ -59,16 +66,17 @@ export default async function ContentPage({ params }: { params: Promise<PagePara
   }
 
   let data;
-  let siblings;
-  let wikilinkIndex;
   try {
     data = await getFileData(type, slug);
-    siblings = await getContentSiblings(type, slug);
-    wikilinkIndex = await getWikilinkIndex();
   } catch (error) {
     console.error(`Error loading ${type}/${slug}:`, error);
     return notFound();
   }
+
+  const [siblings, wikilinkIndex] = await Promise.all([
+    getContentSiblings(type, slug),
+    getWikilinkIndex(),
+  ]);
 
   const mdxOptions: NonNullable<MDXRemoteProps['options']>['mdxOptions'] = {
     // .md files are plain markdown: no JSX semantics, so prose with { or <

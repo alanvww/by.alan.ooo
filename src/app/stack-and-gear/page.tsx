@@ -1,12 +1,21 @@
 import type { Metadata } from 'next';
 import XMBContentLayout from '@/components/xmb/XMBContentLayout';
 import XMBPostFrame from '@/components/xmb/XMBPostFrame';
+import { siteConfig } from '@/lib/site-config';
 import { STACK_ITEMS, GEAR_ITEMS } from '@/lib/stack-and-gear-data';
 import { StackGrid } from './StackCards';
 
 export const metadata: Metadata = {
   title: 'Stack & Gear',
   description: 'The software stack and everyday gear behind Alan Yam’s work.',
+  openGraph: {
+    title: 'Stack & Gear',
+    description: 'The software stack and everyday gear behind Alan Yam’s work.',
+    siteName: siteConfig.name,
+    locale: 'en_US',
+    type: 'website',
+    url: '/stack-and-gear',
+  },
 };
 
 const SECTION_HEADING_CLASS =

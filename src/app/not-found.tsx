@@ -5,15 +5,22 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { playCancel } from '@/hooks/useKeyAudioFx';
 import { XMB_OVERLAY } from '@/lib/xmb-constants';
+import { useXMBLoadingContext } from '@/lib/xmb-navigation-context';
 
 export default function NotFound() {
     const router = useRouter();
+    const { finishNavigation } = useXMBLoadingContext();
+
+    useEffect(() => {
+        finishNavigation();
+    }, [finishNavigation]);
 
     // The 404 renders at the ROOT not-found boundary, outside the [type]
     // layout — XMBPostFrame's Escape handler is unmounted here, so the ESC
     // keycap below needs its own.
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.repeat) return;
             // Modified keys are browser affordances — same rule as the
             // menu dispatcher and XMBPostFrame.
             if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -28,7 +35,7 @@ export default function NotFound() {
     // Client boundary can't export metadata — set the title (2.4.2) directly
     // so the tab and AT don't keep announcing the previous page's name.
     useEffect(() => {
-        document.title = 'Page Not Found | Alan';
+        document.title = 'Page Not Found | Alan Yam';
     }, []);
 
     return (
