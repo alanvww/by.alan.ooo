@@ -25,13 +25,16 @@ import { isChromeTarget } from "@/lib/xmb-chrome";
 import { focusListSibling } from "@/lib/focus";
 import type { XMBItem } from "@/lib/xmb-types";
 import XMBIcon from "./XMBIcon";
-import { XMB_CAROUSEL, XMB_ANIMATION, EASE, XMB_SHAKE } from "@/lib/xmb-constants";
+import { XMB_CAROUSEL, XMB_ANIMATION, EASE, XMB_SHAKE, XMB_GESTURE } from "@/lib/xmb-constants";
 import { playNavigate, playConfirm, playDeny } from "@/hooks/useKeyAudioFx";
 import type { RestrictedPing } from "./XMBRestrictedToast";
 
 // motion-wrapped next/link so internal link cards keep SPA navigation while
 // being genuine anchors (middle-click, context menu, AT link semantics).
 const MotionLink = motion.create(Link);
+
+const isUnoptimizedImage = (src: string): boolean =>
+  !src.startsWith('/') || src.startsWith('//') || /\.(svg|gif)($|[?#])/i.test(src);
 
 interface XMBCarouselProps {
   items: XMBItem[];
@@ -51,6 +54,10 @@ interface XMBCarouselProps {
    * carousel's own container.
    */
   wheelSurfaceRef?: React.RefObject<HTMLElement | null>;
+  /** Shared live index ref so Enter/arrows during a wheel/touch gesture act on the highlighted card. */
+  liveIndexRef?: React.RefObject<number | null>;
+  /** Shared wheel abort ref so keyboard navigation cancels in-flight carousel settle timers. */
+  wheelAbortRef?: React.RefObject<(() => void) | null>;
   /** Accessible name of the listbox — the folder's title, so AT names
       which folder is open rather than a generic "Folder contents". */
   label?: string;
@@ -116,30 +123,6 @@ const XMBCarouselCard = React.memo(({ item, index, setSize, scrollOffset, isActi
     Math.abs(index - offset) <= XMB_CAROUSEL.VISIBLE_ITEMS ? 'auto' : 'none'
   );
 
-  // The followers replace the old animate-prop retargeting one-for-one: the
-  // same 300ms ease-out tween chases the same per-frame targets, so keyboard
-  // jumps, the wheel trail and the settle snap keep the shipped motion. (The
-  // useSpring followers these replace were REAL springs — the only consumers
-  // of the old "spring" configs that ever sprang, since useSpring's
-  // attachFollow path defaults type:'spring' — and settled visibly slower
-  // than the shipped tween.) FOLLOW_TWEEN, not TWEEN: attachFollow takes
-  // durations in milliseconds, and its explicit `type` is load-bearing
-  // because attachFollow spreads options over a `type: "spring"` default
-  // (see XMB_ANIMATION). A follower initializes at the source's current
-  // value, so a card culled back into the mount window paints at its real
-  // transform on first render — the same no-ghost guarantee initial={false}
-  // gave the old animate props.
-  //
-  // MotionConfig reducedMotion="user" (MotionProvider) only governs animate
-  // props — it can't see style-driven motion values — so the gate is manual,
-  // same pattern as XMBVerticalList's entrance, and mirrors motion's
-  // reducedMotion="user" split: transform channels (y/x/scale) snap via a
-  // duration-0 follower (replacing the old raw-target style swap, and
-  // sparing reduce users the cost of dead per-frame animations), while
-  // opacity keeps the full tween. reduceMotion is constant for the life of
-  // a mounted component, so the ternary picks one stable options object —
-  // and useFollowValue re-attaches on JSON.stringify(options) changes, so
-  // even an OS-level flip mid-session resolves correctly.
   const reduceMotion = useReducedMotion();
   const transformFollow: FollowValueOptions = reduceMotion
     ? { type: 'keyframes', duration: 0 }
@@ -149,23 +132,10 @@ const XMBCarouselCard = React.memo(({ item, index, setSize, scrollOffset, isActi
   const scale = useFollowValue(scaleTarget, transformFollow);
   const opacity = useFollowValue(opacityTarget, XMB_ANIMATION.FOLLOW_TWEEN);
 
-  // Link cards render as real anchors (SPA <Link> internally, <a target=
-  // _blank> externally); folders/actions stay divs so the window dispatcher
-  // owns their Enter (a native button click would swallow the drill).
-  // Restricted cards must NOT be anchors — Enter/click deny instead of
-  // navigating, and an anchor would follow its href natively.
   const isLinkCard = !!item.link && !item.action && item.type !== 'folder' && !item.restricted;
   const isExternal = isLinkCard && isExternalLink(item.link!);
-  // Standalone doc routes are tiny static payloads — keep Next's default
-  // viewport prefetch so their loading skeleton never shows in production.
-  // Post links stay opted out so the carousel can't bulk-fetch every
-  // /[type]/[slug] payload (prefetch={false} also disables hover).
   const prefetch = isLinkCard && !isExternal && isStandaloneDocRoute(item.link!) ? undefined : false;
 
-  // Deny shake: replays whenever the parent bumps this card's nonce.
-  // Edge-triggered — the ref starts at the mount value, so a card that
-  // remounts with a stale ping (folder exit/re-entry, culling, layout
-  // switch) never replays a ghost shake.
   const shakeControls = useAnimationControls();
   const lastShakeNonceRef = useRef(shakeNonce);
   useEffect(() => {
@@ -177,48 +147,34 @@ const XMBCarouselCard = React.memo(({ item, index, setSize, scrollOffset, isActi
   }, [shakeNonce, reduceMotion, shakeControls]);
 
   const handleClick = (e: React.MouseEvent<HTMLElement>): void => {
-    // Modified clicks on links (cmd/ctrl/shift/middle) are pure browser
-    // affordances — no selection change, no preventDefault.
     if (isLinkCard && (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0)) {
       return;
     }
     if (!isActive) {
-      // First click centers the card, never activates.
       e.preventDefault();
       playNavigate();
       onSelect(index);
       return;
     }
     if (item.restricted) {
-      // Deny: the handler owns the sound, shake, and toast.
       onRestricted?.(item, index);
       return;
     }
     if (!isActivatable(item)) {
-      // Dead card (empty folder, link-less link): deny cue, nothing else.
       e.preventDefault();
       playDeny();
       return;
     }
     if (isLinkCard) {
-      // The anchor navigates natively; skeleton for internal routes only.
       playConfirm();
       if (!isExternal) {
         startNavigation(item.link!);
       }
     }
-    // Non-link cards (nested folders / actions): Enter drills via the window
-    // dispatcher; clicking the active card keeps its status-quo no-op.
   };
 
   const handleFocus = (): void => onCardFocus(index);
 
-  // Tab walks the carousel: the adjacent card takes focus loudly (ring
-  // shows — browser-style traversal) and selection follows via onFocus; at
-  // either end the default action exits the list so keyboard users are
-  // never trapped (2.1.2). Adjacent cards are always mounted (culling only
-  // drops cards beyond the visibility window), so the sibling lookup only
-  // fails at the true boundaries.
   const handleTabKeyDown = (e: React.KeyboardEvent<HTMLElement>): void => {
     if (e.key !== 'Tab') return;
     if (focusListSibling('carousel-item-', index, e.shiftKey ? -1 : 1)) {
@@ -229,24 +185,12 @@ const XMBCarouselCard = React.memo(({ item, index, setSize, scrollOffset, isActi
   const sharedProps = {
     role: 'option',
     'aria-selected': isActive,
-    // Link cards are real anchors around an image: no URL / ghost drags.
     draggable: false,
-    // Culling mounts only cards near the scroll offset; setsize/posinset keep
-    // screen readers announcing the true "n of N" position regardless.
     'aria-setsize': setSize,
     'aria-posinset': index + 1,
     id: `carousel-item-${index}`,
     tabIndex: isActive ? 0 : -1,
-    // This element is a full-width positioning strip anchored at top:50%;
-    // the visible card is a child pulled up with translateY(-50%). A focus
-    // ring here outlines the strip's untransformed box (offset below and far
-    // wider than the card), so the ring is suppressed and re-drawn on the
-    // card box itself via group-focus-visible.
     className: "group absolute left-0 block w-full cursor-pointer outline-none focus-visible:ring-0 focus-visible:ring-offset-0",
-    // Position is fully style-driven (motion values), so a card entering the
-    // mount window paints at its current computed transform on first render —
-    // no "ghost in the center". initial={false} is kept for its second job:
-    // variant/initial propagation to children stays exactly as before.
     style: {
       top: '50%',
       zIndex,
@@ -270,35 +214,43 @@ const XMBCarouselCard = React.memo(({ item, index, setSize, scrollOffset, isActi
       >
         <div
           className={`
-            xmb-card-chrome w-64 h-36 sm:w-[24rem] sm:h-[14rem] md:w-[28rem] md:h-[16rem] shrink-0 rounded-xl overflow-hidden border shadow-2xl dark:bg-black/85 bg-white/90
+            relative xmb-card-chrome w-64 h-36 sm:w-[24rem] sm:h-[14rem] md:w-[28rem] md:h-[16rem] shrink-0 rounded-xl overflow-hidden border shadow-2xl dark:bg-black/75 bg-white/85
             transition-[border-color,box-shadow,transform] duration-200
             group-focus-visible:ring-2 group-focus-visible:ring-ring
             ${isActive
-              ? 'border-xmb-fg/80 ring-1 ring-xmb-fg/50 shadow-[0_0_35px_var(--color-xmb-shadow-glow)] motion-safe:hover:scale-[1.02] hover:shadow-[0_0_50px_var(--color-xmb-shadow-glow)]'
-              : 'border-xmb-fg/20'
+              ? 'border-xmb-fg/45 shadow-[0_0_32px_var(--color-xmb-shadow-glow)] motion-safe:hover:scale-[1.02] hover:border-xmb-fg/65 hover:shadow-[0_0_44px_var(--color-xmb-shadow-glow)]'
+              : 'border-xmb-fg/15'
             }
           `}
         >
           {item.image ? (
             <div className="relative w-full h-full">
-              <Image src={item.image} alt="" fill sizes="(max-width: 768px) 16rem, 28rem" className="object-cover" />
+              <Image
+                src={item.image}
+                alt=""
+                fill
+                sizes="(max-width: 768px) 16rem, 28rem"
+                unoptimized={isUnoptimizedImage(item.image)}
+                className="object-cover"
+              />
+              <div className="absolute inset-0 ring-1 ring-inset ring-xmb-fg/15 rounded-xl pointer-events-none" />
             </div>
           ) : (
             <div className="w-full h-full flex items-center justify-center">
-              <XMBIcon name="File" size={isActive ? 80 : 40} className="text-xmb-fg/30" />
+              <XMBIcon name="File" size={64} className={isActive ? 'text-xmb-fg/45 xmb-row-icon-active' : 'text-xmb-fg/25'} />
             </div>
           )}
         </div>
 
         <div className="flex flex-col justify-center drop-shadow-2xl max-w-2xl text-center md:text-left md:h-[16rem] sm:h-[14rem] h-36 overflow-hidden">
-          <h2 className={`text-2xl sm:text-3xl md:text-4xl font-extralight tracking-wide transition-colors duration-150 leading-tight ${isActive ? 'text-xmb-fg' : 'text-xmb-fg/35'}`}>
+          <div className={`text-2xl sm:text-3xl md:text-4xl font-extralight tracking-wide transition-colors duration-150 leading-tight ${isActive ? 'text-xmb-fg' : 'text-xmb-fg/35'}`}>
             {item.title}
             {/* Pre-activation cue for AT: restricted cards otherwise
                 announce identically to openable ones. */}
             {item.restricted && (
               <span className="sr-only"> — under wraps, activate for info</span>
             )}
-          </h2>
+          </div>
           <AnimatePresence mode="popLayout">
             {isActive && item.description && (
               <motion.p
@@ -353,76 +305,59 @@ const XMBCarouselCard = React.memo(({ item, index, setSize, scrollOffset, isActi
 
 XMBCarouselCard.displayName = 'XMBCarouselCard';
 
-const XMBCarousel = ({ items, activeIndex, onSelect, onRestricted, restrictedPing, isPointerEvent, wheelSurfaceRef, label }: XMBCarouselProps) => {
+const XMBCarousel = ({
+  items,
+  activeIndex,
+  onSelect,
+  onRestricted,
+  restrictedPing,
+  isPointerEvent,
+  wheelSurfaceRef,
+  liveIndexRef,
+  wheelAbortRef,
+  label,
+}: XMBCarouselProps) => {
   const { startNavigation } = useXMBLoadingContext();
   const containerRef = useRef<HTMLDivElement>(null);
-  const touchStartY = useRef<number>(0);
+  const touchStartY = useRef<number | null>(null);
+  const touchStartX = useRef<number | null>(null);
+  const touchTravelRef = useRef<number>(0);
+  const touchConsumedRef = useRef<boolean>(false);
+  const touchEndedAtRef = useRef<number>(0);
+  const gestureActiveRef = useRef<boolean>(false);
   const animationFrameRef = useRef<number | null>(null);
   const wheelDeltaRef = useRef<number>(0);
   const lastCommittedIndexRef = useRef<number>(activeIndex);
   const snapAnimationRef = useRef<AnimationPlaybackControls | null>(null);
-  // Flips true when we initiate the parent commit ourselves, so the
-  // activeIndex sync effect below knows not to overwrite scrollOffset
-  // (the settle animation is already handling that transition smoothly).
   const selfCommittingRef = useRef<boolean>(false);
 
-  // Smooth scroll position — floating point for continuous scrolling. A
-  // motion value, NOT React state: wheel/touch/settle write it at frame
-  // rate, and routing those writes through setState re-rendered the whole
-  // carousel (recomputing the culling and busting every card's memo) on
-  // every frame. Cards subscribe via useTransform/useFollowValue instead.
   const scrollOffset = useMotionValue(activeIndex);
 
-  // Quantized mirror of scrollOffset for the few things that genuinely need
-  // a React render — the cards' isActive styling/aria and the culling
-  // window. Updated only when the rounded value actually changes, never per
-  // frame.
   const [roundedIndex, setRoundedIndex] = useState<number>(activeIndex);
   const roundedIndexRef = useRef<number>(activeIndex);
 
-  // Keyboard/AT focus landed on a card: sync the selection cursor, with
-  // the tick (sound follows the state change, so the first Tab into the
-  // carousel sounds like every later one). Pointer-driven focus defers to
-  // onClick (the two-click model). The idempotence check reads the
-  // committed index through a LAYOUT-effect-fresh ref, like the vertical
-  // list's itemIndexRef: the parent's index→focus sync is a passive effect
-  // that runs after this component's, so a card's own render-stale
-  // `isActive` still shows the PREVIOUS selection and ticked a second time
-  // on every arrow key.
   const activeIndexRef = useRef(activeIndex);
   useLayoutEffect(() => {
     activeIndexRef.current = activeIndex;
   });
   const handleCardFocus = useCallback((index: number) => {
     if (isPointerEvent?.()) return;
-    if (index === activeIndexRef.current) return; // app-driven sync: the command already ticked
+    if (index === activeIndexRef.current) return;
     playNavigate();
     onSelect(index);
   }, [isPointerEvent, onSelect]);
 
-  // Debounce timer for the settle commit, armed imperatively on each offset
-  // write (the old implementation recreated a setTimeout effect per frame).
   const commitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // The timer can fire up to 50ms after it was armed, so it reads its
-  // inputs from a ref refreshed by a passive effect instead of a possibly
-  // stale closure (the old effect re-armed on dep changes to stay fresh).
   const commitArgsRef = useRef({ itemCount: items.length, onSelect });
   useEffect(() => {
     commitArgsRef.current = { itemCount: items.length, onSelect };
   }, [items.length, onSelect]);
 
-  // While this carousel plays its AnimatePresence exit (folder exit) it is
-  // a frozen clone: props are pinned at the folder's item set, but its
-  // wheel listener on the shared root and its 50ms settle timer are still
-  // live. Both must stand down the moment presence is lost, or a wheel
-  // (or a trackpad momentum tail) inside the 150ms fade would commit a
-  // FOLDER-scoped index onto the root list. Read through a ref so
-  // handleWheel's identity — and the listener registration — stay put.
-  const isPresent = useIsPresent();
-  const isPresentRef = useRef(true);
-  useEffect(() => {
-    isPresentRef.current = isPresent;
-    if (isPresent) return;
+  const abortGesture = useCallback(() => {
+    gestureActiveRef.current = false;
+    if (liveIndexRef) {
+      liveIndexRef.current = null;
+    }
     if (commitTimerRef.current !== null) {
       clearTimeout(commitTimerRef.current);
       commitTimerRef.current = null;
@@ -433,17 +368,30 @@ const XMBCarousel = ({ items, activeIndex, onSelect, onRestricted, restrictedPin
       window.cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
     }
-  }, [isPresent]);
+    wheelDeltaRef.current = 0;
+  }, [liveIndexRef]);
 
-  // Smoothly ease scrollOffset to an integer index. Used after a
-  // wheel/touch scroll settles so cards drift the last fractional step
-  // instead of springing twice (once to the float rest, then back to the
-  // rounded value when the parent re-syncs). The bezier (1/3, 1, 2/3, 1)
-  // is the exact analytic form of the old hand-rolled ease-out cubic
-  // 1-(1-t)^3 over the same 220ms. Like the old rAF loop, this imperative
-  // animation deliberately runs under reduced motion too: it only moves the
-  // offset, and reduced-motion users' cards snap along via their duration-0
-  // followers.
+  useLayoutEffect(() => {
+    if (!wheelAbortRef) return;
+    wheelAbortRef.current = abortGesture;
+    return () => {
+      if (wheelAbortRef.current === abortGesture) {
+        wheelAbortRef.current = null;
+      }
+      if (liveIndexRef) {
+        liveIndexRef.current = null;
+      }
+    };
+  }, [abortGesture, liveIndexRef, wheelAbortRef]);
+
+  const isPresent = useIsPresent();
+  const isPresentRef = useRef(true);
+  useEffect(() => {
+    isPresentRef.current = isPresent;
+    if (isPresent) return;
+    abortGesture();
+  }, [abortGesture, isPresent]);
+
   const snapScrollOffsetTo = useCallback((target: number) => {
     snapAnimationRef.current?.stop();
     snapAnimationRef.current = null;
@@ -454,44 +402,17 @@ const XMBCarousel = ({ items, activeIndex, onSelect, onRestricted, restrictedPin
     });
   }, [scrollOffset]);
 
-  // Sync scrollOffset with activeIndex when it changes externally (keyboard
-  // nav). The offset retargets instantly — each card's follower tween
-  // carries the visible motion, exactly as it did when this was a setState.
-  // Skip if the
-  // change came from our own debounced commit — snapScrollOffsetTo is
-  // already mid-flight and an instant reset would undo it.
-  useEffect(() => {
-    if (selfCommittingRef.current) {
-      selfCommittingRef.current = false;
-      lastCommittedIndexRef.current = activeIndex;
-      return;
-    }
-    snapAnimationRef.current?.stop();
-    snapAnimationRef.current = null;
-    scrollOffset.set(activeIndex);
-    lastCommittedIndexRef.current = activeIndex;
-  }, [activeIndex, scrollOffset]);
-
-  // Every offset write lands here (wheel/touch rAF batches, the settle
-  // animation's frames, external syncs): keep the quantized index fresh and
-  // re-arm the 50ms settle debounce. When scroll settles, commit to parent +
-  // smooth-snap our own scrollOffset together so the cards animate once.
-  // The commit branch only runs for wheel/touch-originated moves (keyboard-
-  // driven activeIndex changes update lastCommittedIndexRef before it
-  // fires), so the tick below never double-plays on keyboard navigation.
-  useMotionValueEvent(scrollOffset, "change", (latest) => {
-    const rounded = Math.round(latest);
-    if (rounded !== roundedIndexRef.current) {
-      roundedIndexRef.current = rounded;
-      setRoundedIndex(rounded);
-    }
-
+  const armSettleTimer = useCallback(() => {
     if (commitTimerRef.current !== null) {
       clearTimeout(commitTimerRef.current);
     }
     commitTimerRef.current = setTimeout(() => {
       commitTimerRef.current = null;
-      if (!isPresentRef.current) return; // exiting: never commit into the root list
+      gestureActiveRef.current = false;
+      if (liveIndexRef) {
+        liveIndexRef.current = null;
+      }
+      if (!isPresentRef.current) return;
       const { itemCount, onSelect: commitSelect } = commitArgsRef.current;
       const settledIndex = Math.round(scrollOffset.get());
       if (
@@ -504,44 +425,60 @@ const XMBCarousel = ({ items, activeIndex, onSelect, onRestricted, restrictedPin
         playNavigate();
         commitSelect(settledIndex);
         snapScrollOffsetTo(settledIndex);
+      } else if (settledIndex >= 0 && settledIndex < itemCount) {
+        snapScrollOffsetTo(settledIndex);
       }
     }, 50);
+  }, [liveIndexRef, scrollOffset, snapScrollOffsetTo]);
+
+  useEffect(() => {
+    if (selfCommittingRef.current) {
+      selfCommittingRef.current = false;
+      lastCommittedIndexRef.current = activeIndex;
+      return;
+    }
+    gestureActiveRef.current = false;
+    if (liveIndexRef) {
+      liveIndexRef.current = null;
+    }
+    if (commitTimerRef.current !== null) {
+      clearTimeout(commitTimerRef.current);
+      commitTimerRef.current = null;
+    }
+    snapAnimationRef.current?.stop();
+    snapAnimationRef.current = null;
+    scrollOffset.set(activeIndex);
+    lastCommittedIndexRef.current = activeIndex;
+  }, [activeIndex, liveIndexRef, scrollOffset]);
+
+  useMotionValueEvent(scrollOffset, "change", (latest) => {
+    const rounded = Math.round(latest);
+    if (rounded !== roundedIndexRef.current) {
+      roundedIndexRef.current = rounded;
+      setRoundedIndex(rounded);
+    }
+    if (gestureActiveRef.current && liveIndexRef) {
+      liveIndexRef.current = rounded;
+    }
   });
 
-  // Cancel the in-flight settle animation and any pending commit on unmount
   useEffect(() => {
     return () => {
-      snapAnimationRef.current?.stop();
-      snapAnimationRef.current = null;
-      if (commitTimerRef.current !== null) {
-        clearTimeout(commitTimerRef.current);
-        commitTimerRef.current = null;
-      }
+      abortGesture();
     };
-  }, []);
+  }, [abortGesture]);
 
   // Mouse wheel handler - smooth continuous scrolling
   const handleWheel = useCallback((e: WheelEvent) => {
-    // Browser zoom is never consumed: ctrl+wheel and a trackpad pinch both
-    // arrive as wheel events with ctrlKey set. Read as a scrub they were
-    // also misinterpreted — the pinch deltas scrubbed the card selection.
     if (e.ctrlKey || e.metaKey) return;
-    // Exiting (see isPresentRef above): the root list owns the wheel again.
     if (!isPresentRef.current) return;
-    // Another consumer on the shared root already took this event. The
-    // vertical list's hook registers its listener in a layout effect so it
-    // always sits ahead of this one; it yields to us via `enabled` while
-    // we are live, and we yield to it via this flag while we exit.
     if (e.defaultPrevented) return;
     e.preventDefault();
 
-    // User is steering again — abort any settle-snap in progress so the
-    // wheel input owns scrollOffset.
+    gestureActiveRef.current = true;
     snapAnimationRef.current?.stop();
     snapAnimationRef.current = null;
 
-    // Normalized: a Firefox wheel mouse reports deltaMode 1 / deltaY 3,
-    // which read as pixels was 0.024 cards per notch.
     const { dy } = normalizeWheelDelta(e, containerRef.current);
     wheelDeltaRef.current += dy * XMB_CAROUSEL.SCROLL_SENSITIVITY;
 
@@ -555,36 +492,49 @@ const XMBCarousel = ({ items, activeIndex, onSelect, onRestricted, restrictedPin
       animationFrameRef.current = null;
 
       const newOffset = scrollOffset.get() + delta;
-      scrollOffset.set(Math.max(0, Math.min(items.length - 1, newOffset)));
+      const clamped = Math.max(0, Math.min(items.length - 1, newOffset));
+      scrollOffset.set(clamped);
+      if (liveIndexRef) {
+        liveIndexRef.current = Math.round(clamped);
+      }
+      armSettleTimer();
     });
-  }, [items.length, scrollOffset]);
+  }, [armSettleTimer, items.length, liveIndexRef, scrollOffset]);
 
   // Touch handlers for mobile swipe support
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    // A second finger is a pinch (touch-action pinch-zoom lets the browser
-    // have it), never a scrub — and a touch that starts on pressable chrome
-    // belongs to that control, not to the scrub, the same rule the root
-    // swipe handler applies.
     if (e.touches.length !== 1 || isChromeTarget(e.target)) {
-      touchStartY.current = 0;
+      touchStartY.current = null;
+      touchStartX.current = null;
       return;
     }
     touchStartY.current = e.touches[0].clientY;
+    touchStartX.current = e.touches[0].clientX;
+    touchTravelRef.current = 0;
+    touchConsumedRef.current = false;
   }, []);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!touchStartY.current || e.touches.length !== 1) return;
+    if (touchStartY.current === null || touchStartX.current === null || e.touches.length !== 1) return;
 
+    const currentY = e.touches[0].clientY;
+    const currentX = e.touches[0].clientX;
+    const deltaY = touchStartY.current - currentY;
+    const deltaX = touchStartX.current - currentX;
+    touchStartY.current = currentY;
+    touchStartX.current = currentX;
+
+    touchTravelRef.current += Math.hypot(deltaX, deltaY);
+    if (touchTravelRef.current > XMB_GESTURE.PAN_SLOP_PX) {
+      touchConsumedRef.current = true;
+    }
+    if (!touchConsumedRef.current) return;
+
+    gestureActiveRef.current = true;
     snapAnimationRef.current?.stop();
     snapAnimationRef.current = null;
 
-    const currentY = e.touches[0].clientY;
-    const deltaY = touchStartY.current - currentY;
-    touchStartY.current = currentY;
-
-    // Convert touch movement to scroll offset
-    const delta = deltaY * 0.01; // Sensitivity for touch
-
+    const delta = deltaY * 0.01;
     wheelDeltaRef.current += delta;
 
     if (animationFrameRef.current !== null) {
@@ -597,16 +547,34 @@ const XMBCarousel = ({ items, activeIndex, onSelect, onRestricted, restrictedPin
       animationFrameRef.current = null;
 
       const newOffset = scrollOffset.get() + touchDelta;
-      scrollOffset.set(Math.max(0, Math.min(items.length - 1, newOffset)));
+      const clamped = Math.max(0, Math.min(items.length - 1, newOffset));
+      scrollOffset.set(clamped);
+      if (liveIndexRef) {
+        liveIndexRef.current = Math.round(clamped);
+      }
+      armSettleTimer();
     });
-  }, [items.length, scrollOffset]);
+  }, [armSettleTimer, items.length, liveIndexRef, scrollOffset]);
 
   const handleTouchEnd = useCallback(() => {
-    touchStartY.current = 0;
+    if (touchConsumedRef.current) {
+      touchEndedAtRef.current = performance.now();
+    }
+    touchStartY.current = null;
+    touchStartX.current = null;
   }, []);
 
-  // Attach wheel event listener — non-passive (React's onWheel is passive,
-  // so preventDefault from it is a no-op), on the shared root when given.
+  const handleClickCapture = useCallback((e: React.MouseEvent) => {
+    if (
+      touchConsumedRef.current &&
+      performance.now() - touchEndedAtRef.current <= XMB_GESTURE.TAP_SUPPRESS_WINDOW_MS
+    ) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    touchConsumedRef.current = false;
+  }, []);
+
   useEffect(() => {
     const container = wheelSurfaceRef?.current ?? containerRef.current;
     if (!container) return;
@@ -624,12 +592,6 @@ const XMBCarousel = ({ items, activeIndex, onSelect, onRestricted, restrictedPin
     };
   }, [handleWheel, wheelSurfaceRef]);
 
-  // Mount window is quantized to roundedIndex (culling shouldn't run per
-  // frame) at ±(VISIBLE_ITEMS + 1): a superset of the old float-based
-  // ±(VISIBLE_ITEMS + 1) window at every offset. For integer i,
-  // |i − offset| ≤ V+1 implies |i − round(offset)| ≤ V+1.5, and since the
-  // left side is an integer, ≤ V+1 — so a card can never pop in/out
-  // mid-flight.
   const visibleEntries = useMemo(() => {
     return items
       .map((item, index) => ({ item, index }))
@@ -639,26 +601,19 @@ const XMBCarousel = ({ items, activeIndex, onSelect, onRestricted, restrictedPin
   return (
     <motion.div
       ref={containerRef}
-      // touch-pinch-zoom, not touch-none: the scrub owns both pan axes,
-      // but pinch zoom must stay available (the viewport meta promises it).
       className="absolute top-0 right-0 w-full md:w-[70%] h-dvh flex items-center justify-center pointer-events-auto overflow-clip touch-pinch-zoom"
       initial={{ opacity: 0, x: 100 }}
       animate={{ opacity: 1, x: 0 }}
-      // Exit is opacity-only and faster than the entrance: sliding this
-      // 70%-viewport subtree of glowing cards out concurrently with a
-      // category switch's springs causes jank, so it just fades.
       exit={{ opacity: 0, transition: { duration: 0.15, ease: EASE.EXIT } }}
       transition={{ duration: 0.25, ease: EASE.ENTER }}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchEnd}
+      onClickCapture={handleClickCapture}
     >
       <div className="relative w-full h-full flex items-center justify-center">
         <div className="relative w-full max-w-6xl h-full px-6 md:pl-12">
-          {/* The listbox is the cards' DIRECT parent. No back pill here:
-              the open folder's row in the context sidebar is the exit
-              (XMBVerticalList). Cards are absolutely positioned, so this
-              wrapper is a zero-impact inset-0 box. */}
           <div role="listbox" aria-label={label ?? 'Folder contents'} className="absolute inset-0">
           {visibleEntries.map(({ item, index }) => {
             return (

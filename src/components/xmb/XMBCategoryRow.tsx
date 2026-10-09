@@ -33,9 +33,11 @@ interface XMBCategoryRowProps {
 // The crossfade instead reproduces the old per-icon animate-prop retargets:
 // only the outgoing and incoming icons move, tweening over the same 300ms.
 
-/** Discrete scale at an integer delta: 1.2 on the active cell, 0.8 elsewhere. */
+/** Discrete scale at an integer delta: 1.2 on the active cell (57.6px),
+    2/3 elsewhere (32px) on a constant 48px icon box so switching never
+    snaps SVG width/height attributes on frame 0. */
 function iconScaleAt(delta: number): number {
-  return delta === 0 ? 1.2 : 0.8;
+  return delta === 0 ? 1.2 : 2 / 3;
 }
 
 /** Discrete opacity at an integer delta: 1 on the active cell (the falloff
@@ -75,6 +77,7 @@ const XMBCategoryCell = React.memo(({
   isPointerEvent,
 }: XMBCategoryCellProps) => {
   const isActive = index === activeIndex;
+
   // Linear blend between the two rest poses. At progress 1 this equals the
   // discrete pose map exactly; when from == to (every icon not part of the
   // switch) the blend is constant, so intermediate icons never ripple.
@@ -114,16 +117,19 @@ const XMBCategoryCell = React.memo(({
     >
       {/* Icon scale/opacity are cursor-driven motion values (falloffs
           above). transition-[filter] fades the active drop-shadow in/out
-          (filter interpolates from none via zeroed drop-shadow values)
           instead of popping it discretely on the switch frame. */}
       <motion.div
         style={{ scale, opacity }}
-        className={`relative z-10 transition-[filter] duration-150 ${isActive ? 'drop-shadow-[0_0_15px_var(--color-xmb-glow)]' : ''}`}
+        className={`relative z-10 flex items-center justify-center transition-[filter] duration-200 ${
+          isActive ? 'xmb-category-icon-active' : ''
+        }`}
       >
         <XMBIcon
           name={category.iconName}
-          size={isActive ? 48 : 40}
-          className={`transition-colors duration-150 ${isActive ? 'text-xmb-fg' : 'text-xmb-fg/70 hover:text-xmb-fg/90'}`}
+          size={48}
+          className={`transition-colors duration-150 ${
+            isActive ? 'text-xmb-fg' : 'text-xmb-fg/70 hover:text-xmb-fg/90'
+          }`}
         />
       </motion.div>
 
@@ -200,6 +206,14 @@ const XMBCategoryRow = React.memo(({
   // Halt any in-flight crossfade when the row unmounts.
   useEffect(() => () => progress.stop(), [progress]);
 
+  // PS3 XMB optical point glow: contracts briefly on switch kickoff and
+  // blooms as the incoming icon locks into the active slot.
+  const flareCoreScale = useTransform(
+    progress,
+    (p: number) => 0.55 + 0.45 * p + Math.sin(p * Math.PI) * 0.15,
+  );
+  const flareOpacity = useTransform(progress, (p: number) => 0.2 + 0.8 * p);
+
   return (
     // Idle vertical drift lives in CSS (xmb-row-sway) so the 8s ambient loop
     // runs on the compositor instead of motion's rAF loop — and so the sway
@@ -214,22 +228,25 @@ const XMBCategoryRow = React.memo(({
       // cell right of screen center.
       style={{ width: XMB_LAYOUT.CATEGORY_WIDTH }}
     >
-      {/* Glow behind the active category. The active cell always lands at this
-          wrapper's own box (the strip translates beneath it), so one persistent
-          element here replaces the per-cell layoutId FLIP — no layout
-          measurement inside the transform-animating strip on switch. h-12
-          matches the active icon's 48px cell content box. */}
-      <div
+      {/* Pure-white optical point glow behind the active icon (1:1 aspect) */}
+      <motion.div
         aria-hidden
-        className="absolute inset-x-0 top-1/2 h-12 -translate-y-1/2 rounded-full pointer-events-none"
+        style={{ opacity: flareOpacity }}
+        className="pointer-events-none absolute inset-0 flex items-center justify-center"
       >
-        {/* Breathing pulse as a CSS keyframe animation (opacity/scale only)
-            so it stays on the compositor; reduced-motion gating in globals.css */}
-        <div
-          className="absolute inset-0 rounded-full xmb-glow-pulse"
-          style={{ background: 'radial-gradient(circle, color-mix(in srgb, var(--color-xmb-fg) 18%, transparent), transparent 55%)' }}
-        />
-      </div>
+        <motion.div
+          style={{ scale: flareCoreScale }}
+          className="size-14 rounded-full xmb-glow-pulse"
+        >
+          <div
+            className="size-full rounded-full"
+            style={{
+              background:
+                'radial-gradient(circle, color-mix(in srgb, var(--color-xmb-fg) 28%, transparent) 0%, color-mix(in srgb, var(--color-xmb-fg) 10%, transparent) 38%, transparent 70%)',
+            }}
+          />
+        </motion.div>
+      </motion.div>
 
       {/* Sliding container - only ONE animation instead of N */}
       <motion.div

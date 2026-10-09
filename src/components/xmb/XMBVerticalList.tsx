@@ -330,16 +330,16 @@ const XMBListItem = React.memo(
                 <motion.div
                     className={`flex items-center gap-3 md:gap-4 w-full py-3 md:py-4 px-3 md:px-4 rounded-lg xmb-row-chrome ${
                         isActive
-                            ? "xmb-row-chrome-active bg-xmb-fg/20 ring-1 ring-xmb-fg/40 shadow-[0_0_20px_var(--color-xmb-shadow-glow)]"
+                            ? "xmb-row-chrome-active bg-xmb-fg/15 ring-1 ring-xmb-fg/35 shadow-[0_0_24px_var(--color-xmb-shadow-glow)]"
                             : "hover:bg-xmb-fg/5"
                     }`}
                     style={{ y, opacity }}
                 >
                     {/* Thumbnail */}
                     <div
-                        className={`w-16 h-10 md:w-24 md:h-14 bg-xmb-fg/5 rounded flex items-center justify-center overflow-hidden border shrink-0 ${
+                        className={`w-16 h-10 md:w-24 md:h-14 bg-xmb-fg/5 rounded flex items-center justify-center overflow-hidden border shrink-0 transition-colors duration-150 ${
                             isActive
-                                ? "border-xmb-fg/50"
+                                ? "border-xmb-fg/40"
                                 : "border-xmb-fg/10"
                         }`}
                     >
@@ -353,15 +353,15 @@ const XMBListItem = React.memo(
                                 transition={{ duration: 0.18, ease: EASE.ENTER }}
                                 className="flex items-center justify-center w-full h-full"
                             >
-                                <XMBIcon name="ArrowLeft" size={24} />
+                                <XMBIcon name="ArrowLeft" size={24} className={isActive ? "xmb-row-icon-active" : undefined} />
                             </motion.div>
                         ) : isFolder ? (
                             <div className="flex items-center justify-center w-full h-full">
-                                <XMBIcon name={item.icon ?? "Folder"} size={24} />
+                                <XMBIcon name={item.icon ?? "Folder"} size={24} className={`transition-[filter] duration-150 ${isActive ? "xmb-row-icon-active" : ""}`} />
                             </div>
                         ) : item.icon ? (
                             <div className="flex items-center justify-center w-full h-full">
-                                <XMBIcon name={item.icon} size={24} />
+                                <XMBIcon name={item.icon} size={24} className={`transition-[filter] duration-150 ${isActive ? "xmb-row-icon-active" : ""}`} />
                             </div>
                         ) : item.image && !imgError ? (
                             <div className="relative w-full h-full">
@@ -370,12 +370,13 @@ const XMBListItem = React.memo(
                                     alt=""
                                     fill
                                     sizes="96px"
+                                    unoptimized={!item.image.startsWith('/') || item.image.startsWith('//') || /\.(svg|gif)($|[?#])/i.test(item.image)}
                                     className="object-cover"
                                     onError={() => setImgError(true)}
                                 />
                             </div>
                         ) : (
-                            <XMBIcon name="File" size={24} />
+                            <XMBIcon name="File" size={24} className={`transition-[filter] duration-150 ${isActive ? "xmb-row-icon-active" : ""}`} />
                         )}
                     </div>
 
@@ -478,7 +479,7 @@ const XMBListItem = React.memo(
                                 gated in globals.css) — the old motion loop
                                 held the entire frameloop awake whenever a
                                 folder/external row sat selected. */}
-                            <div className="xmb-caret-nudge">
+                            <div className="xmb-caret-nudge xmb-row-icon-active">
                                 <XMBIcon name="CaretRight" size={18} />
                             </div>
                         </motion.div>
@@ -814,23 +815,18 @@ const XMBVerticalList = React.memo(
         // remounted rows.)
         const prevListKeyRef = useRef<string | null>(null);
         const listKey = `${activeCategory.id}:${navigationPath.join('/')}`;
+        const [renderedListKey, setRenderedListKey] = useState(listKey);
 
         // A level swap must land the cursor pose DURING RENDER, not in the
         // layout effect below. The swap commit mounts fresh rows (new
         // item.id keys), and each row bakes its initial style from
         // cursor/selectionLevel synchronously in its own render — so the
         // values have to be at their targets before the rows render, which
-        // parent-before-child render order gives us here. A jump() deferred
-        // to the layout effect never reaches those rows: their useTransform
-        // subscriptions are created in the same commit and the scheduled
-        // recompute is dropped (verified: cursor/selectionLevel land on
-        // their targets while every new row's derived pose stays stale), so
-        // the incoming list sat permanently in the outgoing list's pose —
-        // row 0 lifted and dimmed as if the old selection still existed —
-        // until the next selection change re-rendered the rows. Idempotent
-        // under StrictMode's double render: the ref only advances in the
-        // layout effect, after both renders.
-        if (prevListKeyRef.current !== listKey) {
+        // parent-before-child render order gives us here. Tracked via
+        // React's derive-state-from-props pattern (not a ref read during
+        // render) so React 19 / React Compiler purity rules hold.
+        if (renderedListKey !== listKey) {
+            setRenderedListKey(listKey);
             cursor.jump(displayIndex);
             selectionLevel.jump(hasSelection ? 1 : 0);
         }

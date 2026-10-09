@@ -21,10 +21,10 @@ export default function XMBLaunchFlash() {
           initial={{ opacity: 0 }}
           animate={{ opacity: [0, 1, 0] }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.5, times: [0, 0.18, 1], ease: EASE.SOFT }}
+          transition={{ duration: 0.35, times: [0, 0.18, 1], ease: EASE.SOFT }}
           style={{
             background:
-              'radial-gradient(circle at center, color-mix(in srgb, var(--color-xmb-fg) 20%, transparent), transparent 55%)',
+              'radial-gradient(circle at center, color-mix(in srgb, var(--color-xmb-fg) 12%, transparent) 0%, color-mix(in srgb, var(--color-xmb-fg) 4%, transparent) 28%, transparent 52%)',
           }}
         />
       )}

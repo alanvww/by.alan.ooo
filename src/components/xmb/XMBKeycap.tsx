@@ -12,9 +12,9 @@ interface XMBKeycapProps {
   className?: string;
 }
 
-const PRESSED = 'bg-xmb-fg text-background shadow-[0_0_15px_var(--color-xmb-glow)]';
+const PRESSED = 'bg-xmb-fg text-background shadow-[0_0_10px_color-mix(in_srgb,var(--color-xmb-fg)_45%,transparent)]';
 const IDLE = 'border border-xmb-fg/20 bg-xmb-fg/5 text-xmb-fg/70';
-const HOVER = 'hover:bg-xmb-fg hover:text-background hover:shadow-[0_0_15px_var(--color-xmb-glow)]';
+const HOVER = 'hover:bg-xmb-fg hover:text-background hover:shadow-[0_0_10px_color-mix(in_srgb,var(--color-xmb-fg)_45%,transparent)]';
 
 // Press pose and its transitions live in .xmb-keycap (globals.css) —
 // CSS instead of a motion spring so keypress feedback never runs on the

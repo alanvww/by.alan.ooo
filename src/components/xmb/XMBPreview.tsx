@@ -9,7 +9,11 @@ interface XMBPreviewProps {
   item: XMBItem;
 }
 
+const isUnoptimizedImage = (src: string): boolean =>
+  !src.startsWith('/') || src.startsWith('//') || /\.(svg|gif)($|[?#])/i.test(src);
+
 const XMBPreview = ({ item }: XMBPreviewProps) => {
+  const unoptimized = item.image ? isUnoptimizedImage(item.image) : false;
   return (
     <motion.div
       initial={{ opacity: 0, x: 100 }}
@@ -33,6 +37,7 @@ const XMBPreview = ({ item }: XMBPreviewProps) => {
                 alt=""
                 fill
                 sizes="100vw"
+                unoptimized={unoptimized}
                 className="object-cover opacity-20 blur-2xl scale-110"
               />
               <div className="absolute inset-0 dark:bg-black/60 bg-white/20" />
@@ -49,16 +54,20 @@ const XMBPreview = ({ item }: XMBPreviewProps) => {
             // The permanent willChange hint that used to sit here was
             // accidentally serving that role — motion promotes layers on its
             // own while the springs run, so the hint itself was pure cost.
-            className="relative w-full max-w-[450px] aspect-video bg-xmb-fg/5 rounded-lg overflow-hidden border-2 border-xmb-fg/20 shadow-[0_0_50px_var(--color-xmb-shadow-glow)]"
+            className="relative w-full max-w-[450px] aspect-video bg-xmb-fg/5 rounded-xl overflow-hidden border border-xmb-fg/25 shadow-[0_0_50px_var(--color-xmb-shadow-glow)]"
         >
             {item.image ? (
-                <Image
-                    src={item.image}
-                    alt={item.title}
-                    fill
-                    sizes="(max-width: 768px) 100vw, 450px"
-                    className="object-cover"
-                />
+                <>
+                    <Image
+                        src={item.image}
+                        alt={item.title}
+                        fill
+                        sizes="(max-width: 768px) 100vw, 450px"
+                        unoptimized={unoptimized}
+                        className="object-cover"
+                    />
+                    <div className="absolute inset-0 ring-1 ring-inset ring-xmb-fg/15 rounded-xl pointer-events-none" />
+                </>
             ) : (
                 <div className="w-full h-full flex items-center justify-center bg-xmb-fg/5">
                     <span className="text-xmb-fg/20 font-mono">NO PREVIEW</span>
@@ -73,10 +82,10 @@ const XMBPreview = ({ item }: XMBPreviewProps) => {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.08, ...XMB_ANIMATION.TWEEN }}
             >
-                <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-xmb-fg drop-shadow-lg">
+                <h2 className="text-3xl md:text-5xl font-extralight tracking-tight text-xmb-fg drop-shadow-[0_0_12px_color-mix(in_srgb,var(--color-xmb-fg)_25%,transparent)]">
                     {item.title}
                 </h2>
-                <div className="mt-2 w-16 md:w-24 h-1 bg-xmb-fg/40 rounded-full mx-auto md:mx-0" />
+                <div className="mt-3 w-20 md:w-28 h-px bg-linear-to-r from-transparent via-xmb-fg/45 to-transparent md:from-xmb-fg/50 md:via-xmb-fg/25 md:to-transparent mx-auto md:mx-0" />
             </motion.div>
 
             <motion.p
@@ -104,9 +113,6 @@ const XMBPreview = ({ item }: XMBPreviewProps) => {
             )}
         </div>
       </div>
-
-      {/* Selector Glow Effect - Hidden on mobile if needed, or moved */}
-      <div className="hidden md:block absolute left-[15%] top-1/2 -translate-y-1/2 w-4 h-4 bg-xmb-fg rounded-full blur-md animate-pulse motion-reduce:animate-none motion-reduce:opacity-75 shadow-[0_0_20px_var(--color-xmb-glow)]" />
     </motion.div>
   );
 };
