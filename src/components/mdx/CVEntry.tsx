@@ -52,6 +52,7 @@ export function CVEntry({
                 className="underline underline-offset-4 decoration-xmb-fg/20 hover:decoration-xmb-fg/60 transition-[color,background-color,border-color,text-decoration-color,box-shadow] duration-150"
               >
                 {org}
+                <span className="sr-only"> (opens in new tab)</span>
               </a>
             ) : (
               org
@@ -86,7 +87,7 @@ export function CVEntry({
             Links
           </span>
           {links.map(({ label, href }) =>
-            href.startsWith('/') ? (
+            href.startsWith('/') && !href.startsWith('//') ? (
               <Link key={href} href={href} className={ENTRY_LINK_CLASS}>
                 {label}
               </Link>
@@ -99,6 +100,7 @@ export function CVEntry({
                 className={ENTRY_LINK_CLASS}
               >
                 {label}
+                <span className="sr-only"> (opens in new tab)</span>
                 <ArrowUpRight size={13} weight="bold" aria-hidden />
               </a>
             )

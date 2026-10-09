@@ -18,6 +18,19 @@ import { getLocalImageDimensions } from '@/lib/content-assets'
 // every other state change, not snap.
 const LINK_CLASS = 'text-xmb-fg/90 underline underline-offset-4 decoration-xmb-fg/20 hover:decoration-xmb-fg/60 transition-[color,background-color,border-color,text-decoration-color,box-shadow] duration-150'
 
+const BLOCK_HTML_TAGS = new Set([
+    'p', 'div', 'pre', 'blockquote', 'table', 'ul', 'ol', 'figure', 'hr',
+    'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+])
+
+const BLOCK_COMPONENTS = new Set<unknown>([
+    Alert, Callout, Card, Figure, Demo, Tabs, Tab, CodeBlock, MDXImage, Image,
+])
+
+function isInternalPath(url?: string): url is string {
+    return Boolean(url && url.startsWith('/') && !url.startsWith('//'))
+}
+
 // XMB-styled MDX components (theme-aware: xmb-fg token works in both light and dark mode)
 export const mdxComponents: MDXComponents = {
     // Rendered as an h2 (same visual treatment): the frontmatter title in the
@@ -39,21 +52,41 @@ export const mdxComponents: MDXComponents = {
             {children}
         </h3>
     ),
+    h4: ({ children, ...props }) => (
+        <h4 className="text-lg md:text-xl font-normal text-xmb-fg/80 mb-3 mt-6 first:mt-0" {...props}>
+            {children}
+        </h4>
+    ),
+    h5: ({ children, ...props }) => (
+        <h5 className="text-base md:text-lg font-medium text-xmb-fg/75 mb-2 mt-5 first:mt-0" {...props}>
+            {children}
+        </h5>
+    ),
+    h6: ({ children, ...props }) => (
+        <h6 className="text-sm md:text-base font-medium uppercase tracking-wider text-xmb-fg/65 mb-2 mt-4 first:mt-0" {...props}>
+            {children}
+        </h6>
+    ),
     p: ({ children, ...props }) => {
         const childrenArray = React.Children.toArray(children)
-        const inlineHtmlTags = new Set(['a', 'em', 'strong', 'code', 'span', 'small', 'sup', 'sub', 'kbd', 'i', 'b', 'u'])
-        const blockHtmlTags = new Set(['p', 'div', 'pre', 'blockquote', 'table', 'ul', 'ol', 'figure', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
-        const inlineComponents = new Set<unknown>([Badge])
 
         const containsNonInlineContent = childrenArray.some((child) => {
             if (typeof child === 'string' || typeof child === 'number') return false
             if (!React.isValidElement(child)) return false
             const childType: unknown = child.type
             if (typeof childType === 'string') {
-                if (blockHtmlTags.has(childType)) return true
-                return !inlineHtmlTags.has(childType)
+                return BLOCK_HTML_TAGS.has(childType)
             }
-            return !inlineComponents.has(childType)
+            return (
+                BLOCK_COMPONENTS.has(childType) ||
+                childType === mdxComponents.img ||
+                childType === mdxComponents.pre ||
+                childType === mdxComponents.table ||
+                childType === mdxComponents.blockquote ||
+                childType === mdxComponents.ul ||
+                childType === mdxComponents.ol ||
+                childType === mdxComponents.hr
+            )
         })
 
         const className = "mb-6 text-xmb-fg/70 leading-relaxed font-light text-lg md:text-xl"
@@ -124,7 +157,7 @@ export const mdxComponents: MDXComponents = {
         if (href?.startsWith('#')) {
             return <a href={href} className={mergedClass} {...props}>{children}</a>
         }
-        if (href?.startsWith('/')) {
+        if (isInternalPath(href)) {
             return <Link href={href} className={mergedClass} {...props}>{children}</Link>
         }
         // External links: target/rel are set by rehype-external-links.
@@ -150,7 +183,7 @@ export const mdxComponents: MDXComponents = {
         // ![alt](src "caption") — the quoted title renders as a visible caption;
         // alt stays purely for accessibility. Dimensions are probed server-side
         // so the dot-wave placeholder occupies the exact final box.
-        const dimensions = src.startsWith('/') ? getLocalImageDimensions(src) : null
+        const dimensions = isInternalPath(src) ? getLocalImageDimensions(src) : null
 
         return (
             <MDXImage

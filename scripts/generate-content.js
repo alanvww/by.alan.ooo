@@ -3,7 +3,18 @@
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
-const { exec } = require('child_process');
+const { execFile } = require('child_process');
+
+// Keep in sync with slugify() in src/lib/mdx.ts
+function slugify(name) {
+    return name
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/['’"]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+}
 
 const rl = readline.createInterface({
     input: process.stdin,
@@ -34,10 +45,7 @@ rl.question('What do you want to create? (post/project): ', (type) => {
     // Get the title
     rl.question('Enter the title: ', (title) => {
         // Generate slug from title
-        const slug = title
-            .toLowerCase()
-            .replace(/[^\w\s]/g, '')
-            .replace(/\s+/g, '-');
+        const slug = slugify(title);
 
         // Get excerpt
         rl.question('Enter a brief excerpt: ', (excerpt) => {
@@ -58,7 +66,7 @@ coverImage: "./cover.jpg"
             if (type.toLowerCase() === 'project') {
                 rl.question('Enter project URL (optional): ', (projectUrl) => {
                     if (projectUrl) {
-                        frontmatter += `projectUrl: "${projectUrl}"\n`;
+                        frontmatter += `projectUrl: ${JSON.stringify(projectUrl)}\n`;
                     }
 
                     rl.question('Enter technologies (comma-separated): ', (technologies) => {
@@ -67,7 +75,7 @@ coverImage: "./cover.jpg"
                             .filter(tech => tech);
 
                         if (techArray.length > 0) {
-                            frontmatter += `technologies: [${techArray.map(t => `"${t}"`).join(', ')}]\n`;
+                            frontmatter += `technologies: [${techArray.map(t => JSON.stringify(t)).join(', ')}]\n`;
                         }
 
                         finishCreation();
@@ -78,10 +86,8 @@ coverImage: "./cover.jpg"
             }
 
             function finishCreation() {
-                // Close the frontmatter
+                // Close the frontmatter (XMBPostViewer already renders the H1 from frontmatter.title)
                 frontmatter += `---
-
-# ${title}
 
 Write your content here...
 `;
@@ -122,9 +128,9 @@ Write your content here...
                 rl.question('Do you want to open the file now? (y/n): ', (answer) => {
                     if (answer.toLowerCase() === 'y') {
                         // Try to open with VS Code first, fallback to the default system editor
-                        exec(`code ${JSON.stringify(filePath)}`, (error) => {
+                        execFile('code', [filePath], (error) => {
                             if (error) {
-                                exec(`open ${JSON.stringify(filePath)}`);
+                                execFile('open', [filePath]);
                             }
                         });
                     }

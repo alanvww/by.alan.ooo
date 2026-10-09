@@ -1,35 +1,55 @@
 "use client"
-import { isValidElement, useState, type ReactNode } from 'react'
+import { Children, isValidElement, useId, useState, type ReactNode } from 'react'
 
-export function Tabs({ children, defaultTab = 0 }: { children: ReactNode, defaultTab?: number }) {
-  const [activeTab, setActiveTab] = useState(defaultTab)
-  const childArray = Array.isArray(children) ? (children as ReactNode[]) : null
-  const tabLabels = childArray
-    ? childArray.map((child) =>
-        isValidElement(child) ? (child.props as { label?: string }).label || 'Tab' : 'Tab'
-      )
-    : ['Tab']
+export function Tabs({ children, defaultTab = 0 }: { children: ReactNode; defaultTab?: number }) {
+  const baseId = useId()
+  const tabs = Children.toArray(children).filter((child) =>
+    isValidElement<{ label?: string; children?: ReactNode }>(child),
+  )
+  const [activeTab, setActiveTab] = useState(() =>
+    tabs.length > 0 ? Math.min(Math.max(defaultTab, 0), tabs.length - 1) : 0,
+  )
+  const clampedActive = tabs.length > 0 ? Math.min(activeTab, tabs.length - 1) : 0
+
+  if (tabs.length === 0) {
+    return <div className="my-6 p-4">{children}</div>
+  }
+
   return (
     <div className="my-6">
-      <div className="flex border-b border-border">
-        {tabLabels.map((label, index) => (
-          <button
-            key={index}
-            onClick={() => setActiveTab(index)}
-            className={`px-4 py-2 text-sm font-medium transition-colors ${activeTab === index ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'}`}
-          >
-            {label}
-          </button>
-        ))}
+      <div role="tablist" className="flex border-b border-border">
+        {tabs.map((tab, index) => {
+          const label = tab.props.label || `Tab ${index + 1}`
+          const isSelected = clampedActive === index
+          return (
+            <button
+              key={index}
+              id={`${baseId}-tab-${index}`}
+              type="button"
+              role="tab"
+              aria-selected={isSelected}
+              aria-controls={`${baseId}-panel-${index}`}
+              onClick={() => setActiveTab(index)}
+              className={`px-4 py-2 text-sm font-medium transition-colors ${isSelected ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              {label}
+            </button>
+          )
+        })}
       </div>
-      <div className="p-4">
-        {childArray ? childArray[activeTab] : children}
+      <div
+        id={`${baseId}-panel-${clampedActive}`}
+        role="tabpanel"
+        aria-labelledby={`${baseId}-tab-${clampedActive}`}
+        className="p-4"
+      >
+        {tabs[clampedActive]}
       </div>
     </div>
   )
 }
 
-export function Tab({ children }: { children: ReactNode }) {
+export function Tab({ children }: { label?: string; children: ReactNode }) {
   return <div>{children}</div>
 }
 

@@ -74,11 +74,4 @@ export function getContentTypeConfig(folderName: string): ContentTypeConfig {
   return contentConfig[folderName] ?? createDefaultConfig(folderName);
 }
 
-/**
- * Get all explicitly configured content types
- */
-export function getConfiguredContentTypes(): string[] {
-  return Object.keys(contentConfig);
-}
-
 export { contentConfig };

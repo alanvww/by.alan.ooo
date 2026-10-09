@@ -14,7 +14,7 @@ export interface XMBProjectMeta {
 export interface XMBPostMeta {
   tags?: string[];
   date?: string;
-  readingTime?: number;
+  readTime?: number;
   slug?: string;
 }
 

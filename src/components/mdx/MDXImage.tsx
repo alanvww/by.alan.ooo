@@ -20,14 +20,15 @@ interface MDXImageProps {
  */
 export function MDXImage({ src, alt, caption, width, height }: MDXImageProps) {
   const [loaded, setLoaded] = useState(false)
-  const isLocal = src.startsWith('/')
+  const isLocal = src.startsWith('/') && !src.startsWith('//')
+  const isUnoptimizedLocal = isLocal && /\.(svg|gif)($|[?#])/i.test(src)
   const hasDimensions = Boolean(width && height)
 
   // A failed load also dismisses the wave — otherwise a dead URL animates forever.
   const handleLoad = useCallback(() => setLoaded(true), [])
-  // Cached images can already be complete before React attaches onLoad.
+  // Cached or pre-hydration failed images can already be complete before React attaches onLoad/onError.
   const imgRef = useCallback((node: HTMLImageElement | null) => {
-    if (node?.complete && node.naturalWidth > 0) setLoaded(true)
+    if (node?.complete) setLoaded(true)
   }, [])
 
   const imageClass = 'relative w-full h-auto object-cover opacity-90 group-hover:opacity-100 transition-opacity'
@@ -47,6 +48,7 @@ export function MDXImage({ src, alt, caption, width, height }: MDXImageProps) {
             width={width ?? 1600}
             height={height ?? 900}
             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 80vw, 65rem"
+            unoptimized={isUnoptimizedLocal}
             className={imageClass}
             onLoad={handleLoad}
             onError={handleLoad}

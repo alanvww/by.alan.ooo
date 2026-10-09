@@ -11,6 +11,7 @@ const isDev = process.env.NODE_ENV === 'development';
 export interface BaseFrontmatter {
   title: string;
   date: string;
+  updatedDate?: string;
   excerpt: string;
   coverImage?: string;
   slug: string;
@@ -24,7 +25,6 @@ export interface BaseFrontmatter {
 export interface PostFrontmatter extends BaseFrontmatter {
   author?: string;
   category?: string;
-  updatedDate?: string;
 }
 
 export interface ProjectFrontmatter extends BaseFrontmatter {
@@ -80,16 +80,24 @@ export function slugify(name: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
+export const RESTRICTED_TAG_SLUGS = new Set(['google-creative-lab']);
+
 /**
- * Get all files of a specific content type
+ * Checks whether an item's primary tag belongs to a restricted tag folder.
+ * Normalizes the tag segment via slugify so "Google Creative Lab" and
+ * "google-creative-lab" behave identically across menu folders and routes.
  */
-export async function getFiles(type: ContentType): Promise<string[]> {
-  return getVisibleContentEntries(type).map((entry) => entry.slug);
+export function isRestrictedByTag(item: { tags?: unknown }): boolean {
+  if (!Array.isArray(item.tags) || item.tags.length === 0) return false;
+  const primary = String(item.tags[0] ?? '').split('/')[0];
+  return Boolean(primary && RESTRICTED_TAG_SLUGS.has(slugify(primary)));
 }
 
 const getContentEntries = cache((type: ContentType): ContentEntry[] => {
   const typeDirectory = path.join(contentDirectory, type);
-  const dirEntries = fs.readdirSync(typeDirectory, { withFileTypes: true });
+  const dirEntries = fs
+    .readdirSync(typeDirectory, { withFileTypes: true })
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   const entries: ContentEntry[] = [];
   const seenSlugs = new Set<string>();
@@ -147,6 +155,15 @@ function firstHeading(content: string): string | null {
   return match ? match[1].trim() : null;
 }
 
+/** Strip a leading `# Heading` when it duplicates the resolved frontmatter title. */
+function stripLeadingMatchingH1(content: string, title: string): string {
+  const match = content.match(/^\s*#\s+(.+?)\s*(?:\r?\n|$)/);
+  if (match && match[1].trim().toLowerCase() === title.trim().toLowerCase()) {
+    return content.slice(match[0].length);
+  }
+  return content;
+}
+
 /** "my-cool-note" -> "My Cool Note" */
 function humanizeSlug(slug: string): string {
   return slug
@@ -160,8 +177,15 @@ function normalizeDate(value: unknown, fallback: Date): string {
   if (value instanceof Date && !Number.isNaN(value.getTime())) {
     return value.toISOString().slice(0, 10);
   }
-  if (typeof value === 'string' && !Number.isNaN(new Date(value).getTime())) {
-    return value;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed) && !Number.isNaN(new Date(trimmed).getTime())) {
+      return trimmed;
+    }
+    const parsed = new Date(trimmed);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toISOString().slice(0, 10);
+    }
   }
   return fallback.toISOString().slice(0, 10);
 }
@@ -210,35 +234,65 @@ function isPublished(data: Record<string, unknown>): boolean {
   return true;
 }
 
+function normalizeTags(raw: unknown): string[] | undefined {
+  const list = Array.isArray(raw) ? raw : typeof raw === 'string' ? [raw] : undefined;
+  if (!list) return undefined;
+  const cleaned = list.map((tag) => String(tag).trim()).filter(Boolean);
+  return cleaned.length > 0 ? cleaned : undefined;
+}
+
 const parseContentEntry = <T extends BaseFrontmatter>(entry: ContentEntry): ParsedContentEntry<T> => {
   const source = fs.readFileSync(entry.filePath, 'utf8');
   const stat = fs.statSync(entry.filePath);
   const { data, content } = matter(source);
 
+  const title =
+    (typeof data.title === 'string' && data.title.trim()) ||
+    firstHeading(content) ||
+    humanizeSlug(entry.slug);
+  const cleanedContent = stripLeadingMatchingH1(content, title);
+  const tags = normalizeTags(data.tags);
+  const updatedDate =
+    data.updatedDate !== undefined ? normalizeDate(data.updatedDate, stat.mtime) : undefined;
+
   const frontmatter = {
     ...data,
-    title: (typeof data.title === 'string' && data.title.trim()) || firstHeading(content) || humanizeSlug(entry.slug),
+    title,
     date: normalizeDate(data.date, stat.mtime),
-    excerpt: (typeof data.excerpt === 'string' && data.excerpt.trim()) || deriveExcerpt(content),
-    readTime: typeof data.readTime === 'number' ? data.readTime : estimateReadTime(content),
+    ...(updatedDate ? { updatedDate } : {}),
+    ...(tags ? { tags } : { tags: undefined }),
+    excerpt: (typeof data.excerpt === 'string' && data.excerpt.trim()) || deriveExcerpt(cleanedContent),
+    readTime: typeof data.readTime === 'number' ? data.readTime : estimateReadTime(cleanedContent),
     slug: entry.slug,
   } as T;
 
   return {
     ...entry,
     frontmatter: resolveFrontmatterAssets(frontmatter, entry.basePath),
-    content: rewriteRelativeContentPaths(content, entry.basePath),
+    content: rewriteRelativeContentPaths(cleanedContent, entry.basePath),
     published: isPublished(data),
   };
 };
 
 const getParsedContentEntries = cache(<T extends BaseFrontmatter>(type: ContentType): ParsedContentEntry<T>[] => {
-  return getContentEntries(type).map((entry) => parseContentEntry<T>(entry));
+  return getContentEntries(type).flatMap((entry) => {
+    try {
+      return [parseContentEntry<T>(entry)];
+    } catch (error) {
+      console.error(`[content] Failed to parse ${entry.filePath}:`, error);
+      return [];
+    }
+  });
 });
 
 /** Entries that appear in lists, menus and static params: published only. */
-function getVisibleContentEntries<T extends BaseFrontmatter>(type: ContentType): ParsedContentEntry<T>[] {
-  return getParsedContentEntries<T>(type).filter((entry) => entry.published);
+function getVisibleContentEntries<T extends BaseFrontmatter>(
+  type: ContentType,
+  options?: { includeRestricted?: boolean },
+): ParsedContentEntry<T>[] {
+  return getParsedContentEntries<T>(type).filter(
+    (entry) => entry.published && (options?.includeRestricted || !isRestrictedByTag(entry.frontmatter)),
+  );
 }
 
 function sortByDate<T extends BaseFrontmatter>(content: T[]): T[] {
@@ -269,11 +323,11 @@ function resolveFrontmatterAssets<T extends BaseFrontmatter>(
 /**
  * Point relative asset references at the public /content/... URL space.
  * Handles markdown images (`![x](img.png)` and `![x](./img.png)`), raw
- * `<img src>`, `<Image src>`, and JSX `src={"./..."}` — anything that is not
- * an absolute path, a protocol URL, or an anchor.
+ * `<img src>`, `<Image src>`, `<Figure src>`, and JSX `src={"./..."}` —
+ * skipping fenced and inline code spans so code examples are never mutated.
  */
-function rewriteRelativeContentPaths(content: string, basePath: string): string {
-  const withMarkdownImages = content.replace(
+function rewriteRelativeSegment(segment: string, basePath: string): string {
+  const withMarkdownImages = segment.replace(
     /(!\[[^\]]*\]\()(?![a-z][a-z0-9+.-]*:|\/|#|<)(?:\.\/)?([^)\s]+)/gi,
     `$1${basePath}/$2`,
   );
@@ -284,7 +338,7 @@ function rewriteRelativeContentPaths(content: string, basePath: string): string 
   );
 
   const withHtmlImages = withAngleBracketImages.replace(
-    /(<(?:img|Image)[^>]*\s+src=)(["'])(?![a-z][a-z0-9+.-]*:|\/)(?:\.\/)?/gi,
+    /(<(?:img|Image|Figure)[^>]*\s+src=)(["'])(?![a-z][a-z0-9+.-]*:|\/)(?:\.\/)?/gi,
     `$1$2${basePath}/`,
   );
 
@@ -294,29 +348,29 @@ function rewriteRelativeContentPaths(content: string, basePath: string): string 
   );
 }
 
+function rewriteRelativeContentPaths(content: string, basePath: string): string {
+  const parts = content.split(/(```[\s\S]*?```|`[^`\n]+`)/g);
+  return parts
+    .map((part, index) => (index % 2 === 0 ? rewriteRelativeSegment(part, basePath) : part))
+    .join('');
+}
+
 /**
  * Discover all content type folders in src/content/
  * Returns an array of folder names (e.g., ['posts', 'projects'])
  */
-export function getContentTypes(): string[] {
+export const getContentTypes = cache((): string[] => {
   const entries = fs.readdirSync(contentDirectory, { withFileTypes: true });
   return entries
-    .filter(entry => entry.isDirectory())
-    .map(entry => entry.name);
-}
-
-/**
- * Check if a content type folder exists
- */
-export function contentTypeExists(type: string): boolean {
-  const typeDirectory = path.join(contentDirectory, type);
-  return fs.existsSync(typeDirectory);
-}
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort((a, b) => a.localeCompare(b));
+});
 
 /**
  * Get data for a specific file by slug.
  * Drafts resolve in development (for previewing at their URL) but are
- * treated as missing in production.
+ * treated as missing in production. Restricted items never resolve as pages.
  */
 export async function getFileData(
   type: ContentType,
@@ -324,7 +378,7 @@ export async function getFileData(
 ): Promise<ContentFile<PostFrontmatter | ProjectFrontmatter>> {
   const entry = getParsedContentEntries(type).find((item) => item.slug === slug);
 
-  if (!entry || (!entry.published && !isDev)) {
+  if (!entry || (!entry.published && !isDev) || isRestrictedByTag(entry.frontmatter)) {
     throw new Error(`File with slug "${slug}" not found in ${type}`);
   }
 
@@ -338,25 +392,14 @@ export async function getFileData(
 }
 
 /**
- * Get all posts with their frontmatter
- */
-export async function getAllPosts(): Promise<PostFrontmatter[]> {
-  return sortByDate(getVisibleContentEntries<PostFrontmatter>('posts').map((entry) => entry.frontmatter));
-}
-
-/**
- * Get all projects with their frontmatter
- */
-export async function getAllProjects(): Promise<ProjectFrontmatter[]> {
-  return sortByDate(getVisibleContentEntries<ProjectFrontmatter>('projects').map((entry) => entry.frontmatter));
-}
-
-/**
  * Generic function to get all content of any type
- * Used by dynamic XMB category generation
+ * Used by dynamic XMB category generation (includes restricted items so the
+ * menu can display them with `restricted: true` and show the toast).
  */
 export async function getAllContent(type: string): Promise<BaseFrontmatter[]> {
-  return sortByDate(getVisibleContentEntries(type).map((entry) => entry.frontmatter));
+  return sortByDate(
+    getVisibleContentEntries(type, { includeRestricted: true }).map((entry) => entry.frontmatter),
+  );
 }
 
 export const getContentManifest = cache(async (): Promise<Record<string, ParsedContentEntry[]>> => {
@@ -399,44 +442,6 @@ export const getWikilinkIndex = cache(async (): Promise<Map<string, WikilinkTarg
 
   return index;
 });
-
-/**
- * Filter content by tags (exact match)
- */
-export function filterByTag<T extends BaseFrontmatter>(content: T[], tag: string): T[] {
-  return content.filter(item =>
-    item.tags && item.tags.some(t =>
-      t.toLowerCase() === tag.toLowerCase()
-    )
-  );
-}
-
-/**
- * Get all unique tags from content
- */
-export function getAllTags<T extends BaseFrontmatter>(content: T[]): string[] {
-  const tags = new Set<string>();
-  content.forEach(item => {
-    if (item.tags) {
-      item.tags.forEach(tag => tags.add(tag));
-    }
-  });
-  return Array.from(tags).sort();
-}
-
-/**
- * Search content by title and excerpt
- */
-export function searchContent<T extends BaseFrontmatter>(content: T[], query: string): T[] {
-  const searchTerm = query.toLowerCase();
-  return content.filter(item =>
-    item.title.toLowerCase().includes(searchTerm) ||
-    item.excerpt.toLowerCase().includes(searchTerm) ||
-    (item.tags && item.tags.some(tag =>
-      tag.toLowerCase().includes(searchTerm)
-    ))
-  );
-}
 
 /**
  * Get featured content

@@ -32,11 +32,16 @@ function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
 }
 
+function readSortedEntries(dirPath) {
+  return fs
+    .readdirSync(dirPath, { withFileTypes: true })
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
 function discoverTypes() {
   if (!fs.existsSync(contentRoot)) return [];
-  return fs
-    .readdirSync(contentRoot, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
+  return readSortedEntries(contentRoot)
+    .filter((entry) => entry.isDirectory() && !entry.name.startsWith('.'))
     .map((entry) => entry.name);
 }
 
@@ -47,14 +52,36 @@ function copyAsset(sourcePath, targetPath, synced) {
   synced.add(path.relative(publicRoot, targetPath));
 }
 
+/** Recursively copy all non-markdown, non-dotfile assets from sourceDir into outputDir. */
+function syncFolderAssets(sourceDir, outputDir, synced) {
+  readSortedEntries(sourceDir).forEach((entry) => {
+    if (entry.name.startsWith('.')) return;
+    const sourcePath = path.join(sourceDir, entry.name);
+    const targetPath = path.join(outputDir, entry.name);
+
+    if (entry.isDirectory()) {
+      syncFolderAssets(sourcePath, targetPath, synced);
+      return;
+    }
+
+    if (!entry.isFile()) return;
+    const ext = path.extname(entry.name).toLowerCase();
+    if (SOURCE_EXTENSIONS.has(ext)) return;
+    copyAsset(sourcePath, targetPath, synced);
+  });
+}
+
 function syncType(type, synced) {
   const typeDir = path.join(contentRoot, type);
-  const entries = fs.readdirSync(typeDir, { withFileTypes: true });
+  const entries = readSortedEntries(typeDir);
+  const seenSlugs = new Map();
 
   entries.forEach((entry) => {
+    if (entry.name.startsWith('.')) return;
+
     if (entry.isFile()) {
       // Loose assets next to flat markdown files serve from /content/<type>/
-      const ext = path.extname(entry.name);
+      const ext = path.extname(entry.name).toLowerCase();
       if (SOURCE_EXTENSIONS.has(ext)) return;
       copyAsset(
         path.join(typeDir, entry.name),
@@ -68,14 +95,17 @@ function syncType(type, synced) {
 
     const slug = slugify(entry.name);
     if (!slug) return;
+    if (seenSlugs.has(slug)) {
+      throw new Error(
+        `Slug collision in src/content/${type}: "${entry.name}" and "${seenSlugs.get(slug)}" both resolve to "${slug}".`,
+      );
+    }
+    seenSlugs.set(slug, entry.name);
+
     const folderPath = path.join(typeDir, entry.name);
     const outputDir = path.join(publicRoot, type, slug);
 
-    fs.readdirSync(folderPath, { withFileTypes: true }).forEach((file) => {
-      if (!file.isFile()) return;
-      if (SOURCE_EXTENSIONS.has(path.extname(file.name))) return;
-      copyAsset(path.join(folderPath, file.name), path.join(outputDir, file.name), synced);
-    });
+    syncFolderAssets(folderPath, outputDir, synced);
   });
 }
 
@@ -83,7 +113,7 @@ function syncType(type, synced) {
 function removeStale(dir, synced) {
   if (!fs.existsSync(dir)) return;
 
-  fs.readdirSync(dir, { withFileTypes: true }).forEach((entry) => {
+  readSortedEntries(dir).forEach((entry) => {
     const fullPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       removeStale(fullPath, synced);

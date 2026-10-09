@@ -20,7 +20,7 @@ export function Figure({
   height?: number
 }) {
   const probed = !width || !height
-    ? (src.startsWith('/') ? getLocalImageDimensions(src) : null)
+    ? (src.startsWith('/') && !src.startsWith('//') ? getLocalImageDimensions(src) : null)
     : null
 
   return (

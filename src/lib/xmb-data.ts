@@ -1,5 +1,5 @@
 // src/lib/xmb-data.ts
-import { getAllContent, getContentTypes, getFeatured, BaseFrontmatter } from './mdx';
+import { getAllContent, getContentTypes, getFeatured, isRestrictedByTag, BaseFrontmatter } from './mdx';
 import { getContentTypeConfig, type ContentTypeConfig } from './content-config';
 import type { XMBItem, XMBCategory } from './xmb-types';
 import type { XMBIconName } from './xmb-constants';
@@ -83,23 +83,13 @@ function groupItemsIntoFolders(
   const folders: XMBItem[] = [];
   const singular = config.singularLabel ?? type.replace(/s$/, '');
 
-  // `restrictItems` is a property of the tag folder, but the same content
-  // item is also listed in Featured and "All". Stamp it there too, from one
-  // tag set, so a restricted item can't be opened one folder over.
-  const restrictedTags = new Set(
-    PINNED_TAG_FOLDERS.filter((p) => p.restrictItems).map((p) => p.slug),
-  );
-  // Same rule that places an item in a tag folder: the primary (first) tag,
-  // with any "/sub" suffix dropped.
-  const isRestrictedByTag = (item: BaseFrontmatter): boolean =>
-    restrictedTags.has((item.tags?.[0] ?? '').split('/')[0]);
   const toItem = (item: BaseFrontmatter): XMBItem => ({
     id: `${type}-${item.slug}`,
     title: item.title,
     description: item.excerpt || '',
     image: item.coverImage,
     link: `/${type}/${item.slug}`,
-    type: type.replace(/s$/, '') as 'project' | 'post',
+    type: type === 'projects' ? 'project' : 'post',
     meta: item,
     ...(isRestrictedByTag(item) ? { restricted: true } : {}),
   });
@@ -245,7 +235,7 @@ function buildAboutMeItems(): XMBItem[] {
     {
       id: 'about-cv',
       title: 'CV',
-      description: 'Curriculum vitae with PDF download',
+      description: 'Academic & professional curriculum vitae',
       link: '/cv',
       type: 'link',
       icon: 'ReadCvLogo',
