@@ -15,13 +15,18 @@ function logWebGPUFallback(reason?: unknown): void {
   }
 }
 
+export interface CreateBackgroundRendererOptions {
+  skipWebGPU?: boolean;
+}
+
 // Async by design: the WebGPU backend must await tgpu.init before it can hand
 // back a renderer, and callers already treat creation as fallible.
 export async function createBackgroundRenderer(
   canvas: HTMLCanvasElement,
   callbacks: RendererCallbacks,
+  options?: CreateBackgroundRendererOptions,
 ): Promise<BackgroundRenderer | null> {
-  if (typeof navigator !== 'undefined' && navigator.gpu) {
+  if (!options?.skipWebGPU && typeof navigator !== 'undefined' && navigator.gpu) {
     try {
       // Dynamic import so browsers without WebGPU never download typegpu.
       const { createWebGPURenderer } = await import('./webgpu-renderer');

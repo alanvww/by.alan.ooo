@@ -8,6 +8,7 @@ import type { BackgroundRenderer, RendererCallbacks } from '@/components/backgro
 
 const MAX_DEVICE_PIXEL_RATIO = 1.0;
 const TARGET_FRAME_MS = 33; // ~30fps cap for the shader
+const MAX_CANVAS_REMOUNTS = 2;
 
 interface LoopControls {
   start: () => void;
@@ -30,6 +31,7 @@ const WebGLBackground = (): ReactElement => {
   const elapsedRef = useRef<number>(0);
   const lastRenderTimeRef = useRef<number>(0);
   const shouldAnimateRef = useRef<boolean>(true);
+  const skipWebGPURef = useRef<boolean>(false);
   const loopControlsRef = useRef<LoopControls | null>(null);
   const [mounted, setMounted] = useState(false);
   const [canvasGeneration, setCanvasGeneration] = useState(0);
@@ -116,6 +118,14 @@ const WebGLBackground = (): ReactElement => {
       }
     };
 
+    const remountWithWebGLFallback = (): void => {
+      if (cancelled) return;
+      skipWebGPURef.current = true;
+      setCanvasGeneration((generation) =>
+        generation < MAX_CANVAS_REMOUNTS ? generation + 1 : generation
+      );
+    };
+
     // A GPU reset (sleep/wake, driver restart) invalidates the context —
     // rebuild the pipeline instead of leaving a frozen background. The lost
     // renderer is kept aside so its restore listener stays alive until the
@@ -131,6 +141,7 @@ const WebGLBackground = (): ReactElement => {
       onRestored: (): void => {
         void setup().then((ready) => {
           if (ready) {
+            startTimeRef.current = performance.now() - elapsedRef.current * 1000;
             renderFrame(performance.now());
             startLoop();
             return;
@@ -139,15 +150,15 @@ const WebGLBackground = (): ReactElement => {
           // WebGPU has claimed it the WebGL fallback can never attach — and a
           // WebGPU device loss is one-shot, with no restore event to retry on.
           // Remounting the canvas re-runs setup against a fresh element.
-          if (!cancelled) {
-            setCanvasGeneration((generation) => generation + 1);
-          }
+          remountWithWebGLFallback();
         });
       },
     };
 
     const setup = async (): Promise<boolean> => {
-      const renderer = await createBackgroundRenderer(canvas, callbacks);
+      const renderer = await createBackgroundRenderer(canvas, callbacks, {
+        skipWebGPU: skipWebGPURef.current,
+      });
       if (!renderer) return false;
       if (cancelled) {
         renderer.destroy();
@@ -180,7 +191,10 @@ const WebGLBackground = (): ReactElement => {
     };
 
     void setup().then((ready) => {
-      if (!ready) return;
+      if (!ready) {
+        remountWithWebGLFallback();
+        return;
+      }
 
       loopControlsRef.current = {
         start: startLoop,

@@ -144,82 +144,87 @@ export async function createWebGPURenderer(
   // Ambient decoration: never force the discrete GPU on dual-GPU machines.
   const root = await tgpu.init({ adapter: { powerPreference: 'low-power' } });
 
-  const context = canvas.getContext('webgpu');
+  try {
+    const context = canvas.getContext('webgpu');
 
-  if (!context) {
-    root.destroy();
-    return null;
-  }
-
-  const device = root.device;
-  const format = navigator.gpu.getPreferredCanvasFormat();
-  // 'opaque' matches the WebGL context's alpha: false.
-  context.configure({ device, format, alphaMode: 'opaque' });
-
-  const uniformsBuffer = root
-    .createBuffer(Uniforms, { time: 0, resolution: d.vec2f(canvas.width, canvas.height) })
-    .$usage('uniform');
-
-  const layout = tgpu.bindGroupLayout({
-    uniforms: { uniform: Uniforms, visibility: ['fragment'] },
-  });
-  const bindGroup = root.unwrap(root.createBindGroup(layout, { uniforms: uniformsBuffer }));
-
-  const shaderModule = device.createShaderModule({ code: SHADER_SOURCE });
-  const pipeline = device.createRenderPipeline({
-    layout: device.createPipelineLayout({ bindGroupLayouts: [root.unwrap(layout)] }),
-    vertex: { module: shaderModule, entryPoint: 'main_vert' },
-    fragment: { module: shaderModule, entryPoint: 'main_frag', targets: [{ format }] },
-    primitive: { topology: 'triangle-list' },
-  });
-
-  let destroyed = false;
-
-  // Spontaneous losses (sleep/wake, driver reset) go through the caller's
-  // rebuild path; a loss caused by destroy() must not.
-  void device.lost.then((): void => {
-    if (destroyed) return;
-    callbacks.onLost();
-    callbacks.onRestored();
-  });
-
-  return {
-    render(elapsedSeconds: number): void {
-      uniformsBuffer.write({
-        time: elapsedSeconds,
-        resolution: d.vec2f(canvas.width, canvas.height),
-      });
-
-      const encoder = device.createCommandEncoder();
-      const pass = encoder.beginRenderPass({
-        colorAttachments: [
-          {
-            view: context.getCurrentTexture().createView(),
-            clearValue: CLEAR_COLOR,
-            loadOp: 'clear',
-            storeOp: 'store',
-          },
-        ],
-      });
-      pass.setPipeline(pipeline);
-      pass.setBindGroup(0, bindGroup);
-      pass.draw(3);
-      pass.end();
-      device.queue.submit([encoder.finish()]);
-    },
-    resize(): void {
-      // getCurrentTexture() already sizes from canvas.width/height each frame.
-    },
-    destroy(): void {
-      if (destroyed) return;
-      destroyed = true;
-      // After a device loss the replacement renderer reconfigures this same
-      // canvas context — only unconfigure a configuration we still own.
-      if (context.getConfiguration?.()?.device === device) {
-        context.unconfigure();
-      }
-      // root owns the device (tgpu.init), so this also destroys the buffer.
+    if (!context) {
       root.destroy();
-    },
-  };
+      return null;
+    }
+
+    const device = root.device;
+    const format = navigator.gpu.getPreferredCanvasFormat();
+    // 'opaque' matches the WebGL context's alpha: false.
+    context.configure({ device, format, alphaMode: 'opaque' });
+
+    const uniformsBuffer = root
+      .createBuffer(Uniforms, { time: 0, resolution: d.vec2f(canvas.width, canvas.height) })
+      .$usage('uniform');
+
+    const layout = tgpu.bindGroupLayout({
+      uniforms: { uniform: Uniforms, visibility: ['fragment'] },
+    });
+    const bindGroup = root.unwrap(root.createBindGroup(layout, { uniforms: uniformsBuffer }));
+
+    const shaderModule = device.createShaderModule({ code: SHADER_SOURCE });
+    const pipeline = device.createRenderPipeline({
+      layout: device.createPipelineLayout({ bindGroupLayouts: [root.unwrap(layout)] }),
+      vertex: { module: shaderModule, entryPoint: 'main_vert' },
+      fragment: { module: shaderModule, entryPoint: 'main_frag', targets: [{ format }] },
+      primitive: { topology: 'triangle-list' },
+    });
+
+    let destroyed = false;
+
+    // Spontaneous losses (sleep/wake, driver reset) go through the caller's
+    // rebuild path; a loss caused by destroy() must not.
+    void device.lost.then((): void => {
+      if (destroyed) return;
+      callbacks.onLost();
+      callbacks.onRestored();
+    });
+
+    return {
+      render(elapsedSeconds: number): void {
+        uniformsBuffer.write({
+          time: elapsedSeconds,
+          resolution: d.vec2f(canvas.width, canvas.height),
+        });
+
+        const encoder = device.createCommandEncoder();
+        const pass = encoder.beginRenderPass({
+          colorAttachments: [
+            {
+              view: context.getCurrentTexture().createView(),
+              clearValue: CLEAR_COLOR,
+              loadOp: 'clear',
+              storeOp: 'store',
+            },
+          ],
+        });
+        pass.setPipeline(pipeline);
+        pass.setBindGroup(0, bindGroup);
+        pass.draw(3);
+        pass.end();
+        device.queue.submit([encoder.finish()]);
+      },
+      resize(): void {
+        // getCurrentTexture() already sizes from canvas.width/height each frame.
+      },
+      destroy(): void {
+        if (destroyed) return;
+        destroyed = true;
+        // After a device loss the replacement renderer reconfigures this same
+        // canvas context — only unconfigure a configuration we still own.
+        if (context.getConfiguration?.()?.device === device) {
+          context.unconfigure();
+        }
+        // root owns the device (tgpu.init), so this also destroys the buffer.
+        root.destroy();
+      },
+    };
+  } catch (error) {
+    root.destroy();
+    throw error;
+  }
 }
