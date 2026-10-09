@@ -31,11 +31,16 @@ const MIME_TYPES: Record<string, string> = {
 const BLOCKED_EXTENSIONS = new Set(['.md', '.mdx']);
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ path: string[] }> },
 ): Promise<Response> {
   const { path: rawSegments } = await params;
-  const segments = rawSegments.map((segment) => decodeURIComponent(segment));
+  let segments: string[];
+  try {
+    segments = rawSegments.map((segment) => decodeURIComponent(segment));
+  } catch {
+    return new Response(null, { status: 400 });
+  }
 
   const extension = path.extname(segments[segments.length - 1] ?? '').toLowerCase();
   if (BLOCKED_EXTENSIONS.has(extension)) {
@@ -47,15 +52,77 @@ export async function GET(
     return new Response(null, { status: 404 });
   }
 
-  const file = await fs.readFile(filePath);
+  let stat;
+  try {
+    stat = await fs.stat(filePath);
+  } catch {
+    return new Response(null, { status: 404 });
+  }
+
+  const baseHeaders: Record<string, string> = {
+    'Content-Type': MIME_TYPES[extension] ?? 'application/octet-stream',
+    'X-Content-Type-Options': 'nosniff',
+    'Accept-Ranges': 'bytes',
+    'Cache-Control':
+      process.env.NODE_ENV === 'development'
+        ? 'no-store'
+        : 'public, max-age=3600, stale-while-revalidate=86400',
+  };
+
+  if (extension === '.svg') {
+    baseHeaders['Content-Security-Policy'] = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
+  }
+
+  const rangeHeader = request.headers.get('range');
+  if (rangeHeader) {
+    const match = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim());
+    if (!match || (match[1] === '' && match[2] === '')) {
+      return new Response(null, {
+        status: 416,
+        headers: { ...baseHeaders, 'Content-Range': `bytes */${stat.size}` },
+      });
+    }
+
+    const start = match[1] === '' ? Math.max(0, stat.size - Number(match[2])) : Number(match[1]);
+    const end = match[1] === '' ? stat.size - 1 : match[2] === '' ? stat.size - 1 : Math.min(stat.size - 1, Number(match[2]));
+
+    if (Number.isNaN(start) || Number.isNaN(end) || start > end || start >= stat.size) {
+      return new Response(null, {
+        status: 416,
+        headers: { ...baseHeaders, 'Content-Range': `bytes */${stat.size}` },
+      });
+    }
+
+    const chunkSize = end - start + 1;
+    const buffer = new Uint8Array(chunkSize);
+    const handle = await fs.open(filePath, 'r');
+    try {
+      await handle.read(buffer, 0, chunkSize, start);
+    } finally {
+      await handle.close();
+    }
+
+    return new Response(buffer, {
+      status: 206,
+      headers: {
+        ...baseHeaders,
+        'Content-Range': `bytes ${start}-${end}/${stat.size}`,
+        'Content-Length': String(chunkSize),
+      },
+    });
+  }
+
+  let file: Buffer;
+  try {
+    file = await fs.readFile(filePath);
+  } catch {
+    return new Response(null, { status: 404 });
+  }
 
   return new Response(new Uint8Array(file), {
     headers: {
-      'Content-Type': MIME_TYPES[extension] ?? 'application/octet-stream',
-      'Cache-Control':
-        process.env.NODE_ENV === 'development'
-          ? 'no-store'
-          : 'public, max-age=3600, stale-while-revalidate=86400',
+      ...baseHeaders,
+      'Content-Length': String(stat.size),
     },
   });
 }

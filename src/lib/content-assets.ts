@@ -18,6 +18,9 @@ import { slugify } from './mdx';
 // dimension probe below degrades to a 16:9 fallback if a file is absent.
 const contentRoot = path.join(/* turbopackIgnore: true */ process.cwd(), 'src', 'content');
 const publicRoot = path.join(/* turbopackIgnore: true */ process.cwd(), 'public');
+const contentRootPrefix = contentRoot + path.sep;
+const publicRootPrefix = publicRoot + path.sep;
+const HEADER_READ_BYTES = 65536;
 
 function isFile(filePath: string): boolean {
   try {
@@ -27,18 +30,37 @@ function isFile(filePath: string): boolean {
   }
 }
 
+function isValidSegment(segment: string): boolean {
+  return Boolean(
+    segment &&
+      segment !== '.' &&
+      segment !== '..' &&
+      !segment.includes('/') &&
+      !segment.includes('\\') &&
+      !segment.includes('\0'),
+  );
+}
+
+function safeDecodeURIComponent(value: string): string | null {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Resolve /content/<...segments> to a file inside src/content.
  * Slugs in URLs are normalized ("My Project" -> my-project), so when the
  * direct path misses, the slug segment is mapped back to the real folder.
  */
 export function resolveContentAssetFile(segments: string[]): string | null {
-  if (segments.length === 0 || segments.some((s) => !s || s === '..' || s.includes('\\'))) {
+  if (segments.length === 0 || !segments.every(isValidSegment)) {
     return null;
   }
 
   const direct = path.join(contentRoot, ...segments);
-  if (direct.startsWith(contentRoot) && isFile(direct)) return direct;
+  if (direct.startsWith(contentRootPrefix) && isFile(direct)) return direct;
 
   if (segments.length >= 2) {
     const [type, slugSegment, ...rest] = segments;
@@ -46,10 +68,11 @@ export function resolveContentAssetFile(segments: string[]): string | null {
     try {
       const folder = fs
         .readdirSync(/* turbopackIgnore: true */ typeDir, { withFileTypes: true })
+        .sort((a, b) => a.name.localeCompare(b.name))
         .find((entry) => entry.isDirectory() && slugify(entry.name) === slugSegment);
       if (folder) {
         const resolved = path.join(typeDir, folder.name, ...rest);
-        if (resolved.startsWith(contentRoot) && isFile(resolved)) return resolved;
+        if (resolved.startsWith(contentRootPrefix) && isFile(resolved)) return resolved;
       }
     } catch {
       return null;
@@ -61,18 +84,18 @@ export function resolveContentAssetFile(segments: string[]): string | null {
 
 /** Map a site-absolute image URL (/content/... or /assets/...) to a file on disk. */
 export function resolveLocalImageFile(src: string): string | null {
-  const clean = decodeURIComponent(src.split(/[?#]/)[0]);
-  if (!clean.startsWith('/')) return null;
+  const clean = safeDecodeURIComponent(src.split(/[?#]/)[0]);
+  if (!clean || !clean.startsWith('/') || clean.startsWith('//')) return null;
 
   const segments = clean.slice(1).split('/').filter(Boolean);
-  if (segments.some((s) => s === '..' || s.includes('\\'))) return null;
+  if (!segments.every(isValidSegment)) return null;
 
   if (segments[0] === 'content') {
     return resolveContentAssetFile(segments.slice(1));
   }
 
   const publicPath = path.join(publicRoot, ...segments);
-  return publicPath.startsWith(publicRoot) && isFile(publicPath) ? publicPath : null;
+  return publicPath.startsWith(publicRootPrefix) && isFile(publicPath) ? publicPath : null;
 }
 
 export interface ImageDimensions {
@@ -81,6 +104,36 @@ export interface ImageDimensions {
 }
 
 const dimensionsCache = new Map<string, ImageDimensions | null>();
+
+function probeImageDimensions(filePath: string, fileSize: number): ImageDimensions | null {
+  const readBytes = Math.min(fileSize, HEADER_READ_BYTES);
+  if (readBytes <= 0) return null;
+
+  const fd = fs.openSync(/* turbopackIgnore: true */ filePath, 'r');
+  let headBuffer: Uint8Array;
+  try {
+    headBuffer = new Uint8Array(readBytes);
+    const bytesRead = fs.readSync(fd, headBuffer, 0, readBytes, 0);
+    if (bytesRead < readBytes) {
+      headBuffer = headBuffer.subarray(0, bytesRead);
+    }
+  } finally {
+    fs.closeSync(fd);
+  }
+
+  try {
+    const { width, height } = imageSize(headBuffer);
+    if (width && height) return { width, height };
+  } catch {
+    if (fileSize > HEADER_READ_BYTES) {
+      const fullBuffer = new Uint8Array(fs.readFileSync(/* turbopackIgnore: true */ filePath));
+      const { width, height } = imageSize(fullBuffer);
+      if (width && height) return { width, height };
+    }
+  }
+
+  return null;
+}
 
 /**
  * Intrinsic dimensions for a local image so next/image can reserve the right
@@ -91,20 +144,20 @@ export function getLocalImageDimensions(src: string): ImageDimensions | null {
   const filePath = resolveLocalImageFile(src);
   if (!filePath) return null;
 
-  let cacheKey: string;
+  let stat: fs.Stats;
   try {
-    cacheKey = `${filePath}:${fs.statSync(/* turbopackIgnore: true */ filePath).mtimeMs}`;
+    stat = fs.statSync(/* turbopackIgnore: true */ filePath);
   } catch {
     return null;
   }
 
+  const cacheKey = `${filePath}:${stat.mtimeMs}`;
   const cached = dimensionsCache.get(cacheKey);
   if (cached !== undefined) return cached;
 
   let dimensions: ImageDimensions | null = null;
   try {
-    const { width, height } = imageSize(new Uint8Array(fs.readFileSync(/* turbopackIgnore: true */ filePath)));
-    if (width && height) dimensions = { width, height };
+    dimensions = probeImageDimensions(filePath, stat.size);
   } catch {
     dimensions = null;
   }
