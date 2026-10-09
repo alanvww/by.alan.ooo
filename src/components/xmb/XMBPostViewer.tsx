@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { DotWavePlaceholder } from '@/components/mdx/DotWavePlaceholder';
 import { motion } from 'motion/react';
 import { useRouter } from 'next/navigation';
@@ -24,6 +25,9 @@ interface XMBPostViewerProps {
     siblings: SiblingInfo;
 }
 
+const isUnoptimizedImage = (src: string): boolean =>
+    !src.startsWith('/') || src.startsWith('//') || /\.(svg|gif)($|[?#])/i.test(src);
+
 const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerProps) => {
     const router = useRouter();
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -31,6 +35,7 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
     const nextPressed = useKeyPressed('ArrowRight');
     const isCoarse = useCoarsePointer();
     const reduceMotion = useReducedMotion();
+    const coverUnoptimized = frontmatter.coverImage ? isUnoptimizedImage(frontmatter.coverImage) : false;
     // JS-initiated scrolling honors prefers-reduced-motion (2.3.3); the CSS
     // scroll-behavior is gated separately in globals.css.
     const scrollBehavior: ScrollBehavior = reduceMotion ? 'auto' : 'smooth';
@@ -45,7 +50,7 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
     // Dot-wave placeholder sits behind the cover until it finishes loading.
     const [coverLoaded, setCoverLoaded] = useState(false);
     const coverRef = useCallback((node: HTMLImageElement | null) => {
-        if (node?.complete && node.naturalWidth > 0) setCoverLoaded(true);
+        if (node?.complete) setCoverLoaded(true);
     }, []);
 
     // Reading context enters the article whenever this viewer mounts — first
@@ -128,6 +133,7 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
                         alt=""
                         fill
                         sizes="100vw"
+                        unoptimized={coverUnoptimized}
                         className="object-cover blur-3xl scale-110"
                     />
                     <div className="absolute inset-0 bg-linear-to-b dark:from-black/60 from-white/60 dark:via-black/40 via-white/40 dark:to-black/80 to-white/80" />
@@ -164,7 +170,7 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
                                 {type}
                             </span>
                             <div className="h-px w-12 bg-xmb-fg/10" />
-                            <time className="text-xs font-mono text-xmb-fg/40 uppercase tracking-widest">
+                            <time dateTime={frontmatter.date} className="text-xs font-mono text-xmb-fg/40 uppercase tracking-widest">
                                 {new Date(frontmatter.date).toLocaleDateString('en-US', {
                                     year: 'numeric',
                                     month: 'long',
@@ -206,6 +212,7 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
                                 alt={frontmatter.title}
                                 fill
                                 sizes="(max-width: 1024px) 100vw, 1024px"
+                                unoptimized={coverUnoptimized}
                                 className="object-cover"
                                 priority
                                 onLoad={() => setCoverLoaded(true)}
@@ -231,10 +238,12 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
                     {/* Previous */}
                     <div className="flex-1 flex justify-start">
                         {siblings.prev && (
-                            <button
-                                onClick={() => {
-                                    playNavigate();
-                                    router.push(`/${type}/${siblings.prev!.slug}`);
+                            <Link
+                                href={`/${type}/${siblings.prev.slug}`}
+                                onClick={(e) => {
+                                    if (!e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey && e.button === 0) {
+                                        playNavigate();
+                                    }
                                 }}
                                 className="group pointer-events-auto touch-manipulation min-h-11 flex flex-col items-start justify-center gap-1 text-xmb-fg/70 hover:text-xmb-fg active:text-xmb-fg transition-[color,box-shadow]"
                             >
@@ -244,17 +253,19 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
                                     {!isCoarse && <XMBKeycap label="←" hoverable pressed={prevPressed} />}
                                     <span className="max-w-[32vw] truncate">{siblings.prev.title}</span>
                                 </span>
-                            </button>
+                            </Link>
                         )}
                     </div>
 
                     {/* Next */}
                     <div className="flex-1 flex justify-end text-right">
                         {siblings.next && (
-                            <button
-                                onClick={() => {
-                                    playNavigate();
-                                    router.push(`/${type}/${siblings.next!.slug}`);
+                            <Link
+                                href={`/${type}/${siblings.next.slug}`}
+                                onClick={(e) => {
+                                    if (!e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey && e.button === 0) {
+                                        playNavigate();
+                                    }
                                 }}
                                 className="group pointer-events-auto touch-manipulation min-h-11 flex flex-col items-end justify-center gap-1 text-xmb-fg/70 hover:text-xmb-fg active:text-xmb-fg transition-[color,box-shadow]"
                             >
@@ -264,7 +275,7 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
                                     {!isCoarse && <XMBKeycap label="→" hoverable pressed={nextPressed} />}
                                     <XMBIcon name="CaretRight" size={12} className="motion-safe:group-hover:translate-x-1 motion-safe:group-active:translate-x-1 transition-transform" />
                                 </span>
-                            </button>
+                            </Link>
                         )}
                     </div>
                 </div>
@@ -285,9 +296,9 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
                     >
                         ↑
                     </button>
-                    <div className="w-px h-16 bg-linear-to-b from-transparent via-xmb-fg/50 to-transparent" />
-                    <span className="[writing-mode:vertical-rl] text-[10px] font-mono uppercase tracking-widest py-2">Scroll</span>
-                    <div className="w-px h-16 bg-linear-to-t from-transparent via-xmb-fg/50 to-transparent" />
+                    <div aria-hidden="true" className="w-px h-16 bg-linear-to-b from-transparent via-xmb-fg/50 to-transparent" />
+                    <span aria-hidden="true" className="[writing-mode:vertical-rl] text-[10px] font-mono uppercase tracking-widest py-2">Scroll</span>
+                    <div aria-hidden="true" className="w-px h-16 bg-linear-to-t from-transparent via-xmb-fg/50 to-transparent" />
                     <button
                         type="button"
                         aria-label="Scroll to bottom"
@@ -301,7 +312,7 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
                     </button>
                 </div>
             ) : (
-                <div className="absolute right-12 top-1/2 -translate-y-1/2 flex flex-col items-center gap-4 z-40 opacity-30 hover:opacity-100 transition-opacity duration-250">
+                <div aria-hidden="true" className="absolute right-12 top-1/2 -translate-y-1/2 flex flex-col items-center gap-4 z-40 opacity-30 hover:opacity-100 transition-opacity duration-250 pointer-events-none">
                     <div className="w-px h-32 bg-linear-to-b from-transparent via-xmb-fg/50 to-transparent" />
                     <span className="[writing-mode:vertical-rl] text-[10px] font-mono uppercase tracking-widest">Scroll</span>
                     <div className="w-px h-32 bg-linear-to-t from-transparent via-xmb-fg/50 to-transparent" />

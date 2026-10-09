@@ -1,7 +1,7 @@
 // src/hooks/useIndexPan.ts
 'use client';
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import type { PanInfo } from 'motion/react';
 import { playNavigate } from '@/hooks/useKeyAudioFx';
 import { XMB_GESTURE } from '@/lib/xmb-constants';
@@ -18,6 +18,8 @@ interface UseIndexPanOptions {
       pressable chrome, so this pan commits nothing (and swallows no click —
       a press that starts and ends on the header must still reset). */
   isSuppressed?: () => boolean;
+  /** Changing key (category, folder path, or stage) aborts any pending flick timers. */
+  resetKey?: string | number;
 }
 
 export interface IndexPanHandlers {
@@ -39,22 +41,21 @@ export interface IndexPanHandlers {
  * x-locked pans (category swipes) commit no detents and no flick bonus,
  * only tap suppression.
  *
- * All refs are mutated inside event handlers only (React Compiler safe).
+ * All refs are mutated inside event handlers/effects only (React Compiler safe).
  */
-export function useIndexPan({ getIndex, getMin, getMax, onCommit, isSuppressed }: UseIndexPanOptions): IndexPanHandlers {
-  // Index the gesture believes is current — commits are async React state,
-  // so tracking our own pending value keeps multi-detent pans consistent
-  // within a single event.
+export function useIndexPan({ getIndex, getMin, getMax, onCommit, isSuppressed, resetKey }: UseIndexPanOptions): IndexPanHandlers {
   const pendingIndexRef = useRef(0);
   const accumulatedRef = useRef(0);
   const panConsumedRef = useRef(false);
   const panEndedAtRef = useRef(0);
   const flickTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
-  // Axis lock, decided ONCE when total travel first exceeds PAN_SLOP_PX.
-  // A wobbly horizontal category swipe must not commit item detents (or
-  // flick bonus steps) that the switch immediately discards.
   const axisRef = useRef<'x' | 'y' | null>(null);
   const suppressedRef = useRef(false);
+  const callbacksRef = useRef({ getMin, getMax, onCommit });
+
+  useLayoutEffect(() => {
+    callbacksRef.current = { getMin, getMax, onCommit };
+  });
 
   const clearFlickTimers = useCallback(() => {
     for (const timer of flickTimersRef.current) {
@@ -63,17 +64,22 @@ export function useIndexPan({ getIndex, getMin, getMax, onCommit, isSuppressed }
     flickTimersRef.current = [];
   }, []);
 
+  useLayoutEffect(() => {
+    clearFlickTimers();
+  }, [clearFlickTimers, resetKey]);
+
   useEffect(() => clearFlickTimers, [clearFlickTimers]);
 
   const step = useCallback((direction: 1 | -1) => {
-    const next = Math.min(getMax(), Math.max(getMin(), pendingIndexRef.current + direction));
+    const { getMin: minFn, getMax: maxFn, onCommit: commitFn } = callbacksRef.current;
+    const next = Math.min(maxFn(), Math.max(minFn(), pendingIndexRef.current + direction));
     if (next === pendingIndexRef.current) {
       return;
     }
     pendingIndexRef.current = next;
-    onCommit(next);
+    commitFn(next);
     playNavigate();
-  }, [getMax, getMin, onCommit]);
+  }, []);
 
   const onPanStart = useCallback(() => {
     clearFlickTimers();

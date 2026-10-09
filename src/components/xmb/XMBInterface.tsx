@@ -405,12 +405,14 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
   const handlePagedPointerDownCapture = useCallback((event: React.PointerEvent) => {
     panChromeOriginRef.current = isChromeTarget(event.target);
   }, []);
+  const wheelListKey = `${categoryIndex}:${navigationPath.join('/')}`;
   const listPanHandlers = useIndexPan({
     getIndex: () => Math.max(itemIndex, 0),
     getMin: () => 0,
     getMax: () => Math.max(currentItems.length - 1, 0),
     onCommit: setItemIndex,
     isSuppressed: () => panChromeOriginRef.current,
+    resetKey: `${wheelListKey}:${pagedStage}`,
   });
 
   // Mouse wheel / trackpad on the whole menu root (the way the arrow keys
@@ -424,10 +426,11 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
   const listDriverRef = useRef<XMBWheelDriver | null>(null);
   const reduceMotion = useReducedMotion();
   const atRoot = navigationPath.length === 0;
+  const isCarouselActive = showCarousel && layoutMode === 'full';
   const wheel = useWheelCursor({
     surfaceRef: containerRef,
     driverRef: listDriverRef,
-    enabled: !(showCarousel && layoutMode === 'full') && currentItems.length > 0,
+    enabled: !isCarouselActive && currentItems.length > 0,
     isPointerEvent,
     isNavigating,
     reduceMotion: reduceMotion ?? false,
@@ -442,16 +445,18 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
   // gesture, or a momentum tail would commit an index from the previous
   // state. Layout effect: the list's own layout effects (driver
   // registration, itemIndexRef) have already run.
-  const wheelListKey = `${categoryIndex}:${navigationPath.join('/')}`;
   useLayoutEffect(() => {
     wheel.notifySelection(itemIndex, wheelListKey);
   }, [wheel, itemIndex, wheelListKey]);
   useLayoutEffect(() => {
+    if (isCarouselActive) return;
     wheelAbortRef.current = wheel.abort;
     return () => {
-      wheelAbortRef.current = null;
+      if (wheelAbortRef.current === wheel.abort) {
+        wheelAbortRef.current = null;
+      }
     };
-  }, [wheel]);
+  }, [wheel, isCarouselActive]);
 
   // Early return after all hooks have been called
   if (categories.length === 0 || !activeCategory) return null;
@@ -601,6 +606,8 @@ const XMBInterface = ({ categories }: XMBInterfaceProps) => {
             restrictedPing={restrictedPing}
             isPointerEvent={isPointerEvent}
             wheelSurfaceRef={containerRef}
+            liveIndexRef={liveIndexRef}
+            wheelAbortRef={wheelAbortRef}
           />
         )}
       </AnimatePresence>

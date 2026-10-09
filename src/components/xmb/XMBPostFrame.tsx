@@ -60,8 +60,13 @@ const XMBPostFrame = ({ children }: { children: React.ReactNode }): React.ReactE
             if (e.key !== 'Escape' && e.key !== 'Backspace') return;
             // A held Escape must not queue a cancel cue per OS repeat.
             if (e.repeat) return;
-            // Prevent backspace from navigating back if focused on an input
-            if (e.key === 'Backspace' && ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName || '')) {
+            // Prevent backspace from navigating back if focused on an interactive text/select control
+            const activeEl = document.activeElement as HTMLElement | null;
+            if (
+                e.key === 'Backspace' &&
+                (['INPUT', 'TEXTAREA', 'SELECT'].includes(activeEl?.tagName || '') ||
+                    activeEl?.isContentEditable)
+            ) {
                 return;
             }
             playCancel();
@@ -91,6 +96,7 @@ const XMBPostFrame = ({ children }: { children: React.ReactNode }): React.ReactE
                 placement identical. */}
             <div className="absolute top-[max(2rem,env(safe-area-inset-top))] left-6 md:left-12 z-50">
                 <button
+                    type="button"
                     onClick={() => {
                         playCancel();
                         router.push('/');

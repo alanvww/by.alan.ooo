@@ -1,6 +1,8 @@
 'use client';
 
-import React, { createContext, useContext, useMemo, useRef, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { usePathname } from 'next/navigation';
+import { normalizePathname } from './xmb-routes';
 import type { XMBCategory, XMBItem } from './xmb-types';
 
 interface XMBSelectionContextType {
@@ -72,6 +74,10 @@ export const XMBNavigationProvider = ({
     categories: XMBCategory[];
     initialCategoryIndex?: number;
 }) => {
+    const pathname = usePathname();
+    const pathnameRef = useRef(pathname);
+    const prevPathnameRef = useRef(pathname);
+
     const [categoryIndex, setCategoryIndex] = useState(() =>
         Math.min(Math.max(initialCategoryIndex, 0), Math.max(categories.length - 1, 0)),
     );
@@ -106,6 +112,10 @@ export const XMBNavigationProvider = ({
     const finishPendingRef = useRef(false);
 
     const startNavigation = useCallback((href?: string) => {
+        if (href && normalizePathname(href) === normalizePathname(pathnameRef.current)) {
+            return;
+        }
+
         setIsNavigating(true);
         setPendingHref(href ?? null);
         minDelayReachedRef.current = false;
@@ -130,6 +140,22 @@ export const XMBNavigationProvider = ({
         } else {
             finishPendingRef.current = true;
         }
+    }, []);
+
+    useEffect(() => {
+        pathnameRef.current = pathname;
+        if (prevPathnameRef.current !== pathname) {
+            prevPathnameRef.current = pathname;
+            finishNavigation();
+        }
+    }, [pathname, finishNavigation]);
+
+    useEffect(() => {
+        return () => {
+            if (navTimerRef.current) {
+                clearTimeout(navTimerRef.current);
+            }
+        };
     }, []);
 
     const selectionValue = useMemo<XMBSelectionContextType>(() => ({
