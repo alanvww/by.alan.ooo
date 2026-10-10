@@ -4,7 +4,7 @@ import path from 'path';
 import matter from 'gray-matter';
 import { cache } from 'react';
 
-const contentDirectory = path.join(process.cwd(), 'src/content');
+const contentDirectory = path.join(/* turbopackIgnore: true */ process.cwd(), 'src', 'content');
 const isDev = process.env.NODE_ENV === 'development';
 
 export interface ProjectLink {
@@ -106,7 +106,7 @@ export function isRestrictedByTag(item: { tags?: unknown }): boolean {
 const getContentEntries = cache((type: ContentType): ContentEntry[] => {
   const typeDirectory = path.join(contentDirectory, type);
   const dirEntries = fs
-    .readdirSync(typeDirectory, { withFileTypes: true })
+    .readdirSync(/* turbopackIgnore: true */ typeDirectory, { withFileTypes: true })
     .sort((a, b) => a.name.localeCompare(b.name));
 
   const entries: ContentEntry[] = [];
@@ -123,13 +123,13 @@ const getContentEntries = cache((type: ContentType): ContentEntry[] => {
 
   dirEntries.forEach((entry) => {
     if (entry.isDirectory()) {
-      const folderPath = path.join(typeDirectory, entry.name);
+      const folderPath = path.join(/* turbopackIgnore: true */ typeDirectory, entry.name);
       const slug = slugify(entry.name);
       if (!slug) return;
 
       for (const [file, extension] of [['index.mdx', 'mdx'], ['index.md', 'md']] as const) {
-        const filePath = path.join(folderPath, file);
-        if (fs.existsSync(filePath)) {
+        const filePath = path.join(/* turbopackIgnore: true */ folderPath, file);
+        if (fs.existsSync(/* turbopackIgnore: true */ filePath)) {
           addEntry({
             slug,
             filePath,
@@ -148,7 +148,7 @@ const getContentEntries = cache((type: ContentType): ContentEntry[] => {
       if (!slug) return;
       addEntry({
         slug,
-        filePath: path.join(typeDirectory, entry.name),
+        filePath: path.join(/* turbopackIgnore: true */ typeDirectory, entry.name),
         extension,
         // Loose assets dropped next to flat files are served from the type root.
         basePath: `/content/${type}`,
@@ -265,8 +265,8 @@ function normalizeProjectLinks(raw: unknown): ProjectLink[] | undefined {
 }
 
 const parseContentEntry = <T extends BaseFrontmatter>(entry: ContentEntry): ParsedContentEntry<T> => {
-  const source = fs.readFileSync(entry.filePath, 'utf8');
-  const stat = fs.statSync(entry.filePath);
+  const source = fs.readFileSync(/* turbopackIgnore: true */ entry.filePath, 'utf8');
+  const stat = fs.statSync(/* turbopackIgnore: true */ entry.filePath);
   const { data, content } = matter(source);
 
   const title =
@@ -402,7 +402,7 @@ function rewriteRelativeContentPaths(content: string, basePath: string): string 
  * Returns an array of folder names (e.g., ['posts', 'projects'])
  */
 export const getContentTypes = cache((): string[] => {
-  const entries = fs.readdirSync(contentDirectory, { withFileTypes: true });
+  const entries = fs.readdirSync(/* turbopackIgnore: true */ contentDirectory, { withFileTypes: true });
   return entries
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)

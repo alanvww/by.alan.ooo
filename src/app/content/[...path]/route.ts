@@ -55,7 +55,7 @@ export async function GET(
 
   let stat;
   try {
-    stat = await fs.stat(filePath);
+    stat = await fs.stat(/* turbopackIgnore: true */ filePath);
   } catch {
     return new Response(null, { status: 404 });
   }
@@ -96,7 +96,7 @@ export async function GET(
 
     const chunkSize = end - start + 1;
     const buffer = new Uint8Array(chunkSize);
-    const handle = await fs.open(filePath, 'r');
+    const handle = await fs.open(/* turbopackIgnore: true */ filePath, 'r');
     try {
       await handle.read(buffer, 0, chunkSize, start);
     } finally {
@@ -115,7 +115,7 @@ export async function GET(
 
   let file: Buffer;
   try {
-    file = await fs.readFile(filePath);
+    file = await fs.readFile(/* turbopackIgnore: true */ filePath);
   } catch {
     return new Response(null, { status: 404 });
   }

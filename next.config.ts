@@ -12,19 +12,22 @@ const nextConfig: NextConfig = {
     optimizePackageImports: ['@phosphor-icons/react', 'motion'],
   },
   // Every route renders through the layout's XMB menu, which reads MDX from
-  // src/content at render time (and /content/[...path] serves colocated
-  // assets from there) — ship it with every server bundle so on-demand
-  // revalidation keeps working.
+  // src/content at render time — ship only markdown/MDX sources with server
+  // bundles so on-demand revalidation keeps working without bundling 200MB+
+  // of colocated media (which sync-content-media.js copies to public/content
+  // for static CDN serving).
   outputFileTracingIncludes: {
-    '/**': ['./src/content/**/*'],
+    '/**': ['./src/content/**/*.{md,mdx}'],
   },
-  // public/ is served from the CDN; traced into functions it adds ~233MB and
-  // blows Vercel's 250MB function limit. Belt to the turbopackIgnore
-  // suspenders in src/lib/content-assets.ts — the only runtime reader of
-  // public/ files is the image-dimension probe there, which falls back to
-  // 16:9 when a file is absent.
+  // public/ and colocated media in src/content/ are served from the CDN;
+  // traced into functions they add ~220MB and blow Vercel's 250MB function
+  // limit. Belt to the turbopackIgnore suspenders in src/lib/mdx.ts and
+  // src/lib/content-assets.ts.
   outputFileTracingExcludes: {
-    '/**': ['./public/**', './src/content/**/*.{mp4,mov,webm,gif}'],
+    '/**': [
+      './public/**',
+      './src/content/**/*.{mp4,mov,webm,gif,png,jpg,jpeg,webp,avif,svg,mp3,wav,pdf}',
+    ],
   },
   reactCompiler: true,
   images: {
