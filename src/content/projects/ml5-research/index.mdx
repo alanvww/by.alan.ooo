@@ -1,17 +1,18 @@
 ---
-title: "ml5.js Next-Gen Documentation"
-excerpt: "Interactive documentation and live browser-based code runner for the ml5.js 1.0 release at NYU ITP."
+title: "ml5.js Website Enhancement & Built-in Editor"
+excerpt: "Designing and prototyping an interactive in-page code editor and unified documentation experience for the ml5.js 1.0 release at NYU ITP."
 date: "2024-03-12"
 timeframe: "Spring 2024"
-role: "Research & Documentation Contributor"
+role: "Student Researcher"
 projectUrl: "https://docs.ml5js.org"
-githubUrl: "https://github.com/ml5js/ml5-website-v02-docsify"
+githubUrl: "https://github.com/alanvww/ml5-website-v02-docsify"
 technologies:
   - ml5.js
   - p5.js
-  - JavaScript
+  - CodeMirror
   - Docsify
-  - WebGL
+  - React / Gatsby
+  - Next.js
 coverImage: "./ml5-docs-facemesh.png"
 tags:
   - design-engineering
@@ -21,17 +22,20 @@ status: "completed"
 publish: true
 ---
 
-Part of the **ml5.js 1.0** redesign and research effort at NYU ITP, focused on making client-side machine learning approachable for artists, students, and creative coders directly in the browser.
+Conducted during Daniel Shiffman's **ml5.js Research Studio** at NYU ITP (Spring 2024), this research project focused on redesigning the **ml5.js 1.0** website and embedding a live, interactive code editor directly inside the reference documentation so beginners can experiment with browser-based machine learning models without context-switching.
 
-## Interactive Code Runner & Model Reference
+- **Research Proposal**: [ml5.js Website Functionality Enhancement and Examples with Built-in Editor](https://github.com/ml5js/research-studio-s24/blob/main/projects/alanren.md)
+- **Prototypes**: [`ml5-website-v02-docsify`](https://github.com/alanvww/ml5-website-v02-docsify) · [`ml5-website-v02-gatsby`](https://github.com/alanvww/ml5-website-v02-gatsby)
 
-Rather than requiring learners to switch between static API reference pages and an external editor, the updated documentation embeds a live **p5.js + ml5.js code editor and webcam canvas** directly inside each model guide (`BodyPose`, `HandPose`, `FaceMesh`, `ImageClassifier`, and `NeuralNetwork`).
+## Research Objectives
 
-### Key Improvements
+1. **Centralize Learning Resources**: Unify API reference pages, video tutorials, and runnable examples into a single cohesive documentation flow.
+2. **Embed an In-Page Live Code Editor**: Allow learners to inspect, modify, and execute `p5.js` + `ml5.js` sketches (`FaceMesh`, `HandPose`, `BodyPose`, `ImageClassifier`, `NeuralNetwork`) with live webcam feedback directly inside the docs.
+3. **Optimize Performance & Cross-Origin Execution**: Evaluate single-page documentation architectures (Next.js, Gatsby/React, Vite, and Docsify) while resolving `iframe` HTTPS and camera permission constraints for embedded sketches.
 
-- **Live In-Page Execution**: Visitors can inspect, edit, and run `ml5.faceMesh`, `ml5.handPose`, and `ml5.bodyPose` sketches inline with real-time webcam feedback.
-- **Unified v1.0 API Patterns**: Standardized lifecycle methods (`preload()`, `detectStart()`, `detectStop()`) across all pretrained TensorFlow.js models.
-- **Zero-Install Onboarding**: Quickstart templates link directly to the p5.js Web Editor with preconfigured CDN script tags (`ml5.min.js`), bridging reference examples to full projects like [[look-at-you|Look At You!!!]] and [[webcam-nn|Webcam Handpose Neural Network]].
+## Prototyping the In-Page Code Runner
+
+Early iterations tested a **CodeMirror** + **Next.js** proof-of-concept and evaluated sandboxing strategies for running live webcam sketches inside documentation pages. Resolving `iframe` camera/microphone permissions over HTTPS enabled seamless inline execution alongside each model's syntax breakdown, which directly informed later work on the [[help-page|p5.js Built-In Help Page]] during Google Summer of Code.
 
 ```javascript
 let facemesh;
@@ -54,7 +58,3 @@ function gotFaces(results) {
   faces = results;
 }
 ```
-
-<Callout type="note" title="Author Review Note">
-  Add specific fellowship/research responsibilities, collaborators or faculty advisors (e.g., Daniel Shiffman / ml5.js team), and any additional weekly milestones you want highlighted here.
-</Callout>

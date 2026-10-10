@@ -1,9 +1,10 @@
 ---
 title: "Water Break Timer"
-excerpt: "A webcam-driven hydration timer that triggers native OS notifications until it sees you pick up your mug."
-date: "2024-03-20"
+excerpt: "A webcam-driven hydration timer built with p5.js, ml5.js, and Teachable Machine that fires desktop notifications until it sees you drink from a mug."
+date: "2024-02-16"
 timeframe: "Spring 2024"
 role: "Creative Technologist"
+projectUrl: "https://editor.p5js.org/alanvww/sketches/xxdvtg7YK"
 technologies:
   - p5.js
   - ml5.js
@@ -18,20 +19,44 @@ status: "completed"
 publish: true
 ---
 
-**Water Break Timer** is a playful browser utility that pairs a custom webcam image classifier with the **Web Notifications API** to enforce regular hydration breaks during long coding sessions.
+Built for Yining Shi's *Machine Learning for the Web* course at NYU ITP (Spring 2024), **Water Break Timer** pairs a custom **Google Teachable Machine** image classifier (`ml5.imageClassifier`) with the browser's **Web Notifications API** to enforce hydration breaks during long coding sessions.
 
-## How It Works
+## Interaction Loop
 
-Instead of a passive timer that can be dismissed with a click, the app watches the webcam feed to verify whether you actually took a sip:
+Instead of a passive countdown timer that can be dismissed with a click, the sketch watches the live webcam feed (`320×240`) to verify whether you actually picked up a cup:
 
-- **Idle Detection (`Just me :(`)**: While sitting at the desk without a cup in frame, the countdown bar ticks down toward `0:00`.
-- **System Alert (`Time's up!`)**: When the timer hits `0:00`, the status bar turns red and dispatches a native macOS browser notification: *"Water Break Timer — Time's up! Take a water break."*
-- **Mug Verification (`Mug`)**: Raising a mug to take a drink switches the classifier label to `Mug` and automatically resets the countdown timer.
+1. **Idle Countdown (`Just me :(`)**: While sitting at the desk without a mug in frame, the 20-minute countdown timer (`timerDuration = 20 * 60 * 1000`, shortened to 5 seconds for demo recording) ticks down at the bottom of the canvas.
+2. **Desktop Alert (`Time's up!`)**: When `millis() - startTime > timerDuration`, the status bar turns bright red (`background(255, 0, 0)`) and dispatches a native OS notification via `new Notification("Water Break Timer", { body: "Time's up! Take a water break." })`.
+3. **Visual Verification (`Mug`)**: Raising a mug into frame switches the top classification result (`results[0].label`) to `"Mug"`, immediately calling `resetTimer()` to restart the countdown.
 
-## Live Demo Recording
+![Webcam classifier counting down to 0:00, firing a macOS notification, and resetting when a mug is detected](./screen.gif "Countdown expires ('Just me :('), triggers a native macOS notification, and resets once the classifier detects 'Mug'")
 
-![Webcam classifier counting down to 0:00, firing a macOS notification, and resetting when a mug is detected](./screen.gif "Countdown expires ('Just me :('), triggers a system notification, and resets once the classifier detects 'Mug'")
+## Implementation
 
-<Callout type="note" title="Author Review Note">
-  Add link to the p5.js sketch or GitHub repo (`projectUrl` / `githubUrl`) and specify which NYU ITP class or weekly prompt inspired the prototype.
-</Callout>
+```javascript
+let classifier;
+let imageModelURL = "https://teachablemachine.withgoogle.com/models/UySicD1il/";
+let timerDuration = 20 * 60 * 1000; // 20 minutes in milliseconds
+
+function preload() {
+  classifier = ml5.imageClassifier(imageModelURL + "model.json");
+}
+
+function gotResult(error, results) {
+  if (error) return console.error(error);
+  label = results[0].label;
+
+  if (label === "Mug") {
+    resetTimer();
+  }
+  classifyVideo();
+}
+
+function showNotification() {
+  if ("Notification" in window && Notification.permission === "granted") {
+    new Notification("Water Break Timer", {
+      body: "Time's up! Take a water break.",
+    });
+  }
+}
+```

@@ -1,12 +1,14 @@
 ---
-title: "Webcam Handpose Neural Network"
-excerpt: "Training an in-browser ml5.js neural network on hand skeletal keypoints to steer a live slit-scan webcam brush."
-date: "2024-04-02"
+title: "Neural Network HandPose & Webcam Controller"
+excerpt: "Training a client-side ml5.js neural network on 21 hand keypoints to steer a live webcam viewport across a p5.js canvas."
+date: "2024-03-29"
 timeframe: "Spring 2024"
 role: "Creative Technologist"
+projectUrl: "https://editor.p5js.org/alanvww/sketches/0dsOrHpiO"
 technologies:
   - p5.js
   - ml5.js (HandPose & NeuralNetwork)
+  - WebGL
   - JavaScript
 coverImage: "./train.png"
 tags:
@@ -16,24 +18,46 @@ status: "completed"
 publish: true
 ---
 
-An interactive machine learning experiment built at NYU ITP that chains **ml5.js HandPose** skeletal landmark extraction into a custom client-side **ml5.neuralNetwork** classifier—allowing users to train directional hand gestures in the browser and immediately use them to paint with a live webcam feed.
+Developed for Yining Shi's *Machine Learning for the Web* course at NYU ITP (Spring 2024), this two-part project chains **ml5.js HandPose** skeletal keypoint tracking into a custom **ml5.neuralNetwork** gesture classifier—allowing users to train directional hand gestures in the browser and use them to steer a live webcam brush across a p5.js canvas.
 
-## In-Browser Data Collection & Training
+## Part 1 — Training the HandPose Neural Network
 
-Rather than writing brittle coordinate thresholds for finger angles, the sketch uses the 21 3D hand keypoints output by `ml5.handPose` as feature vectors for a custom 4-class neural network (`Up`, `Down`, `Left`, `Right`):
+- **Live Training Sketch**: [p5.js Web Editor (`rCBCQ1RzG`)](https://editor.p5js.org/alanvww/sketches/rCBCQ1RzG)
 
-1. **Sample Capture**: Buttons below the canvas (`Add Hand Point Up Data`, `Down`, `Left`, `Right`) record labeled snapshots of the current hand skeleton directly in the browser.
-2. **Client-Side Training**: Clicking `Train and Save Model` normalizes the keypoint inputs, runs training epochs via `ml5.neuralNetwork`, and exports the trained weights for real-time inference.
+The training pipeline captures real-time 2D hand landmarks from `ml5.handPose()` running on the WebGL backend (`ml5.setBackend("webgl")`) and trains a 4-class classifier (`Up`, `Down`, `Left`, `Right`):
 
-## Gesture-Driven Slit-Scan Canvas
+1. **Keypoint Flattening**: For each detected hand, `flattenHandData()` extracts the `(x, y)` coordinates of all 21 skeletal keypoints into a 42-float feature vector.
+2. **Interactive Sample Collection**: Performing gestures in front of the webcam while clicking directional buttons (`Up`, `Down`, `Left`, `Right`) appends labeled feature vectors via `classifier.addData(inputData, outputData)`.
+3. **In-Browser Training & Export**: Pressing `Train and Save Model` normalizes the collected dataset (`classifier.normalizeData()`), runs 50 training epochs (`classifier.train({ epochs: 50 })`) with live loss/accuracy curves, and downloads the trained `model.json`, `model_meta.json`, and `model.weights.bin` files (`classifier.save()`).
 
-Once trained, continuous classification results (`Up`, `Down`, `Left`, `Right`) translate the live webcam viewport across the p5.js canvas without clearing previous frames—generating layered slit-scan trails as you point in different directions.
+## Part 2 — Interactive Gesture Webcam Controller
 
-<ImageGrid cols={2} caption="Live gesture-controlled movement (left) and accumulated slit-scan trail composition (right)">
-  ![Live webcam frame moving across the canvas via hand gesture classification](./move.gif)
-  ![Slit-scan trail composition produced by steering the webcam brush](./result.png)
+- **Live Controller Sketch**: [p5.js Web Editor (`0dsOrHpiO`)](https://editor.p5js.org/alanvww/sketches/0dsOrHpiO)
+
+The second sketch loads the pre-trained weights (`classifier.load(modelDetails, modelLoaded)`) and runs continuous classification on live `handPose` detections. Each predicted label (`Up`, `Down`, `Left`, `Right`) increments `xAdded` or `yAdded` by `±5px` per frame, translating the `480×360` webcam feed across the full-window canvas without clearing prior frames—leaving an expressive slit-scan trail across the screen.
+
+<ImageGrid cols={2} caption="Real-time gesture classification translating the webcam frame (left) and the resulting accumulated trail composition (right)">
+  ![Hand detected and video moving across the canvas](./move.gif)
+  ![Accumulated slit-scan trail result on the p5.js canvas](./result.png)
 </ImageGrid>
 
-<Callout type="note" title="Author Review Note">
-  Add p5.js Web Editor / GitHub link (`projectUrl` / `githubUrl`) if available, and link to any related ITP coursework (such as [[ml5-research|ml5.js Next-Gen Documentation]] or [[gestura|Gestura]]).
-</Callout>
+```javascript
+function flattenHandData() {
+  let hand = hands[0];
+  let handData = [];
+  for (let i = 0; i < hand.keypoints.length; i++) {
+    let keypoint = hand.keypoints[i];
+    handData.push(keypoint.x);
+    handData.push(keypoint.y);
+  }
+  return handData;
+}
+
+function gotClassification(results) {
+  classification = results[0].label;
+  if (classification === "Up") yAdded -= 5;
+  else if (classification === "Down") yAdded += 5;
+  else if (classification === "Left") xAdded -= 5;
+  else if (classification === "Right") xAdded += 5;
+}
+```
