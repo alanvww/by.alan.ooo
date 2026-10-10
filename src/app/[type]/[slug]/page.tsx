@@ -140,7 +140,7 @@ export default async function ContentPage({ params }: { params: Promise<PagePara
       <MDXRemote
         source={data.content}
         components={xmbMdxComponents}
-        options={{ mdxOptions }}
+        options={{ mdxOptions, blockJS: false }}
       />
     </XMBPostViewer>
   );

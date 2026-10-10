@@ -262,6 +262,10 @@ export const XMB_ICON_NAMES = [
   'VirtualReality',
   'Backpack',
   'Crab',
+  'ArrowUpRight',
+  'Globe',
+  'Play',
+  'Clock',
 ] as const;
 
 export type XMBIconName = (typeof XMB_ICON_NAMES)[number];

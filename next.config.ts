@@ -24,7 +24,7 @@ const nextConfig: NextConfig = {
   // public/ files is the image-dimension probe there, which falls back to
   // 16:9 when a file is absent.
   outputFileTracingExcludes: {
-    '/**': ['./public/**'],
+    '/**': ['./public/**', './src/content/**/*.{mp4,mov,webm,gif}'],
   },
   reactCompiler: true,
   images: {

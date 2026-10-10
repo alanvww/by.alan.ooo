@@ -5,15 +5,15 @@ export function Demo({ children, title = 'Live Demo' }: { children: ReactNode, t
   const [isExpanded, setIsExpanded] = useState(false)
   const panelId = useId()
   return (
-    <div className="my-8 rounded-lg border bg-card shadow-lg overflow-hidden">
+    <div className="my-10 rounded-xl border border-xmb-fg/10 bg-xmb-fg/5 shadow-2xl overflow-hidden backdrop-blur-sm">
       {children}
-      <div className="border-t bg-muted/50 p-4">
+      <div className="border-t border-xmb-fg/10 bg-xmb-fg/5 px-4 py-3">
         <button
           type="button"
           onClick={() => setIsExpanded(!isExpanded)}
           aria-expanded={isExpanded}
           aria-controls={isExpanded ? panelId : undefined}
-          className="flex items-center justify-between w-full text-sm text-muted-foreground font-medium hover:text-foreground transition-colors"
+          className="flex items-center justify-between w-full text-xs font-mono uppercase tracking-widest text-xmb-fg/50 hover:text-xmb-fg transition-colors"
         >
           <span>{title}</span>
           <svg aria-hidden="true" className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -21,13 +21,14 @@ export function Demo({ children, title = 'Live Demo' }: { children: ReactNode, t
           </svg>
         </button>
         {isExpanded && (
-          <div id={panelId} className="mt-3 pt-3 border-t border-border/50">
-            <p className="text-xs text-muted-foreground">This is an interactive demo. Try interacting with the elements above.</p>
+          <div id={panelId} className="mt-3 pt-3 border-t border-xmb-fg/10">
+            <p className="text-xs font-mono text-xmb-fg/50">Interactive demo preview</p>
           </div>
         )}
       </div>
     </div>
   )
 }
+
 
 

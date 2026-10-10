@@ -28,6 +28,15 @@ interface XMBPostViewerProps {
 const isUnoptimizedImage = (src: string): boolean =>
     !src.startsWith('/') || src.startsWith('//') || /\.(svg|gif)($|[?#])/i.test(src);
 
+const STATUS_LABELS: Record<NonNullable<ProjectFrontmatter['status']>, string> = {
+    completed: 'Completed',
+    'in-progress': 'In Progress',
+    archived: 'Archived',
+};
+
+const ACTION_PILL_CLASS =
+    'inline-flex items-center gap-2 rounded-full border border-xmb-fg/20 bg-xmb-fg/5 px-5 py-2.5 text-xs font-mono uppercase tracking-widest text-xmb-fg/80 hover:bg-xmb-fg/10 hover:border-xmb-fg/40 hover:text-xmb-fg active:bg-xmb-fg/15 transition-[color,background-color,border-color,box-shadow] duration-150';
+
 const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerProps) => {
     const router = useRouter();
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -115,6 +124,31 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
         };
     }, [router, siblings, type]);
 
+    const projectMeta = frontmatter as ProjectFrontmatter;
+    const actionLinks = [
+        ...(projectMeta.projectUrl
+            ? [{ label: 'Live Project', href: projectMeta.projectUrl, icon: 'Globe' as const }]
+            : []),
+        ...(projectMeta.demoUrl
+            ? [{ label: 'Live Demo', href: projectMeta.demoUrl, icon: 'Play' as const }]
+            : []),
+        ...(projectMeta.githubUrl
+            ? [{ label: 'Source Code', href: projectMeta.githubUrl, icon: 'GithubLogo' as const }]
+            : []),
+        ...(projectMeta.links ?? []).map((link) => ({
+            label: link.label,
+            href: link.href,
+            icon: 'ArrowUpRight' as const,
+        })),
+    ];
+
+    const hasSpecBar = Boolean(
+        projectMeta.role ||
+            (projectMeta.collaborators && projectMeta.collaborators.length > 0) ||
+            projectMeta.timeframe ||
+            (projectMeta.technologies && projectMeta.technologies.length > 0),
+    );
+
     // The frosted backdrop and back button live in XMBPostFrame (the [type]
     // layout), which persists across sibling navigation — this root only
     // fades the per-post content in over the already-opaque frame.
@@ -165,21 +199,47 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
                         transition={{ delay: 0.1, ...XMB_ANIMATION.TWEEN }}
                         className="mb-16 text-center"
                     >
-                        <div className="flex items-center justify-center gap-4 mb-8">
+                        <div className="flex flex-wrap items-center justify-center gap-3 md:gap-4 mb-8">
                             <span className="px-3 py-1 rounded-lg border border-xmb-fg/10 bg-xmb-fg/5 text-[10px] font-mono uppercase tracking-widest text-xmb-fg/40">
                                 {type}
                             </span>
-                            <div className="h-px w-12 bg-xmb-fg/10" />
+                            <div className="h-px w-8 bg-xmb-fg/10" />
                             <time dateTime={frontmatter.date} className="text-xs font-mono text-xmb-fg/40 uppercase tracking-widest">
-                                {new Date(frontmatter.date).toLocaleDateString('en-US', {
-                                    year: 'numeric',
-                                    month: 'long',
-                                    day: 'numeric',
-                                    // Frontmatter dates parse as UTC midnight — format in
-                                    // UTC too, or viewers west of GMT see the previous day.
-                                    timeZone: 'UTC',
-                                })}
+                                {projectMeta.timeframe ??
+                                    new Date(frontmatter.date).toLocaleDateString('en-US', {
+                                        year: 'numeric',
+                                        month: 'long',
+                                        day: 'numeric',
+                                        // Frontmatter dates parse as UTC midnight — format in
+                                        // UTC too, or viewers west of GMT see the previous day.
+                                        timeZone: 'UTC',
+                                    })}
                             </time>
+                            {frontmatter.updatedDate && frontmatter.updatedDate !== frontmatter.date && (
+                                <>
+                                    <div className="h-px w-6 bg-xmb-fg/10" />
+                                    <span className="text-xs font-mono text-xmb-fg/40 uppercase tracking-widest">
+                                        Updated {frontmatter.updatedDate}
+                                    </span>
+                                </>
+                            )}
+                            {type !== 'projects' && frontmatter.readTime && (
+                                <>
+                                    <div className="h-px w-6 bg-xmb-fg/10" />
+                                    <span className="inline-flex items-center gap-1.5 text-xs font-mono text-xmb-fg/40 uppercase tracking-widest">
+                                        <XMBIcon name="Clock" size={13} />
+                                        {frontmatter.readTime} min read
+                                    </span>
+                                </>
+                            )}
+                            {projectMeta.status && projectMeta.status !== 'completed' && (
+                                <>
+                                    <div className="h-px w-6 bg-xmb-fg/10" />
+                                    <span className="px-2.5 py-0.5 rounded-full border border-xmb-fg/20 bg-xmb-fg/10 text-[10px] font-mono uppercase tracking-widest text-xmb-fg/70">
+                                        {STATUS_LABELS[projectMeta.status]}
+                                    </span>
+                                </>
+                            )}
                         </div>
 
                         <h1 className="text-4xl md:text-7xl font-extralight tracking-tight mb-8 leading-tight">
@@ -195,6 +255,32 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
                                 ))}
                             </div>
                         )}
+
+                        {actionLinks.length > 0 && (
+                            <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+                                {actionLinks.map(({ label, href, icon }) =>
+                                    href.startsWith('/') && !href.startsWith('//') ? (
+                                        <Link key={`${label}-${href}`} href={href} className={ACTION_PILL_CLASS}>
+                                            <XMBIcon name={icon} size={15} />
+                                            <span>{label}</span>
+                                        </Link>
+                                    ) : (
+                                        <a
+                                            key={`${label}-${href}`}
+                                            href={href}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className={ACTION_PILL_CLASS}
+                                        >
+                                            <XMBIcon name={icon} size={15} />
+                                            <span>{label}</span>
+                                            <XMBIcon name="ArrowUpRight" size={12} weight="bold" className="opacity-60" />
+                                            <span className="sr-only"> (opens in new tab)</span>
+                                        </a>
+                                    ),
+                                )}
+                            </div>
+                        )}
                     </motion.header>
 
                     {/* Featured Image */}
@@ -203,7 +289,7 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
                             initial={{ opacity: 0, y: 40, scale: 0.98 }}
                             animate={{ opacity: 1, y: 0, scale: 1 }}
                             transition={{ delay: 0.15, duration: 0.4, ease: EASE.MOVE }}
-                            className="relative aspect-video rounded-2xl overflow-hidden border border-xmb-fg/10 shadow-[0_0_80px_var(--color-xmb-shadow-glow)] mb-24"
+                            className={`relative aspect-video rounded-2xl overflow-hidden border border-xmb-fg/10 shadow-[0_0_80px_var(--color-xmb-shadow-glow)] ${hasSpecBar ? 'mb-10' : 'mb-24'}`}
                         >
                             {!coverLoaded && <DotWavePlaceholder className="absolute inset-0" />}
                             <Image
@@ -220,6 +306,64 @@ const XMBPostViewer = ({ type, frontmatter, children, siblings }: XMBPostViewerP
                             />
                             <div className="absolute inset-0 ring-1 ring-inset ring-xmb-fg/20 rounded-2xl" />
                         </motion.div>
+                    )}
+
+                    {/* Case Study Spec Bar */}
+                    {hasSpecBar && (
+                        <motion.dl
+                            initial={{ opacity: 0, y: 16 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.18, ...XMB_ANIMATION.TWEEN }}
+                            className="mb-16 rounded-2xl border border-xmb-fg/10 bg-xmb-fg/5 p-6 md:p-8 backdrop-blur-sm grid grid-cols-1 sm:grid-cols-2 gap-6 text-left"
+                        >
+                            {projectMeta.role && (
+                                <div>
+                                    <dt className="text-[10px] font-mono uppercase tracking-widest text-xmb-fg/40 mb-1.5">
+                                        Role
+                                    </dt>
+                                    <dd className="text-sm md:text-base font-light text-xmb-fg/90">
+                                        {projectMeta.role}
+                                    </dd>
+                                </div>
+                            )}
+                            {projectMeta.collaborators && projectMeta.collaborators.length > 0 && (
+                                <div>
+                                    <dt className="text-[10px] font-mono uppercase tracking-widest text-xmb-fg/40 mb-1.5">
+                                        Collaborators
+                                    </dt>
+                                    <dd className="text-sm md:text-base font-light text-xmb-fg/80">
+                                        {projectMeta.collaborators.join(', ')}
+                                    </dd>
+                                </div>
+                            )}
+                            {projectMeta.timeframe && (
+                                <div>
+                                    <dt className="text-[10px] font-mono uppercase tracking-widest text-xmb-fg/40 mb-1.5">
+                                        Timeline
+                                    </dt>
+                                    <dd className="text-sm md:text-base font-light text-xmb-fg/80">
+                                        {projectMeta.timeframe}
+                                    </dd>
+                                </div>
+                            )}
+                            {projectMeta.technologies && projectMeta.technologies.length > 0 && (
+                                <div className="sm:col-span-2">
+                                    <dt className="text-[10px] font-mono uppercase tracking-widest text-xmb-fg/40 mb-2">
+                                        Technologies
+                                    </dt>
+                                    <dd className="flex flex-wrap gap-2">
+                                        {projectMeta.technologies.map((tech) => (
+                                            <span
+                                                key={tech}
+                                                className="text-[11px] font-mono px-2.5 py-1 rounded-md border border-xmb-fg/15 bg-xmb-fg/5 text-xmb-fg/80"
+                                            >
+                                                {tech}
+                                            </span>
+                                        ))}
+                                    </dd>
+                                </div>
+                            )}
+                        </motion.dl>
                     )}
 
                     {/* MDX Content */}

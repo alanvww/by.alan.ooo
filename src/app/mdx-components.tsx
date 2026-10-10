@@ -11,6 +11,8 @@ import { Figure } from '@/components/mdx/Figure'
 import { Demo } from '@/components/mdx/Demo'
 import { Tabs, Tab } from '@/components/mdx/Tabs'
 import { MDXImage } from '@/components/mdx/MDXImage'
+import { MDXVideo } from '@/components/mdx/MDXVideo'
+import { ImageGrid } from '@/components/mdx/ImageGrid'
 import { getLocalImageDimensions } from '@/lib/content-assets'
 
 // box-shadow stays in the transition list: the global focus ring
@@ -18,13 +20,15 @@ import { getLocalImageDimensions } from '@/lib/content-assets'
 // every other state change, not snap.
 const LINK_CLASS = 'text-xmb-fg/90 underline underline-offset-4 decoration-xmb-fg/20 hover:decoration-xmb-fg/60 transition-[color,background-color,border-color,text-decoration-color,box-shadow] duration-150'
 
+const VIDEO_EXT_RE = /\.(mp4|webm|mov)($|[?#])/i
+
 const BLOCK_HTML_TAGS = new Set([
     'p', 'div', 'pre', 'blockquote', 'table', 'ul', 'ol', 'figure', 'hr',
-    'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'video',
 ])
 
 const BLOCK_COMPONENTS = new Set<unknown>([
-    Alert, Callout, Card, Figure, Demo, Tabs, Tab, CodeBlock, MDXImage, Image,
+    Alert, Callout, Card, Figure, Demo, Tabs, Tab, CodeBlock, MDXImage, MDXVideo, ImageGrid, Image,
 ])
 
 function isInternalPath(url?: string): url is string {
@@ -180,6 +184,18 @@ export const mdxComponents: MDXComponents = {
     img: ({ src, alt, title }: React.ImgHTMLAttributes<HTMLImageElement>) => {
         if (typeof src !== 'string' || !src) return null
 
+        // Video files embedded via standard markdown ![alt](./clip.mp4 "caption")
+        // or Obsidian ![[clip.mp4]] automatically route to MDXVideo.
+        if (VIDEO_EXT_RE.test(src)) {
+            return (
+                <MDXVideo
+                    src={src}
+                    alt={alt ?? ''}
+                    caption={title?.trim() || undefined}
+                />
+            )
+        }
+
         // ![alt](src "caption") — the quoted title renders as a visible caption;
         // alt stays purely for accessibility. Dimensions are probed server-side
         // so the dot-wave placeholder occupies the exact final box.
@@ -205,4 +221,8 @@ export const mdxComponents: MDXComponents = {
     Tab,
     Badge,
     Image,
+    Video: MDXVideo,
+    MDXVideo,
+    ImageGrid,
+    Gallery: ImageGrid,
 }

@@ -5,17 +5,29 @@ export type XMBItemType = 'project' | 'post' | 'profile' | 'link' | 'folder';
 export interface XMBProjectMeta {
   tags?: string[];
   date?: string;
+  updatedDate?: string;
   featured?: boolean;
   coverImage?: string;
   excerpt?: string;
   slug?: string;
+  order?: number;
+  role?: string;
+  collaborators?: string[];
+  timeframe?: string;
+  technologies?: string[];
+  status?: 'completed' | 'in-progress' | 'archived';
+  projectUrl?: string;
+  githubUrl?: string;
+  demoUrl?: string;
 }
 
 export interface XMBPostMeta {
   tags?: string[];
   date?: string;
+  updatedDate?: string;
   readTime?: number;
   slug?: string;
+  order?: number;
 }
 
 export type XMBItemMeta = XMBProjectMeta | XMBPostMeta;

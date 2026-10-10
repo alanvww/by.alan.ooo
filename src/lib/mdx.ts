@@ -7,6 +7,11 @@ import { cache } from 'react';
 const contentDirectory = path.join(process.cwd(), 'src/content');
 const isDev = process.env.NODE_ENV === 'development';
 
+export interface ProjectLink {
+  label: string;
+  href: string;
+}
+
 // Define TypeScript interfaces for frontmatter
 export interface BaseFrontmatter {
   title: string;
@@ -20,6 +25,7 @@ export interface BaseFrontmatter {
   draft?: boolean;
   featured?: boolean;
   readTime?: number;
+  order?: number;
 }
 
 export interface PostFrontmatter extends BaseFrontmatter {
@@ -34,6 +40,10 @@ export interface ProjectFrontmatter extends BaseFrontmatter {
   demoUrl?: string;
   status?: 'completed' | 'in-progress' | 'archived';
   permalink?: string;
+  role?: string;
+  collaborators?: string[];
+  timeframe?: string;
+  links?: ProjectLink[];
 }
 
 /**
@@ -234,11 +244,24 @@ function isPublished(data: Record<string, unknown>): boolean {
   return true;
 }
 
-function normalizeTags(raw: unknown): string[] | undefined {
+function normalizeStringList(raw: unknown): string[] | undefined {
   const list = Array.isArray(raw) ? raw : typeof raw === 'string' ? [raw] : undefined;
   if (!list) return undefined;
-  const cleaned = list.map((tag) => String(tag).trim()).filter(Boolean);
+  const cleaned = list.map((item) => String(item).trim()).filter(Boolean);
   return cleaned.length > 0 ? cleaned : undefined;
+}
+
+function normalizeProjectLinks(raw: unknown): ProjectLink[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const links = raw.flatMap((entry) => {
+    if (!entry || typeof entry !== 'object') return [];
+    const { label, href } = entry as Record<string, unknown>;
+    if (typeof label === 'string' && label.trim() && typeof href === 'string' && href.trim()) {
+      return [{ label: label.trim(), href: href.trim() }];
+    }
+    return [];
+  });
+  return links.length > 0 ? links : undefined;
 }
 
 const parseContentEntry = <T extends BaseFrontmatter>(entry: ContentEntry): ParsedContentEntry<T> => {
@@ -251,7 +274,11 @@ const parseContentEntry = <T extends BaseFrontmatter>(entry: ContentEntry): Pars
     firstHeading(content) ||
     humanizeSlug(entry.slug);
   const cleanedContent = stripLeadingMatchingH1(content, title);
-  const tags = normalizeTags(data.tags);
+  const tags = normalizeStringList(data.tags);
+  const collaborators = normalizeStringList(data.collaborators);
+  const technologies = normalizeStringList(data.technologies);
+  const links = normalizeProjectLinks(data.links);
+  const order = typeof data.order === 'number' && Number.isFinite(data.order) ? data.order : undefined;
   const updatedDate =
     data.updatedDate !== undefined ? normalizeDate(data.updatedDate, stat.mtime) : undefined;
 
@@ -261,10 +288,14 @@ const parseContentEntry = <T extends BaseFrontmatter>(entry: ContentEntry): Pars
     date: normalizeDate(data.date, stat.mtime),
     ...(updatedDate ? { updatedDate } : {}),
     ...(tags ? { tags } : { tags: undefined }),
+    ...(collaborators ? { collaborators } : { collaborators: undefined }),
+    ...(technologies ? { technologies } : { technologies: undefined }),
+    ...(links ? { links } : { links: undefined }),
+    ...(order !== undefined ? { order } : { order: undefined }),
     excerpt: (typeof data.excerpt === 'string' && data.excerpt.trim()) || deriveExcerpt(cleanedContent),
     readTime: typeof data.readTime === 'number' ? data.readTime : estimateReadTime(cleanedContent),
     slug: entry.slug,
-  } as T;
+  } as unknown as T;
 
   return {
     ...entry,
@@ -295,10 +326,20 @@ function getVisibleContentEntries<T extends BaseFrontmatter>(
   );
 }
 
+function compareFrontmatter(a: BaseFrontmatter, b: BaseFrontmatter): number {
+  const aHasOrder = typeof a.order === 'number' && Number.isFinite(a.order);
+  const bHasOrder = typeof b.order === 'number' && Number.isFinite(b.order);
+  if (aHasOrder && bHasOrder && a.order !== b.order) {
+    return a.order! - b.order!;
+  }
+  if (aHasOrder !== bHasOrder) {
+    return aHasOrder ? -1 : 1;
+  }
+  return new Date(b.date).getTime() - new Date(a.date).getTime();
+}
+
 function sortByDate<T extends BaseFrontmatter>(content: T[]): T[] {
-  return [...content].sort((a, b) => {
-    return new Date(b.date).getTime() - new Date(a.date).getTime();
-  });
+  return [...content].sort(compareFrontmatter);
 }
 
 function isRelativePath(value: string): boolean {
@@ -323,8 +364,9 @@ function resolveFrontmatterAssets<T extends BaseFrontmatter>(
 /**
  * Point relative asset references at the public /content/... URL space.
  * Handles markdown images (`![x](img.png)` and `![x](./img.png)`), raw
- * `<img src>`, `<Image src>`, `<Figure src>`, and JSX `src={"./..."}` —
- * skipping fenced and inline code spans so code examples are never mutated.
+ * `<img src>`, `<Image src>`, `<Figure src>`, `<video src>`, `<Video src>`,
+ * and JSX `src={"./..."}` — skipping fenced and inline code spans so code
+ * examples are never mutated.
  */
 function rewriteRelativeSegment(segment: string, basePath: string): string {
   const withMarkdownImages = segment.replace(
@@ -338,7 +380,7 @@ function rewriteRelativeSegment(segment: string, basePath: string): string {
   );
 
   const withHtmlImages = withAngleBracketImages.replace(
-    /(<(?:img|Image|Figure)[^>]*\s+src=)(["'])(?![a-z][a-z0-9+.-]*:|\/)(?:\.\/)?/gi,
+    /(<(?:img|Image|Figure|video|Video)[^>]*\s+src=)(["'])(?![a-z][a-z0-9+.-]*:|\/)(?:\.\/)?/gi,
     `$1$2${basePath}/`,
   );
 
@@ -408,9 +450,7 @@ export const getContentManifest = cache(async (): Promise<Record<string, ParsedC
   return Object.fromEntries(
     types.map((type) => [
       type,
-      [...getVisibleContentEntries(type)].sort((a, b) => {
-        return new Date(b.frontmatter.date).getTime() - new Date(a.frontmatter.date).getTime();
-      }),
+      [...getVisibleContentEntries(type)].sort((a, b) => compareFrontmatter(a.frontmatter, b.frontmatter)),
     ]),
   );
 });

@@ -63,22 +63,15 @@ All three image forms work. In `bun dev` they are served directly from
 | Extension | Behavior |
 | --------- | -------- |
 | `.md` | Plain markdown. `{braces}` and `<angle brackets>` in prose are safe. No JSX. This is what Obsidian/Zed output — **default to this**. |
-| `.mdx` | Full MDX: can use `<Figure>`, `<Demo>`, `<Tabs>`, `<Callout>` and JSX expressions. A stray `{` or `<` in prose is a syntax error, so reserve `.mdx` for files that need components. |
+| `.mdx` | Full MDX: can use `<Figure>`, `<Video>`, `<ImageGrid>`, `<Demo>`, `<Tabs>`, `<Callout>` and JSX expressions. A stray `{` or `<` in prose is a syntax error, so reserve `.mdx` for files that need components. |
 
 One caveat for `.md`: raw HTML fragments (including accidental `<word>` in
 prose) are dropped silently rather than rendered. Escape as `\<word\>` or wrap
 in backticks when you mean the literal characters.
 
-One caveat for `.mdx`: next-mdx-remote v6 blocks JavaScript expressions by
-default (`blockJS: true`). On the dynamic content pages
-(`src/app/[type]/[slug]/page.tsx`) any JSX attribute expression —
-`<Tabs items={[...]}>`, inline `{expressions}` — is silently stripped at
-compile time: string attributes like `title="..."` survive, expression
-attributes arrive as `undefined`. In posts and projects, stick to string
-attributes for custom components. A page rendering trusted content can opt
-out the way the standalone CV page does: `src/app/cv/page.tsx` passes
-`options={{ mdxOptions, blockJS: false }}` because `src/content/cv.mdx` uses
-`<CVEntry links={[...]} />` (see the comment there).
+In `.mdx` files, `blockJS: false` is enabled (while `blockDangerousJS: true`
+remains active), so JSX expression props like `<ImageGrid cols={2}>` work in
+both posts and projects.
 
 ---
 
@@ -91,6 +84,7 @@ out the way the standalone CV page does: `src/app/cv/page.tsx` passes
 [[gestura|my hand-tracking app]] → same link, custom label
 [[Some Future Note]]            → renders as inert dashed text until the note exists
 ![[image.png]]                  → embeds a colocated image
+![[demo.mp4]]                   → embeds a colocated looping video
 ```
 
 Unresolved links are not errors — they mark notes you haven't written yet.
@@ -105,11 +99,15 @@ Unresolved links are not errors — they mark notes you haven't written yet.
 - **Heading anchors**: hover a heading for its `#` link
 - **External links** open in a new tab automatically; in-page `#anchors` and
   internal `/paths` stay in-tab
-
-Images get intrinsic dimensions read at build time (no layout shift), show an
-XMB-style dot-wave placeholder while loading, and a markdown title
-(`![alt](src "caption")`) renders as a visible caption — `alt` stays for
-accessibility. External image URLs work from any host.
+- **Images & Videos**:
+  - Local images get intrinsic dimensions read at build time (no layout shift),
+    show an XMB-style dot-wave placeholder while loading, and a markdown title
+    (`![alt](src "caption")`) renders as a visible caption.
+  - Video files (`.mp4`, `.webm`, `.mov`) referenced via `![alt](./demo.mp4 "caption")`,
+    `![[demo.mp4]]`, or `<Video src="./demo.mp4" caption="..." />` render as
+    silent looping portfolio videos (or YouTube/Vimeo embeds).
+  - Multi-column galleries in `.mdx`: wrap markdown images or `<Figure>` blocks
+    in `<ImageGrid cols={2} caption="...">...</ImageGrid>`.
 
 ---
 
@@ -121,18 +119,29 @@ accessibility. External image URLs work from any host.
 | ----- | ---- | ------- |
 | `title` | string | first `# Heading`, else filename |
 | `date` | YYYY-MM-DD | file modification time |
+| `updatedDate` | YYYY-MM-DD | none — shown in header when different from `date` |
 | `excerpt` | string | first paragraph |
 | `coverImage` | path/URL | none — `./name.jpg` resolves to the colocated file |
 | `tags` | string[] | none — first tag groups projects into XMB folders |
 | `draft` | boolean | `false` — `true` hides from lists and production (still viewable at its URL in dev) |
 | `publish` | boolean | `true` — `false` behaves like `draft: true` |
 | `featured` | boolean | `false` — featured projects get a Featured folder |
-| `readTime` | number | computed |
+| `order` | number | none — explicit ascending sort priority before `date` |
+| `readTime` | number | computed (rendered in post headers and XMB preview) |
 
 ### Project-only fields (optional)
 
-`projectUrl`, `githubUrl`, `demoUrl`, `technologies` (string[]),
-`status` (`completed` | `in-progress` | `archived`)
+| Field | Type | Rendered Location |
+| ----- | ---- | ----------------- |
+| `projectUrl` | URL/path | Header "Live Project" CTA pill |
+| `demoUrl` | URL/path | Header "Live Demo" CTA pill |
+| `githubUrl` | URL | Header "Source Code" CTA pill |
+| `links` | `{ label, href }[]` | Additional header CTA pills |
+| `role` | string | Case Study Spec Bar & XMB Preview eyebrow |
+| `collaborators` | string[] | Case Study Spec Bar |
+| `timeframe` | string | Header eyebrow, Case Study Spec Bar & XMB Preview |
+| `technologies` | string[] | Case Study Spec Bar & XMB Preview pills |
+| `status` | `completed` \| `in-progress` \| `archived` | Header status badge (when not `completed`) |
 
 ### Slugs
 
@@ -183,6 +192,8 @@ Legacy images under `public/assets/...` keep working via absolute paths.
 - **"Hide/unpublish something"** → add `draft: true` to its frontmatter.
 - **"Scaffold interactively"** → `bun run new` (refuses to overwrite existing
   slugs).
+- **"Validate content & links"** → `bun run validate:content` checks frontmatter,
+  broken media references, duplicate hero images, and truncated paragraphs.
 - **"Check everything renders"** → `/posts/pipeline-test` is a permanent draft
   exercising every pipeline feature; view it in dev after pipeline changes.
 - **Do not** set `slug` in frontmatter, hand-copy images into `public/`, or

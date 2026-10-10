@@ -14,6 +14,12 @@ const isUnoptimizedImage = (src: string): boolean =>
 
 const XMBPreview = ({ item }: XMBPreviewProps) => {
   const unoptimized = item.image ? isUnoptimizedImage(item.image) : false;
+  const projectMeta = item.meta && 'technologies' in item.meta ? item.meta : undefined;
+  const postMeta = item.meta && 'readTime' in item.meta ? item.meta : undefined;
+  const metaPills = (projectMeta?.technologies && projectMeta.technologies.length > 0)
+    ? projectMeta.technologies
+    : (item.meta?.tags ?? []);
+
   return (
     <motion.div
       initial={{ opacity: 0, x: 100 }}
@@ -82,6 +88,16 @@ const XMBPreview = ({ item }: XMBPreviewProps) => {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.08, ...XMB_ANIMATION.TWEEN }}
             >
+                {(projectMeta?.role || projectMeta?.timeframe || (item.type === 'post' && postMeta?.readTime)) && (
+                    <div className="mb-2 flex flex-wrap items-center justify-center md:justify-start gap-2 text-[10px] font-mono uppercase tracking-widest text-xmb-fg/45">
+                        {projectMeta?.role && <span>{projectMeta.role}</span>}
+                        {projectMeta?.role && projectMeta?.timeframe && <span>·</span>}
+                        {projectMeta?.timeframe && <span>{projectMeta.timeframe}</span>}
+                        {item.type === 'post' && postMeta?.readTime && (
+                            <span>{postMeta.readTime} min read</span>
+                        )}
+                    </div>
+                )}
                 <h2 className="text-3xl md:text-5xl font-extralight tracking-tight text-xmb-fg drop-shadow-[0_0_12px_color-mix(in_srgb,var(--color-xmb-fg)_25%,transparent)]">
                     {item.title}
                 </h2>
@@ -97,14 +113,14 @@ const XMBPreview = ({ item }: XMBPreviewProps) => {
                 {item.description}
             </motion.p>
 
-            {item.meta?.tags && (
+            {metaPills.length > 0 && (
                 <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.16, duration: 0.2, ease: EASE.ENTER }}
                     className="flex flex-wrap justify-center md:justify-start gap-2"
                 >
-                    {(item.meta.tags as string[]).map((tag: string) => (
+                    {metaPills.slice(0, 6).map((tag: string) => (
                         <span key={tag} className="text-[10px] font-mono uppercase tracking-widest px-2 py-1 bg-xmb-fg/10 rounded border border-xmb-fg/10">
                             {tag}
                         </span>

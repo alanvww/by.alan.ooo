@@ -32,7 +32,7 @@ export interface RemarkWikilinksOptions {
 }
 
 const WIKILINK_RE = /(!)?\[\[([^\][|]+?)(?:\|([^\][]+?))?\]\]/g;
-const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp|avif|svg)$/i;
+const MEDIA_EXT_RE = /\.(png|jpe?g|gif|webp|avif|svg|mp4|webm|mov)$/i;
 
 /** Parents whose text children should not be transformed. */
 const SKIP_PARENTS = new Set(['link', 'linkReference', 'definition']);
@@ -55,8 +55,8 @@ function transformText(node: MdastNode, options: RemarkWikilinksOptions): MdastN
       result.push({ type: 'text', value: value.slice(lastIndex, match.index) });
     }
 
-    if (bang && IMAGE_EXT_RE.test(target)) {
-      // ![[image.png]] — colocated image embed
+    if (bang && MEDIA_EXT_RE.test(target)) {
+      // ![[image.png]] or ![[clip.mp4]] — colocated media embed
       result.push({
         type: 'image',
         url: `${options.assetBase}/${encodeURI(target)}`,

@@ -30,6 +30,10 @@ import {
   Cube,
   VirtualReality,
   Backpack,
+  ArrowUpRight,
+  Globe,
+  Play,
+  Clock,
 } from '@phosphor-icons/react';
 import Crab from '@/components/icons/Crab';
 import type { XMBIconName } from '@/lib/xmb-constants';
@@ -62,6 +66,10 @@ const iconRegistry = {
   VirtualReality,
   Backpack,
   Crab,
+  ArrowUpRight,
+  Globe,
+  Play,
+  Clock,
 } as const;
 
 interface XMBIconProps {

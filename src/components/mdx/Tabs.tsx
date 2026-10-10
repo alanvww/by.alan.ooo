@@ -12,12 +12,12 @@ export function Tabs({ children, defaultTab = 0 }: { children: ReactNode; defaul
   const clampedActive = tabs.length > 0 ? Math.min(activeTab, tabs.length - 1) : 0
 
   if (tabs.length === 0) {
-    return <div className="my-6 p-4">{children}</div>
+    return <div className="my-8 p-4">{children}</div>
   }
 
   return (
-    <div className="my-6">
-      <div role="tablist" className="flex border-b border-border">
+    <div className="my-8 rounded-xl border border-xmb-fg/10 bg-xmb-fg/5 overflow-hidden backdrop-blur-sm">
+      <div role="tablist" className="flex border-b border-xmb-fg/10 bg-xmb-fg/5 overflow-x-auto">
         {tabs.map((tab, index) => {
           const label = tab.props.label || `Tab ${index + 1}`
           const isSelected = clampedActive === index
@@ -30,7 +30,11 @@ export function Tabs({ children, defaultTab = 0 }: { children: ReactNode; defaul
               aria-selected={isSelected}
               aria-controls={`${baseId}-panel-${index}`}
               onClick={() => setActiveTab(index)}
-              className={`px-4 py-2 text-sm font-medium transition-colors ${isSelected ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+              className={`px-4 py-2.5 text-xs font-mono uppercase tracking-widest transition-colors ${
+                isSelected
+                  ? 'border-b-2 border-xmb-fg text-xmb-fg bg-xmb-fg/5'
+                  : 'text-xmb-fg/50 hover:text-xmb-fg/80'
+              }`}
             >
               {label}
             </button>
@@ -41,7 +45,7 @@ export function Tabs({ children, defaultTab = 0 }: { children: ReactNode; defaul
         id={`${baseId}-panel-${clampedActive}`}
         role="tabpanel"
         aria-labelledby={`${baseId}-tab-${clampedActive}`}
-        className="p-4"
+        className="p-5 [&>p:last-child]:mb-0"
       >
         {tabs[clampedActive]}
       </div>
@@ -52,5 +56,6 @@ export function Tabs({ children, defaultTab = 0 }: { children: ReactNode; defaul
 export function Tab({ children }: { label?: string; children: ReactNode }) {
   return <div>{children}</div>
 }
+
 
 
