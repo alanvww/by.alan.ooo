@@ -1,0 +1,39 @@
+---
+title: "Webcam Handpose Neural Network"
+excerpt: "Training an in-browser ml5.js neural network on hand skeletal keypoints to steer a live slit-scan webcam brush."
+date: "2024-04-02"
+timeframe: "Spring 2024"
+role: "Creative Technologist"
+technologies:
+  - p5.js
+  - ml5.js (HandPose & NeuralNetwork)
+  - JavaScript
+coverImage: "./train.png"
+tags:
+  - creative-coding
+  - machine-learning
+status: "completed"
+publish: true
+---
+
+An interactive machine learning experiment built at NYU ITP that chains **ml5.js HandPose** skeletal landmark extraction into a custom client-side **ml5.neuralNetwork** classifier—allowing users to train directional hand gestures in the browser and immediately use them to paint with a live webcam feed.
+
+## In-Browser Data Collection & Training
+
+Rather than writing brittle coordinate thresholds for finger angles, the sketch uses the 21 3D hand keypoints output by `ml5.handPose` as feature vectors for a custom 4-class neural network (`Up`, `Down`, `Left`, `Right`):
+
+1. **Sample Capture**: Buttons below the canvas (`Add Hand Point Up Data`, `Down`, `Left`, `Right`) record labeled snapshots of the current hand skeleton directly in the browser.
+2. **Client-Side Training**: Clicking `Train and Save Model` normalizes the keypoint inputs, runs training epochs via `ml5.neuralNetwork`, and exports the trained weights for real-time inference.
+
+## Gesture-Driven Slit-Scan Canvas
+
+Once trained, continuous classification results (`Up`, `Down`, `Left`, `Right`) translate the live webcam viewport across the p5.js canvas without clearing previous frames—generating layered slit-scan trails as you point in different directions.
+
+<ImageGrid cols={2} caption="Live gesture-controlled movement (left) and accumulated slit-scan trail composition (right)">
+  ![Live webcam frame moving across the canvas via hand gesture classification](./move.gif)
+  ![Slit-scan trail composition produced by steering the webcam brush](./result.png)
+</ImageGrid>
+
+<Callout type="note" title="Author Review Note">
+  Add p5.js Web Editor / GitHub link (`projectUrl` / `githubUrl`) if available, and link to any related ITP coursework (such as [[ml5-research|ml5.js Next-Gen Documentation]] or [[gestura|Gestura]]).
+</Callout>

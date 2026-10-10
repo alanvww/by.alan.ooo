@@ -1,0 +1,153 @@
+---
+title: "Understanding Networks: Protocol & Packet Lab"
+excerpt: "Network forensics, global routing topology, email authentication diagrams, and a face-tracked OSC-to-TCP game controller from NYU ITP's Understanding Networks."
+date: "2024-12-02"
+timeframe: "Fall 2024"
+role: "Network Engineer & Creative Technologist"
+technologies:
+  - TCP / UDP Sockets
+  - Node.js
+  - OSC (Open Sound Control)
+  - Linux / UFW
+  - tcpdump
+  - traceroute
+  - DNS (NextDNS & Tailscale MagicDNS)
+coverImage: "./explainer-flow.png"
+tags:
+  - design-engineering
+  - creative-coding
+status: "completed"
+publish: true
+---
+
+A collection of network forensics investigations, protocol architecture diagrams, and socket hardware/software experiments from Tom Igoe's **Understanding Networks** course at NYU ITP (Fall 2024). Across the semester, these labs traced how packets move from local interfaces and campus Wi-Fi resolvers out across submarine cables, autonomous systems, cloud firewalls, and custom TCP game servers.
+
+---
+
+## Lab 1 — Cloud Firewall Forensics (`ufw.log` & ASN Lookups)
+
+Within hours of provisioning a fresh Ubuntu droplet (`ubuntu-unetwork-1` at `137.184.200.216`) on DigitalOcean, `/var/log/ufw.log` accumulated over 1,400 blocked inbound TCP `SYN` probes from automated internet-wide scanners.
+
+<ImageGrid cols={2} caption="Network interface configuration (eth0 / eth1 / lo) and rapid growth of /var/log/ufw.log on ubuntu-unetwork-1">
+  ![ifconfig output on ubuntu-unetwork-1](./droplet-ifconfig.png)
+  ![Line count growth in /var/log/ufw.log](./ufw-log-line-count.png)
+</ImageGrid>
+
+![Parsing UFW BLOCK entries in /var/log/ufw.log with sed](./ufw-log-tail.png "Inspecting source IPs, target ports (DPT=26044, 19189, 3128, 88, 6379), and TCP window sizes in /var/log/ufw.log")
+
+### Tracing Autonomous Systems (`whois` & `ipinfo.io`)
+
+By extracting source IPs from blocked `SYN` packets and querying `whois` and `ipinfo.io`, the traffic mapped back to hosting providers and internet survey scanners across Amsterdam, Kansas City, and Bangkok:
+
+| Source IP | ASN / Organization | Location | Targeted Ports / Role |
+| :--- | :--- | :--- | :--- |
+| `79.110.62.70` | `AS215766` Emanuel Hosting Ltd. | Amsterdam, NL (registered London, GB) | Repeated probes on ports `5787`, `9183` |
+| `45.84.89.2` / `.3` | `AS401172` Inspici LLC (`survey.inspici.com`) | Kansas City, MO, US | Internet-wide census scanning |
+| `92.63.197.192` | `AS210848` Telkom Internet LTD | Amsterdam, NL | Hosting range scanner |
+| `45.150.130.98` | `AS56309` Siamdata / ReadyIDC Co., Ltd. | Nonthaburi, TH | Automated port sweep |
+
+<ImageGrid cols={3} caption="WHOIS RIPE registry query and IPInfo ASN lookups for top firewall-blocked source IPs">
+  ![RIPE WHOIS output for 79.110.62.70](./whois-79-110-62-70.png)
+  ![IPInfo lookup for 79.110.62.70](./ipinfo-79-110-62-70.png)
+  ![IPInfo lookup for 45.84.89.2](./ipinfo-45-84-89-2.png)
+  ![IPInfo lookup for 45.84.89.3](./ipinfo-45-84-89-3.png)
+  ![IPInfo lookup for 92.63.197.192](./ipinfo-92-63-197-192.png)
+  ![IPInfo lookup for 45.150.130.98](./ipinfo-45-150-130-98.png)
+</ImageGrid>
+
+---
+
+## Lab 2 — Email Authentication Architecture (SPF, DKIM & DMARC)
+
+To document how modern mail servers prevent domain spoofing, I designed visual protocol diagrams comparing **SPF** (Sender Policy Framework IP allowlisting), **DKIM** (DomainKeys Identified Mail public/private key signature verification), and **DMARC** (alignment enforcement and quarantine/rejection policies).
+
+<ImageGrid cols={2} caption="Overview of SPF, DMARC, and DKIM responsibilities and end-to-end DNS verification flow">
+  ![Types of email authentication: SPF, DMARC, and DKIM](./email-auth-types.png)
+  ![End-to-end SPF, DKIM, and DMARC DNS lookup diagram](./email-verification-diagram.png)
+</ImageGrid>
+
+---
+
+## Lab 3 — Global Routing & `traceroute` Topology
+
+To see how physical geography and autonomous system peering shape packet latency, I ran `traceroute` to `alan.ooo` (Cloudflare anycast `172.67.136.143`), `youtube.com`, `google.com`, `reddit.com`, and `torproject.org` from two vantage points:
+
+1. **Local Residential Fiber (Verizon FiOS, NYC/NJ `98.109.25.1`)**: Reaches Cloudflare and Google edge nodes in **6–8 ms** within the New York metro area, or routes via Hurricane Electric (`he.net`) from NYC (`nyc4`) to Dallas (`dal1`/`dal2`) in **~43 ms** for `torproject.org`.
+2. **VPN Exit Node in Hong Kong (`138.199.62.204`, Datacamp Limited / CDN77 HKG)**: Introduces a **~220–260 ms** trans-Pacific baseline, routing across Equinix Hong Kong (`15169.hkg.equinix.com`), NTT Global IP Network (`tokyjp10.jp.bb.gin.ntt.net`), Taipei, and Manila (`mnl07s01-in-f14.1e100.net`).
+
+<ImageGrid cols={3} caption="Vantage point IP lookups: Verizon FiOS (Jersey City/NYC), Hong Kong VPN exit, and Prague VPN exit">
+  ![Verizon Business IP lookup 98.109.25.1](./ip-lookup-verizon-nyc.png)
+  ![Hong Kong Datacamp Limited IP lookup 138.199.62.204](./ip-lookup-hk-vpn.png)
+  ![Prague Datacamp Limited IP lookup 45.134.215.9](./ip-lookup-prague-vpn.png)
+</ImageGrid>
+
+<ImageGrid cols={2} caption="Raw traceroute hop logs comparing local Verizon FiOS paths against Hong Kong VPN paths">
+  ![Local traceroute to alan.ooo in 7 hops (7.5 ms)](./traceroute-alan-ooo-local.png)
+  ![Local traceroute to torproject.org via Hurricane Electric NYC to Dallas](./traceroute-torproject.png)
+  ![Local traceroute to youtube.com in 8 hops (8.2 ms)](./traceroute-youtube-local.png)
+  ![Hong Kong VPN traceroute to youtube.com terminating at Manila edge (255 ms)](./traceroute-youtube-hk-vpn.png)
+</ImageGrid>
+
+![Hong Kong VPN traceroute to reddit.com via NTT Hong Kong and Tokyo backbone routers](./traceroute-reddit-hk-vpn.png "Traceroute to reddit.com traversing CDN77 HKG and NTT Tokyo (tokyjp10.jp.bb.gin.ntt.net)")
+
+<ImageGrid cols={2} caption="Geographic hop visualizations mapped via Traceroute Mapper">
+  ![US traceroute map to alan.ooo](./traceroute-map-alan-ooo-us.png)
+  ![Hong Kong VPN traceroute map to alan.ooo](./traceroute-map-alan-ooo-hk.png)
+  ![US metro traceroute map to youtube.com](./traceroute-map-youtube-us.png)
+  ![Global traceroute map to google.com via Hong Kong and Manila](./traceroute-map-google-hk.png)
+</ImageGrid>
+
+![Regional East Asia routing hops between Hong Kong, Taipei, and Manila](./traceroute-map-east-asia-hops.png "Zoomed view of regional hops between Hong Kong (hop 7), Taipei (hop 8), and Manila (hop 13)")
+
+---
+
+## Lab 4 — Face-Tracked OSC-to-TCP Controller for `BallDropServer`
+
+For our networked multiplayer game assignment using Tom Igoe's TCP **`BallDropServer`** (where players connect over raw TCP sockets on port `8080` and send `w`, `a`, `s`, `d` ASCII commands to move their paddle), I built a custom **Node.js UDP-to-TCP bridge** (`OSCServer/server.js`).
+
+An iPhone running ARKit face tracking streams real-time facial landmark coordinates over Wi-Fi via **OSC (Open Sound Control)** over UDP. The Node.js server listens on the local UDP port, thresholds head tilt/position into directional commands (`w`/`a`/`s`/`d`), and writes them directly to the persistent `net.Socket` TCP connection on `BallDropServer`.
+
+<Video src="./balldrop-face-controller.mp4" controls caption="Controlling the TCP BallDropServer client via real-time iPhone ARKit Face Tracking over OSC (UDP) bridged to a Node.js TCP socket" />
+
+<ImageGrid cols={2} caption="Local and classroom tests of the multiplayer BallDropServer TCP game">
+  <Video src="./balldrop-server-1.mov" controls caption="BallDropServer running locally on 127.0.0.1:8080" />
+  <Video src="./balldrop-server-2.mov" controls caption="Connecting over the NYU LAN to the shared classroom BallDropServer instance" />
+</ImageGrid>
+
+---
+
+## Lab 5 — Web Tracking Audits & DNS Packet Capture (`tcpdump`)
+
+The final module examined application-layer tracking and DNS transport privacy on the NYU campus network (`10.18.207.216`).
+
+### Browser Fingerprinting & Blacklight Audits
+
+Testing browser configurations against the EFF's **Cover Your Tracks** tool demonstrated the shift from standard ad/tracker blocking (which still left a unique browser fingerprint) to randomized fingerprint protection. Running The Markup's **Blacklight** inspector across four domains highlighted the contrast between static/privacy-first sites (`www.alan.ooo` and `ml5js.org` with **0 trackers / 0 third-party cookies**), `by.alan.ooo`, and institutional portals (`itp.nyu.edu/itp/` with **4 ad trackers and 5 third-party cookies**).
+
+<ImageGrid cols={3} caption="EFF Cover Your Tracks results before and after enabling fingerprint randomization">
+  ![Partial protection with unique browser fingerprint](./cover-your-tracks-default.png)
+  ![Strong protection with randomized browser fingerprint](./cover-your-tracks-hardened-1.png)
+  ![Verified randomized fingerprint status](./cover-your-tracks-hardened-2.png)
+</ImageGrid>
+
+<ImageGrid cols={2} caption="The Markup Blacklight privacy inspections across alan.ooo, by.alan.ooo, ml5js.org, and itp.nyu.edu">
+  ![Blacklight audit of www.alan.ooo: 0 ad trackers, 0 third-party cookies](./blacklight-alan-ooo.png)
+  ![Blacklight audit of ml5js.org: 0 ad trackers, 0 third-party cookies](./blacklight-ml5js-org.png)
+  ![Blacklight audit of by.alan.ooo](./blacklight-by-alan-ooo.png)
+  ![Blacklight audit of itp.nyu.edu/itp/: 4 ad trackers, 5 third-party cookies](./blacklight-itp-nyu-edu.png)
+</ImageGrid>
+
+### Live Port 53 Inspection with `tcpdump`
+
+Capturing live port `53` traffic on `en0` (`sudo tcpdump -i en0 -s0 port 53`) and the Tailscale tunnel interface `utun0` (`sudo tcpdump -i utun0 -s0 port 53`) exposed every plaintext `A`, `AAAA`, `CNAME`, `PTR`, and `Type65` (HTTPS) DNS query leaving the machine—and demonstrated how routing through **Tailscale MagicDNS** (`100.100.100.100`) and **NextDNS** changes resolver visibility.
+
+<ImageGrid cols={2} caption="Plaintext UDP port 53 packet captures across NYU campus DNS, NextDNS, and Tailscale MagicDNS">
+  ![tcpdump on en0 showing queries to NYU campus resolver dns1-ha.noc.nyu.edu](./tcpdump-dns-nyu-resolver.png)
+  ![tcpdump on en0 showing queries routed to dns1.nextdns.io](./tcpdump-dns-nextdns.png)
+  ![tcpdump showing DNS-SD PTR and service queries via MagicDNS](./tcpdump-dns-tailscale-ptr.png)
+  ![tcpdump on utun0 verifying NextDNS test endpoints over Tailscale MagicDNS](./tcpdump-dns-utun0-tailscale.png)
+</ImageGrid>
+
+<Callout type="note" title="Author Review Note">
+  Let me know if you want to split any of these 5 modules (e.g., the Face-Tracked OSC-to-TCP `BallDropServer` controller or the Email Authentication diagrams) into standalone posts under `src/content/posts/` or keep them unified as a single *Understanding Networks* portfolio entry.
+</Callout>

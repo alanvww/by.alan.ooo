@@ -1,0 +1,60 @@
+---
+title: "ml5.js Next-Gen Documentation"
+excerpt: "Interactive documentation and live browser-based code runner for the ml5.js 1.0 release at NYU ITP."
+date: "2024-03-12"
+timeframe: "Spring 2024"
+role: "Research & Documentation Contributor"
+projectUrl: "https://docs.ml5js.org"
+githubUrl: "https://github.com/ml5js/ml5-website-v02-docsify"
+technologies:
+  - ml5.js
+  - p5.js
+  - JavaScript
+  - Docsify
+  - WebGL
+coverImage: "./ml5-docs-facemesh.png"
+tags:
+  - design-engineering
+  - machine-learning
+  - creative-coding
+status: "completed"
+publish: true
+---
+
+Part of the **ml5.js 1.0** redesign and research effort at NYU ITP, focused on making client-side machine learning approachable for artists, students, and creative coders directly in the browser.
+
+## Interactive Code Runner & Model Reference
+
+Rather than requiring learners to switch between static API reference pages and an external editor, the updated documentation embeds a live **p5.js + ml5.js code editor and webcam canvas** directly inside each model guide (`BodyPose`, `HandPose`, `FaceMesh`, `ImageClassifier`, and `NeuralNetwork`).
+
+### Key Improvements
+
+- **Live In-Page Execution**: Visitors can inspect, edit, and run `ml5.faceMesh`, `ml5.handPose`, and `ml5.bodyPose` sketches inline with real-time webcam feedback.
+- **Unified v1.0 API Patterns**: Standardized lifecycle methods (`preload()`, `detectStart()`, `detectStop()`) across all pretrained TensorFlow.js models.
+- **Zero-Install Onboarding**: Quickstart templates link directly to the p5.js Web Editor with preconfigured CDN script tags (`ml5.min.js`), bridging reference examples to full projects like [[look-at-you|Look At You!!!]] and [[webcam-nn|Webcam Handpose Neural Network]].
+
+```javascript
+let facemesh;
+let video;
+let faces = [];
+
+function preload() {
+  facemesh = ml5.faceMesh();
+}
+
+function setup() {
+  createCanvas(640, 480);
+  video = createCapture(VIDEO);
+  video.size(640, 480);
+  video.hide();
+  facemesh.detectStart(video, gotFaces);
+}
+
+function gotFaces(results) {
+  faces = results;
+}
+```
+
+<Callout type="note" title="Author Review Note">
+  Add specific fellowship/research responsibilities, collaborators or faculty advisors (e.g., Daniel Shiffman / ml5.js team), and any additional weekly milestones you want highlighted here.
+</Callout>

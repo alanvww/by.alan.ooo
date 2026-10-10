@@ -1,0 +1,37 @@
+---
+title: "Water Break Timer"
+excerpt: "A webcam-driven hydration timer that triggers native OS notifications until it sees you pick up your mug."
+date: "2024-03-20"
+timeframe: "Spring 2024"
+role: "Creative Technologist"
+technologies:
+  - p5.js
+  - ml5.js
+  - Teachable Machine
+  - Web Notifications API
+  - JavaScript
+coverImage: "./water-break-cover.png"
+tags:
+  - creative-coding
+  - machine-learning
+status: "completed"
+publish: true
+---
+
+**Water Break Timer** is a playful browser utility that pairs a custom webcam image classifier with the **Web Notifications API** to enforce regular hydration breaks during long coding sessions.
+
+## How It Works
+
+Instead of a passive timer that can be dismissed with a click, the app watches the webcam feed to verify whether you actually took a sip:
+
+- **Idle Detection (`Just me :(`)**: While sitting at the desk without a cup in frame, the countdown bar ticks down toward `0:00`.
+- **System Alert (`Time's up!`)**: When the timer hits `0:00`, the status bar turns red and dispatches a native macOS browser notification: *"Water Break Timer — Time's up! Take a water break."*
+- **Mug Verification (`Mug`)**: Raising a mug to take a drink switches the classifier label to `Mug` and automatically resets the countdown timer.
+
+## Live Demo Recording
+
+![Webcam classifier counting down to 0:00, firing a macOS notification, and resetting when a mug is detected](./screen.gif "Countdown expires ('Just me :('), triggers a system notification, and resets once the classifier detects 'Mug'")
+
+<Callout type="note" title="Author Review Note">
+  Add link to the p5.js sketch or GitHub repo (`projectUrl` / `githubUrl`) and specify which NYU ITP class or weekly prompt inspired the prototype.
+</Callout>

@@ -30,7 +30,7 @@ const contentConfig: Record<string, ContentTypeConfig> = {
     iconName: 'Atom',
     order: 10,
     groupByTags: true,
-    showFeatured: true,
+    showFeatured: false,
     singularLabel: 'project',
   },
   posts: {
