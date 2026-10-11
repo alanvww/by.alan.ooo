@@ -1,18 +1,26 @@
 ---
 title: "Altify"
-excerpt: "A Chrome extension that utilizes AI to generate alt text for images, enhancing accessibility for users with visual impairments."
+excerpt: "An accessible web app and Chrome extension that runs quantized DistilViT vision-to-text models inside a browser Web Worker to generate screen-reader alt text."
 date: "2024-05-15"
 timeframe: "Spring 2024"
 role: "Creator & Developer"
 projectUrl: "https://altify-ajr.netlify.app"
 githubUrl: "https://github.com/alanvww/altify"
+links:
+  - label: "Live Web App"
+    href: "https://altify-ajr.netlify.app"
+  - label: "GitHub Repository"
+    href: "https://github.com/alanvww/altify"
+  - label: "Video Demo (YouTube)"
+    href: "https://www.youtube.com/watch?v=tjDAxrLKOwo"
 technologies:
   - Next.js
   - React
-  - TypeScript
+  - Transformers.js (@xenova/transformers)
+  - Web Workers (ES Modules)
+  - DistilViT (ONNX)
+  - WAI-ARIA Live Regions
   - Tailwind CSS
-  - Transformers.js
-  - Chrome Extension API
 coverImage: "./demo.png"
 tags:
   - creative-coding
@@ -24,107 +32,69 @@ status: "completed"
 publish: true
 ---
 
-Altify is a Chrome extension that leverages client-side artificial intelligence to automatically generate descriptive alt text for images on the web, addressing a critical accessibility gap that affects users who rely on screen readers.
+**Altify** is a client-side AI accessibility tool—built as both a standalone Next.js web application ([`altify-ajr.netlify.app`](https://altify-ajr.netlify.app)) and a companion Chrome extension—that generates descriptive `alt` text for unlabelled images directly inside the browser using **Transformers.js** (`@xenova/transformers`) and **DistilViT** (`tarekziade/distilvit` / `Mozilla/distilvit`).
 
-## Project Overview
+Because all vision-language inference executes locally inside an **ES Module Web Worker** with browser-cached ONNX weights, users with visual impairments can caption local photos or remote web images without uploading private media to third-party cloud APIs or blocking the main UI thread.
 
-The web is increasingly visual, yet millions of pages lack meaningful alt text for images. Altify bridges this gap by running vision-language models directly in the browser to provide context-aware descriptions in real time.
+---
 
-<Callout type="info">
-  **Accessibility Impact:** Proper alt text is essential for screen readers to convey image content to users with visual impairments.
-</Callout>
+## System Architecture
 
-## How It Works
+### 1. Singleton ONNX Pipeline Inside an ES Module Web Worker (`src/app/worker.js`)
 
-The extension integrates into Chrome and processes unlabelled images on any webpage:
+Running a Vision Transformer + GPT-2 decoder on the main browser thread would freeze scrolling, keyboard focus, and screen-reader announcements during tokenization and forward passes. Altify isolates model initialization and inference inside a dedicated module worker (`new Worker(new URL('./worker.js', import.meta.url), { type: 'module' })`) with persistent browser cache storage enabled (`env.useBrowserCache = true`):
 
-1. **Image Detection**: Scans the active DOM for images missing `alt` attributes or carrying placeholder filenames.
-2. **Client-Side AI Analysis**: Runs vision-to-text inference locally via Transformers.js.
-3. **Text Generation**: Produces concise, descriptive alt text tailored to the visual content.
-4. **DOM Injection**: Updates image attributes in place so assistive technologies announce them immediately.
+```javascript
+// src/app/worker.js — Singleton DistilViT image-to-text pipeline in a Web Worker
+import { pipeline, env } from '@xenova/transformers';
 
-## Technical Implementation
+env.allowLocalModels = false;
+env.useBrowserCache = true;
 
-### Core Technologies
+const CORS_PROXY =
+  process.env.NEXT_PUBLIC_CORS_FIX_URL ||
+  'https://cors-anywhere.herokuapp.com/';
 
-<Card>
-  <h3>Frontend Framework</h3>
-  <p>Built with Next.js and React for the extension popup, options page, and companion web experience.</p>
-  <div className="flex flex-wrap gap-2 mt-4">
-    <Badge>Next.js</Badge>
-    <Badge variant="secondary">React</Badge>
-    <Badge variant="outline">TypeScript</Badge>
-  </div>
-</Card>
+class Image2TextPipeline {
+  static instance = null;
 
-<Card>
-  <h3>AI & Machine Learning</h3>
-  <p>Powered by Transformers.js for local, privacy-preserving image analysis and caption generation.</p>
-  <div className="flex flex-wrap gap-2 mt-4">
-    <Badge>Transformers.js</Badge>
-    <Badge variant="secondary">DistilViT</Badge>
-    <Badge variant="outline">Hugging Face</Badge>
-  </div>
-</Card>
-
-### Architecture
-
-```typescript
-// Content script for page interaction
-class ImageProcessor {
-  async processImages() {
-    const images = document.querySelectorAll('img');
-    for (const img of images) {
-      if (this.needsAltText(img)) {
-        const altText = await this.generateAltText(img);
-        this.updateImage(img, altText);
-      }
+  static async getInstance(progress_callback = null) {
+    if (!this.instance) {
+      this.instance = pipeline('image-to-text', 'tarekziade/distilvit', {
+        progress_callback,
+      });
     }
-  }
-  
-  private async generateAltText(img: HTMLImageElement): Promise<string> {
-    const captioner = await pipeline('image-to-text', 'Mozilla/distilvit');
-    const result = await captioner(img.src);
-    return result[0].generated_text;
+    return this.instance;
   }
 }
+
+self.addEventListener('message', async (event) => {
+  const captioner = await Image2TextPipeline.getInstance((progress) => {
+    self.postMessage(progress);
+  });
+
+  const targetUrl = event.data.url.startsWith('data:')
+    ? event.data.url
+    : CORS_PROXY + event.data.url;
+
+  const output = await captioner(targetUrl);
+  self.postMessage({ status: 'update', output });
+});
 ```
 
-## Key Features
+On the first visit, the worker streams granular shard-download events (`initiate`, `progress`, `done`, `ready`) back to the React UI as the quantized ONNX checkpoints download from Hugging Face Hub into the browser's Cache API. Subsequent visits load the model directly from local cache.
 
-- **Real-Time Processing**: Automatically detects and captions images as you browse.
-- **Intelligent Descriptions**: Generates contextually relevant alt text using DistilViT.
-- **Performance Optimized**: Lightweight background worker with minimal impact on page load times.
-- **User Customization**: Adjustable sensitivity and description length preferences.
-- **Privacy Focused**: All inference runs locally in the browser—no images are uploaded to external servers.
+---
 
-## Machine Learning Models
+### 2. Screen-Reader-First WAI-ARIA Live Region Choreography (`src/app/page.js`)
 
-- **Primary Model**: [DistilViT by Mozilla](https://huggingface.co/Mozilla/distilvit) — distilled Vision Transformer + GPT-2 decoder optimized for in-browser execution.
-- **Alternative Models**: Support for swapped Hugging Face vision-language checkpoints based on speed vs. detail preference.
+Because Altify is designed for assistive technology users, the React interface pairs visual progress bars with two distinct **WAI-ARIA live regions** so screen readers (such as macOS/iOS VoiceOver and NVDA) announce both model warm-up and finished descriptions automatically:
 
-<Callout type="warning">
-  **Model Selection:** Smaller quantized models trade fine OCR detail for sub-3-second local inference latency.
-</Callout>
+- **`aria-live="assertive"` Model Progress Container**: Announces one-time ONNX weight download status (`"Loading models... (only run once)"`) so screen-reader users know why initial inference takes a few seconds on cold start.
+- **`aria-live="polite"` Figure Gallery**: Wraps each captioned image in a semantic `role="figure"` container where the `<img>` element's `alt` attribute and linked `<figcaption id="description-${index}">` (`aria-describedby`) transition from `"Loading caption..."` to the generated description (`output.generated_text`), triggering a polite screen-reader readout as soon as the worker posts its `update` message.
+- **Dual Input Ingestion (`FileDrop`)**: Accepts both local drag-and-drop / mobile camera Roll uploads (converted to base64 `data:` URLs via `FileReader.readAsDataURL`) and remote image URLs.
 
-## Interface & Mobile Companion
-
-<ImageGrid cols={2} caption="Mobile companion views and configuration panel">
-  ![Mobile screenshot showing the extension in action](./phone-1.png "Companion interface with live image captioning")
-  ![Settings and configuration panel](./phone-2.jpeg "Sensitivity and model configuration panel")
+<ImageGrid cols={2} caption="Altify running on mobile Safari with VoiceOver-compatible live captioning">
+  ![Altify mobile interface uploading and captioning a photo locally in the browser](./phone-1.png "Uploading an image on mobile and streaming local DistilViT caption generation")
+  ![Altify mobile result view displaying generated alt text inside an accessible figure region](./phone-2.jpeg "Generated alt text bound to both the img alt attribute and aria-describedby figcaption")
 </ImageGrid>
-
-## Impact & Results
-
-- **Alt Text Coverage**: Increased from 0% to 95% on tested image-heavy pages.
-- **Processing Speed**: 2–3 seconds per image locally in browser.
-- **Accuracy**: 85%+ relevance rating in user testing with screen reader navigation.
-
-<Callout type="success">
-  **User Testing:** Evaluated at NYU ITP with screen-reader workflows, confirming immediate improvements in navigating unlabelled visual feeds.
-</Callout>
-
-## Resources & References
-
-- [Transformers.js Documentation](https://huggingface.co/docs/transformers.js/index)
-- [Chrome Extension Manifest V3 Guide](https://developer.chrome.com/docs/extensions/mv3/getstarted/)

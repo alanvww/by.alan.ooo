@@ -1,31 +1,46 @@
 ---
 title: "A Peek Through the Dark Room"
-excerpt: "Reimagining the Alice Austen House darkroom through AR, digital fabrication, and interactive media."
+excerpt: "Reimagining the historic Alice Austen House Museum darkroom through browser-based WebAR, 1:12 scale physical models, and tactile architectural reliefs."
 date: "2024-05-05"
 timeframe: "Spring 2024"
-role: "Creative Technologist"
+role: "Creative Technologist & WebAR Developer"
+projectUrl: "https://aliceaustenhouse.netlify.app/"
+githubUrl: "https://github.com/alanvww/AAH-WebAR"
+links:
+  - label: "Live WebAR Experience"
+    href: "https://aliceaustenhouse.netlify.app/"
+  - label: "GitHub Repository"
+    href: "https://github.com/alanvww/AAH-WebAR"
 technologies:
   - WebAR
-  - Digital Fabrication
-  - 3D Modeling
+  - Three.js / WebGL
+  - JavaScript
+  - Digital Fabrication (Laser Cutting & 3D Printing)
   - Physical Prototyping
-  - Exhibition Design
+  - Accessible Museum Design
 coverImage: "./aah-dark-room-1.jpg"
 tags:
   - installation
   - virtual-reality
+status: "completed"
 publish: true
 ---
 
-We redesigned the exhibition experience for the historic second-floor darkroom at the Alice Austen House Museum, making an architectural space that is physically inaccessible to many visitors engaging and tangible through WebAR, digital fabrication, and tactile media.
+Developed in partnership with the **Alice Austen House Museum** in Staten Island, NY, *A Peek Through the Dark Room* reimagines the museum's historic second-floor photographic darkroom—an architectural space where pioneering photographer Alice Austen (1866–1952) developed thousands of glass-plate negatives, but which remains physically inaccessible to visitors unable to climb the narrow nineteenth-century staircase.
 
-Our final deliverables to the museum included two 1:12 scale physical models of the darkroom, a browser-based augmented reality experience demonstrating nineteenth-century photographic plate development, and a series of tactile architectural reliefs of the darkroom's façade installed along the first-floor staircase.
+To bring the second-floor darkroom down into the accessible first-floor gallery, our team designed a multi-sensory exhibition system combining **tactile architectural reliefs**, **two 1:12 scale physical darkroom models**, and a **browser-based WebAR plate-development experience** ([`aliceaustenhouse.netlify.app`](https://aliceaustenhouse.netlify.app/)).
 
-## Exhibition Deliverables & Scale Prototypes
+---
 
-<ImageGrid cols={2} caption="1:12 scale darkroom models, tactile staircase reliefs, and WebAR experience">
-  ![Scale darkroom prototype 1](./aah-dark-room-2.jpg)
-  ![Scale darkroom prototype 2](./aah-dark-room-3.jpg)
-  ![Tactile architectural relief](./aah-dark-room-4.jpg)
-  ![WebAR darkroom interaction](./aah-dark-room-5.jpg)
+## Engineering & Exhibition Deliverables
+
+1. **Browser-Based WebAR Darkroom Experience ([`AAH-WebAR`](https://github.com/alanvww/AAH-WebAR))**: I engineered the companion mobile web and WebAR application (`aliceaustenhouse.netlify.app`), allowing museum visitors to scan markers on their smartphones without installing a native app, peer inside a virtual reconstruction of Austen's workspace, and interactively step through nineteenth-century glass-plate negative chemical development under virtual safelight illumination.
+2. **1:12 Scale Physical Darkroom Models**: Two precision-fabricated 1:12 miniature reconstructions of the historic darkroom interior, complete with miniature developing trays, period cabinetry, glass plates, and embedded warm/red safelight LEDs that invite visitors to look through a physical peephole.
+3. **Tactile Staircase Reliefs**: A sequence of laser-cut and 3D-printed tactile architectural reliefs installed along the first-floor staircase wall, translating the darkroom's exterior carpentry and spatial layout into touchable surfaces for blind and low-vision visitors.
+
+<ImageGrid cols={2} caption="1:12 scale darkroom models, tactile staircase reliefs, and mobile WebAR experience at the Alice Austen House Museum">
+  ![1:12 scale darkroom interior model illuminated by red safelight](./aah-dark-room-2.jpg "1:12 scale physical model of Alice Austen's darkroom with miniature developing trays and safelight LEDs")
+  ![Visitors inspecting the peephole darkroom model and physical enclosures](./aah-dark-room-3.jpg "Peephole enclosure and scale architectural prototype")
+  ![Tactile architectural relief panels mounted for touch exploration](./aah-dark-room-4.jpg "Tactile relief panels translating the historic darkroom architecture for touch exploration")
+  ![Mobile WebAR experience running in the browser at aliceaustenhouse.netlify.app](./aah-dark-room-5.jpg "Browser-based WebAR experience simulating nineteenth-century glass-plate photographic development")
 </ImageGrid>

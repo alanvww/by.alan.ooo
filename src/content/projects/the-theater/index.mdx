@@ -1,9 +1,9 @@
 ---
 title: "The Theater"
-excerpt: "A VR interactive theatre piece blending Chinese theatre aesthetics, mocap, and hand tracking to explore individualism and collectivism."
+excerpt: "An interactive VR theatre piece in Unreal Engine 5 blending traditional Chinese opera aesthetics, OptiTrack & AI motion capture, and controller-free hand tracking."
 date: "2024-12-10"
 timeframe: "2024"
-role: "Game Developer"
+role: "VR Game Developer (Unreal Engine 5)"
 collaborators:
   - John Luo
   - Yingru Huang
@@ -14,10 +14,10 @@ collaborators:
   - Yoyo Shang
 technologies:
   - Unreal Engine 5
-  - Virtual Reality
+  - Virtual Reality (Quest / OpenXR)
+  - Controller-Free Hand Tracking
   - OptiTrack Motion Capture
   - AI Motion Capture (Qian Mian)
-  - Hand Tracking
   - Chaos Cloth
   - Marvelous Designer
 coverImage: "./the-theater-1.jpg"
@@ -26,18 +26,31 @@ tags:
   - installation
 featured: true
 order: 4
+status: "completed"
 publish: true
 ---
 
-*The Theater* is an interactive VR theatre piece that blends traditional Chinese opera aesthetics with contemporary mechanical design, combining live choreography, optical and AI motion capture, and controller-free hand tracking to explore the tension between individualism and collectivism.
+Selected for the **2024 NYU Tandon Research Excellence Exhibit**, *The Theater* is an interactive VR theatre piece built in **Unreal Engine 5** that blends traditional Chinese opera aesthetics with contemporary mechanical design—combining live dance choreography, optical and AI motion capture, and controller-free hand tracking to explore the tension between **collectivism** and **individualism**.
 
-The experience presents two contrasting virtual worlds—one embodying Eastern collectivism and the other Western individualism. Each world unfolds as a living stage where audiences actively shape the performance through physical gesture and movement, reflecting on how cultural frameworks mediate personal identity and communal belonging.
+The experience places the audience inside two contrasting virtual stages—one embodying Eastern collectivism and the other Western individualism. Rather than passively watching a pre-recorded 360° film, participants inhabit a living theatrical stage where their physical hand gestures and spatial movement directly trigger scene transitions, lighting cues, and choreographed responses from the virtual performers.
+
+---
+
+## Engineering Role & VR Interaction Systems
+
+As **VR Game Developer** alongside co-director John Luo, my engineering work focused on bridging the high-fidelity Unreal Engine 5 cinematic assets with real-time headset performance and embodied interaction:
+
+1. **Controller-Free Hand Tracking & Gesture Triggers**: Integrated OpenXR/Meta Quest skeletal hand tracking into Unreal Engine 5 so audience members can interact with stage props, summon theatrical masks, and drive narrative branching naturally with bare hands—removing the barrier of unfamiliar VR game controllers for gallery visitors.
+2. **Dual-World Stage State Machine**: Engineered the interactive scene management and real-time level streaming transitions between the Eastern collectivist stage and Western individualist stage, synchronizing spatial audio stems with motion-captured character animation sequences.
+3. **Real-Time Skeletal Retargeting & Cloth Integration**: Integrated multi-performer OptiTrack and AI motion-capture (`Qian Mian`) animation takes onto custom mechanical character rigs running **UE5 Chaos Cloth** garment simulations.
+
+---
 
 ## Shan Gui — 3D Short Film & Visual World
 
-The accompanying 3D short film, *Shan Gui*, serves as the visual and thematic prologue for the VR experience. Reimagining the Mountain Spirit from Qu Yuan's classical poem as an androgynous mechanical figure in Unreal Engine 5, the film establishes the project's core themes of isolation, longing, and cultural memory.
+The accompanying 3D short film, *Shan Gui*, serves as the visual and thematic prologue for the VR experience. Reimagining the Mountain Spirit from Qu Yuan's classical poem (*Nine Songs*) as an androgynous mechanical figure in Unreal Engine 5, the film establishes the project's core themes of isolation, longing, and cultural memory.
 
-<ImageGrid cols={2} caption="Stills from Shan Gui, rendered in Unreal Engine 5">
+<ImageGrid cols={2} caption="Stills from Shan Gui and the interactive VR stages, rendered in Unreal Engine 5">
   ![Shan Gui still 1](./the-theater-2.jpg)
   ![Shan Gui still 2](./the-theater-3.jpg)
   ![Shan Gui still 3](./the-theater-4.jpg)
@@ -50,17 +63,17 @@ The accompanying 3D short film, *Shan Gui*, serves as the visual and thematic pr
 
 ## Motion Capture & Interactive Choreography
 
-Performances combine AI motion capture (Qian Mian) with multi-camera OptiTrack volumes to record professional dancers. AI mocap enables performers to rehearse in unconstrained spaces, while OptiTrack captures high-precision multi-performer interactions for real-time VR staging.
+Performances combine AI motion capture (`Qian Mian`) with multi-camera **OptiTrack** optical volumes to record professional dancers. AI mocap enabled performers to rehearse and iterate in unconstrained studio spaces, while OptiTrack captured sub-millimeter multi-performer interactions for real-time VR staging.
 
-<ImageGrid cols={3} caption="Motion capture sessions and real-time skeletal retargeting">
+<ImageGrid cols={3} caption="OptiTrack motion capture sessions and real-time Unreal Engine 5 skeletal retargeting">
   ![Motion capture session 1](./the-theater-10.jpg)
   ![Motion capture session 2](./the-theater-11.jpg)
   ![Motion capture session 3](./the-theater-12.jpg)
 </ImageGrid>
 
-## Digital Fashion & Cloth Simulation
+## Digital Fashion & Chaos Cloth Simulation
 
-Costumes were designed in Marvelous Designer and simulated in real time using Unreal Engine 5's Chaos Cloth solver, paired with AI-assisted 3D ornamental modeling to preserve the movement and silhouette of traditional theatrical garments inside VR.
+Costumes were patterned in **Marvelous Designer** and simulated in real time using Unreal Engine 5's **Chaos Cloth** solver, paired with AI-assisted 3D ornamental modeling to preserve the flowing sleeves, weight, and silhouette of traditional Chinese opera garments inside VR.
 
 <ImageGrid cols={2} caption="Garment simulation and character ornamentation in Unreal Engine 5">
   ![Costume design 1](./the-theater-13.jpg)
@@ -76,7 +89,7 @@ Costumes were designed in Marvelous Designer and simulated in real time using Un
 - **Co-Directors**: John Luo, Yingru Huang
 - **Choreography Director**: Yingru Huang
 - **Screenplay Co-Director**: Lois He
-- **Game Developers**: John Luo, Alan Yam
+- **Game Developers**: John Luo, Alan Ren (Alan Yam)
 - **Tech & 3D Artists**: John Luo, Kano Tao, Yi Wang
 - **Fashion Designers**: Maggie Zhou, Yoyo Shang
 - **Fashion Consultants**: Elena Liu, Annie Xing, Laurel Fang

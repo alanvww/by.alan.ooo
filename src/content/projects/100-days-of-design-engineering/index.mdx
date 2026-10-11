@@ -1,35 +1,57 @@
 ---
 title: "100 Days of Design Engineering"
-excerpt: "Daily design engineering practice from the \"100 Days of Making\" class — Next.js, React, and WebGL experiments."
-date: "2024-05-10"
-timeframe: "Spring 2024"
+excerpt: "60+ daily design engineering builds exploring interactive UI primitives, WebGL shaders, and full-stack React architectures."
+date: "2025-05-10"
+timeframe: "Spring 2025"
 role: "Design Engineer"
 projectUrl: "https://100days.alan.ooo/"
+githubUrl: "https://github.com/alanvww/100-Days-of-Design-Engineering"
+links:
+  - label: "Live Archive (100days.alan.ooo)"
+    href: "https://100days.alan.ooo/"
+  - label: "GitHub Repository"
+    href: "https://github.com/alanvww/100-Days-of-Design-Engineering"
 technologies:
   - Next.js
   - React
   - TypeScript
-  - WebGL
-  - Three.js
+  - WebGL / Three.js
   - Tailwind CSS
+  - Framer Motion
 coverImage: "./100-days-of-design-engineering-1.jpg"
 tags:
   - design-engineering
   - creative-coding
 featured: true
 order: 1
+status: "completed"
 publish: true
 ---
 
-Welcome to my journey through the "100 Days of Making" class at NYU ITP, where I focused on design engineering with an emphasis on interactive web development. This project documents daily experiments and UI studies built with Next.js, React components, and WebGL shaders.
+Built during the *100 Days of Making* studio at NYU ITP (Spring 2025), **100 Days of Design Engineering** ([`100days.alan.ooo`](https://100days.alan.ooo/)) is a living monorepo and interactive archive of daily design engineering experiments. Rather than treating UI design and frontend engineering as separate handoff stages, each daily build ships a self-contained, production-grade component, shader study, or full-stack micro-application in **Next.js, React, TypeScript, Tailwind CSS, and WebGL**.
 
-## Selected Experiments
+---
 
-<ImageGrid cols={2} caption="Selected daily builds from 100 Days of Design Engineering">
-  ![Experiment showcase 1](./100-days-of-design-engineering-2.jpg)
-  ![Experiment showcase 2](./100-days-of-design-engineering-3.jpg)
-  ![Experiment showcase 3](./100-days-of-design-engineering-4.jpg)
-  ![Experiment showcase 4](./100-days-of-design-engineering-5.jpg)
+## Four Tracks of Daily Exploration
+
+Across the semester, the daily builds converged around four recurring themes:
+
+1. **Interactive UI Primitives & Micro-Interactions**: Tactile navigation patterns, keyboard-first pagination controls (**Day 40**), multi-state theme toggles, rich-text document editors (**Day 11–12**), and spatial accordion menus (**Day 64**).
+2. **Real-Time WebGL & Shader Studies**: Procedural 3D scenes, hologram maze shaders (**Day 55**), particle fields, and post-processing pipelines integrated into standard React DOM layouts.
+3. **Developer Tooling & Documentation Systems**: Custom Markdown/MDX loaders (**Day 1–3**), live code-preview sandboxes (**Day 5**), and vector-indexed documentation search (**Day 57**).
+4. **Full-Stack Feedback & Telemetry Widgets**: Lightweight API endpoints and persistent feedback controls embedded directly into interactive prototypes.
+
+---
+
+## Archive Index & Selected Daily Builds
+
+<ImageGrid cols={2} caption="Chronological archive views and individual daily component studies on 100days.alan.ooo">
+  ![Light-mode chronological index showing Days 1–12 (Markdown loader, code preview sandbox, button system, document editor)](./100-days-of-design-engineering-2.jpg "Days 1–12: Markdown pipeline, live code preview, button system, and rich-text document editor")
+  ![Dark-mode chronological index showing Days 53–64 (Hologram Maze WebGL, Vector Index Docs, Vertical Menu)](./100-days-of-design-engineering-3.jpg "Days 53–64: Hologram Maze WebGL scene, vector-indexed docs, and motion-driven navigation")
+  ![Day 64 — Vertical Accordion Menu component with spring-driven expansion](./100-days-of-design-engineering-4.jpg "Day 64: Vertical Accordion Menu primitive with keyboard and pointer choreography")
+  ![Day 40 — Day Navigation bar for stepping through daily builds](./100-days-of-design-engineering-5.jpg "Day 40: Contextual pagination and keyboard shortcut bar for navigating daily experiments")
 </ImageGrid>
 
-The "100 Days of Making" practice established a disciplined loop of rapid prototyping, shader experimentation, and interaction polish across TypeScript, Next.js, React, and WebGL.
+## Architecture of the Archive
+
+To prevent 60+ heterogeneous experiments—ranging from raw Three.js canvases to server-backed React forms—from colliding or bloating a single bundle, the repository ([`alanvww/100-Days-of-Design-Engineering`](https://github.com/alanvww/100-Days-of-Design-Engineering)) isolates each day under dynamic route segments (`/[slug]/page.tsx`) with lazy-loaded component boundaries, shared typography tokens, and unified keyboard navigation across the entire catalog.

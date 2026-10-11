@@ -1,49 +1,65 @@
 ---
 title: "Different Paths, The Same End."
-excerpt: "An installation examining China's zero-COVID policy through city maps, magnifying glasses, and fictional quarantine stories."
+excerpt: "A collaborative installation, bilingual print publication, and interactive web exhibition examining China's zero-COVID policy through annotated city maps, magnifying lenses, and quarantine narratives."
 date: "2023-05-15"
-timeframe: "2023"
+timeframe: "Spring 2023"
 role: "Co-Creator & Web Developer"
+collaborators:
+  - Jixin Zheng
 projectUrl: "https://paths.katudio.com/"
+links:
+  - label: "Online Exhibition (paths.katudio.com)"
+    href: "https://paths.katudio.com/"
 technologies:
   - Interactive Installation
-  - Web Development
+  - Frontend Web Development
+  - Interactive Magnifier Canvas
   - Cartography
-  - Bilingual Typography
-  - Editorial Design
+  - Bilingual Typography (CJK / Latin)
+  - Editorial & Book Design
 coverImage: "./different-paths-the-same-end-1.jpg"
 tags:
   - installation
   - design-engineering
 featured: true
 order: 6
+status: "completed"
 publish: true
 ---
 
-*Different Paths, The Same End.* is a collaborative installation and web exhibition that examines the human impact of China's zero-COVID policy. During the policy's enforcement, municipal health authorities published the granular travel histories of positive cases in local news outlets—exposing private daily routines to public scrutiny before ending in mandatory centralized quarantine.
+Created in collaboration with **Jixin Zheng** and exhibited at the **80WSE Gallery** (NYU Steinhardt Senior Show, 2023), *Different Paths, The Same End.* is a physical installation, bilingual print publication, and interactive web exhibition ([`paths.katudio.com`](https://paths.katudio.com/)) that examines the human impact of China's zero-COVID policy.
 
-To materialize this tension between surveillance and ordinary life, we researched published epidemiological logs and constructed annotated maps for eight cities. Each map is mounted beneath a physical magnifying glass, inviting viewers to peer into strangers' movements the way internet bystanders scrutinized published case logs. Alongside the maps, we authored bilingual narratives (Chinese and English) reconstructing the ordinary days that preceded the shared final sentence: *"I am going to be quarantined."*
+During the policy's enforcement, municipal health authorities routinely published the granular, hour-by-hour travel logs of positive cases in local news outlets—exposing private daily routines (grocery runs, transit transfers, late-night shifts) to public scrutiny before every log converged on the same mandatory outcome: centralized quarantine.
 
-## Physical Installation & Printed Books
+To materialize this tension between institutional surveillance and ordinary life, we researched published epidemiological logs across **eight Chinese cities** and constructed annotated cartographic prints mounted behind suspended **physical magnifying lenses**—inviting gallery visitors to peer into strangers' movements the same way internet bystanders scrutinized published case trajectories. Alongside the maps, we authored and typeset bilingual narratives (Chinese and English) reconstructing the ordinary days that preceded the shared final line: *"I am going to be quarantined."*
 
-<ImageGrid cols={2} caption="City map installations under magnifying lenses and printed bilingual editions">
-  ![Installation view 2](./different-paths-the-same-end-2.jpg)
-  ![Installation view 3](./different-paths-the-same-end-3.jpg)
-  ![Installation view 4](./different-paths-the-same-end-4.jpg)
-  ![Installation view 5](./different-paths-the-same-end-5.jpg)
-  ![Installation view 6](./different-paths-the-same-end-6.jpg)
-  ![Installation view 7](./different-paths-the-same-end-7.jpg)
-  ![Installation view 8](./different-paths-the-same-end-8.jpg)
-  ![Installation view 9](./different-paths-the-same-end-9.jpg)
+---
+
+## Physical Installation & Printed Editions (80WSE Gallery)
+
+<ImageGrid cols={2} caption="Annotated eight-city cartographic installation under suspended magnifying lenses and saddle-stitched bilingual publications at 80WSE Gallery">
+  ![Gallery wall installation with eight city maps and suspended magnifying glasses](./different-paths-the-same-end-2.jpg)
+  ![Close-up of suspended magnifying glass over annotated epidemiological city route](./different-paths-the-same-end-3.jpg)
+  ![Printed bilingual narrative booklets mounted alongside city maps](./different-paths-the-same-end-4.jpg)
+  ![Detail of typographic route markers and bilingual story cards](./different-paths-the-same-end-5.jpg)
+  ![Editorial spread showing synchronized Chinese and English narrative columns](./different-paths-the-same-end-6.jpg)
+  ![Close-up of magnifying lens refracting street-level travel annotations](./different-paths-the-same-end-7.jpg)
+  ![Overview of printed book spreads and exhibition signage](./different-paths-the-same-end-8.jpg)
+  ![Visitors examining the maps and booklets through the magnifying lenses](./different-paths-the-same-end-9.jpg)
 </ImageGrid>
 
-## Online Exhibition
+---
 
-The companion web archive translates the physical installation into the browser, featuring an interactive magnifying-glass inspection canvas, traditional horizontal Chinese editorial typography, and synchronized bilingual reading views.
+## Online Exhibition & Frontend Engineering ([`paths.katudio.com`](https://paths.katudio.com/))
 
-<ImageGrid cols={2} caption="Interactive web archive with magnifying glass simulation and bilingual layout">
-  ![Online exhibition interface 1](./different-paths-the-same-end-10.jpg)
-  ![Online exhibition interface 2](./different-paths-the-same-end-11.jpg)
-  ![Online exhibition interface 3](./different-paths-the-same-end-12.jpg)
-  ![Online exhibition interface 4](./different-paths-the-same-end-13.jpg)
+To extend the exhibition beyond the gallery, I designed and engineered the companion web archive ([`paths.katudio.com`](https://paths.katudio.com/)), translating the physical tactile mechanics of the installation into the browser:
+
+- **Interactive Magnifying-Glass Canvas**: Tracks pointer and touch coordinates across each city's vector/high-DPI map to render a real-time optical loupe overlay, revealing fine-print epidemiological timestamps and street-level movement paths on hover.
+- **Bilingual Editorial Grid (CJK & Latin)**: Pairs vertical and horizontal Chinese typographic conventions with synchronized English translations across all eight city narratives.
+
+<ImageGrid cols={2} caption="Interactive web archive at paths.katudio.com featuring real-time cursor magnifying loupe and bilingual narrative typography">
+  ![Landing interface of paths.katudio.com with interactive magnifying lens](./different-paths-the-same-end-10.jpg)
+  ![City selector and interactive map inspection loupe in the browser](./different-paths-the-same-end-11.jpg)
+  ![Bilingual story reader with synchronized Chinese and English typography](./different-paths-the-same-end-12.jpg)
+  ![Index of the eight cities and documented epidemiological trajectories](./different-paths-the-same-end-13.jpg)
 </ImageGrid>

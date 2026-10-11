@@ -34,7 +34,6 @@ const PINNED_TAG_FOLDERS: {
     slug: 'google-creative-lab',
     title: 'Google Creative Lab',
     aboveSlug: 'design-engineering',
-    restrictItems: true,
     extraItems: [
       {
         id: 'gcl-gemma-translator',
@@ -66,6 +65,7 @@ const PINNED_TAG_FOLDERS: {
         description: 'Generative shader experiment for Viberary — featured at Google Creative House @ Cannes Lions International Festival of Creativity',
         image: '/assets/projects/google-creative-lab/wave-studio.gif',
         type: 'link',
+        restricted: true,
       },
     ],
   },

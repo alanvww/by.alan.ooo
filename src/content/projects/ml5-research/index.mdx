@@ -1,60 +1,96 @@
 ---
-title: "ml5.js Website Enhancement & Built-in Editor"
-excerpt: "Designing and prototyping an interactive in-page code editor and unified documentation experience for the ml5.js 1.0 release at NYU ITP."
-date: "2024-03-12"
-timeframe: "Spring 2024"
-role: "Student Researcher"
-projectUrl: "https://docs.ml5js.org"
-githubUrl: "https://github.com/alanvww/ml5-website-v02-docsify"
+title: "ml5.js Website & Next-Gen Documentation"
+excerpt: "Designing, engineering, and maintaining the ml5.js 1.0 website and interactive documentation platform for friendly machine learning on the web."
+date: "2024-09-01"
+timeframe: "2024 – Present"
+role: "Web Developer & Open Source Maintainer"
+order: 3
+projectUrl: "https://ml5js.org/"
+githubUrl: "https://github.com/ml5js/ml5-next-gen"
+links:
+  - label: "ml5js.org"
+    href: "https://ml5js.org/"
+  - label: "Documentation (docs.ml5js.org)"
+    href: "https://docs.ml5js.org/"
+  - label: "ml5-next-gen Repository"
+    href: "https://github.com/ml5js/ml5-next-gen"
+  - label: "Docsify Platform Repo"
+    href: "https://github.com/ml5js/ml5-website-v02-docsify"
 technologies:
   - ml5.js
   - p5.js
-  - CodeMirror
+  - JavaScript / TypeScript
   - Docsify
-  - React / Gatsby
-  - Next.js
+  - CodeMirror
+  - React / Next.js
+  - TensorFlow.js
 coverImage: "./ml5-docs-facemesh.png"
 tags:
   - design-engineering
-  - machine-learning
   - creative-coding
+  - machine-learning
+featured: true
 status: "completed"
 publish: true
 ---
 
-Conducted during Daniel Shiffman's **ml5.js Research Studio** at NYU ITP (Spring 2024), this research project focused on redesigning the **ml5.js 1.0** website and embedding a live, interactive code editor directly inside the reference documentation so beginners can experiment with browser-based machine learning models without context-switching.
+[**ml5.js**](https://ml5js.org/) is an open-source library developed at NYU ITP/IMA that brings approachable machine learning (`FaceMesh`, `HandPose`, `BodyPose`, `ImageClassifier`, `SoundClassifier`, `NeuralNetwork`, `DepthEstimation`, and `Sentiment`) to artists, creative coders, and students on top of **TensorFlow.js** and **p5.js**.
 
-- **Research Proposal**: [ml5.js Website Functionality Enhancement and Examples with Built-in Editor](https://github.com/ml5js/research-studio-s24/blob/main/projects/alanren.md)
-- **Prototypes**: [`ml5-website-v02-docsify`](https://github.com/alanvww/ml5-website-v02-docsify) · [`ml5-website-v02-gatsby`](https://github.com/alanvww/ml5-website-v02-gatsby)
+Beginning in Daniel Shiffman's **ml5.js Research Studio** (Spring 2024) and continuing as an open-source **Web Developer & Maintainer** for the ml5.js project (`2024 – Present`), I helped design, architect, and maintain the **ml5.js 1.0** web presence ([`ml5js.org`](https://ml5js.org/)) and unified reference documentation ([`docs.ml5js.org`](https://docs.ml5js.org/)).
 
-## Research Objectives
+---
 
-1. **Centralize Learning Resources**: Unify API reference pages, video tutorials, and runnable examples into a single cohesive documentation flow.
-2. **Embed an In-Page Live Code Editor**: Allow learners to inspect, modify, and execute `p5.js` + `ml5.js` sketches (`FaceMesh`, `HandPose`, `BodyPose`, `ImageClassifier`, `NeuralNetwork`) with live webcam feedback directly inside the docs.
-3. **Optimize Performance & Cross-Origin Execution**: Evaluate single-page documentation architectures (Next.js, Gatsby/React, Vite, and Docsify) while resolving `iframe` HTTPS and camera permission constraints for embedded sketches.
+## Key Contributions
 
-## Prototyping the In-Page Code Runner
+### 1. Redesigning the ml5.js 1.0 Documentation & Website Architecture
 
-Early iterations tested a **CodeMirror** + **Next.js** proof-of-concept and evaluated sandboxing strategies for running live webcam sketches inside documentation pages. Resolving `iframe` camera/microphone permissions over HTTPS enabled seamless inline execution alongside each model's syntax breakdown, which directly informed later work on the [[help-page|p5.js Built-In Help Page]] during Google Summer of Code.
+As `ml5-next-gen` (ml5.js 1.0) overhauled its core APIs around modern TensorFlow.js and MediaPipe tasks (`detectStart`, `detectStop`, coordinate normalization, and WebGL/WebGPU backends), the legacy documentation needed a complete structural rebuild:
+
+- **Architecture Benchmarking**: Prototyped and benchmarked multiple documentation engines—including **Next.js + CodeMirror**, **Gatsby/React** ([`ml5-website-v02-gatsby`](https://github.com/alanvww/ml5-website-v02-gatsby)), and **Docsify** ([`ml5-website-v02-docsify`](https://github.com/ml5js/ml5-website-v02-docsify))—optimizing for zero-build Markdown contribution workflows so students and faculty can submit documentation PRs without complex frontend build steps.
+- **Unified Learning Flow**: Consolidated API reference specifications, model method signatures, step-by-step quickstarts, and curated community projects across [`ml5js.org`](https://ml5js.org/) and [`docs.ml5js.org`](https://docs.ml5js.org/).
+
+### 2. Interactive In-Page Code Runner & Webcam Sandboxing
+
+A central goal of my [Spring 2024 Research Proposal](https://github.com/ml5js/research-studio-s24/blob/main/projects/alanren.md) was eliminating the friction between reading a machine learning API reference and seeing live webcam inference in action:
+
+- Designed an embedded live-code preview workflow allowing learners to inspect, edit, and run `p5.js` + `ml5.js` sketches directly alongside each model's parameter documentation.
+- Resolved cross-origin `iframe` HTTPS security policies and `Permissions-Policy: camera; microphone` delegation so live computer-vision models (`ml5.faceMesh()`, `ml5.handPose()`, `ml5.bodyPose()`) can access webcam streams inline without leaving the documentation page.
 
 ```javascript
-let facemesh;
+// ml5.js 1.0 FaceMesh — Real-time 468-keypoint facial landmark tracking in p5.js
+let faceMesh;
 let video;
 let faces = [];
 
 function preload() {
-  facemesh = ml5.faceMesh();
+  faceMesh = ml5.faceMesh({ maxFaces: 1, refineLandmarks: false, flipped: true });
 }
 
 function setup() {
   createCanvas(640, 480);
-  video = createCapture(VIDEO);
+  video = createCapture(VIDEO, { flipped: true });
   video.size(640, 480);
   video.hide();
-  facemesh.detectStart(video, gotFaces);
+  faceMesh.detectStart(video, (results) => {
+    faces = results;
+  });
 }
 
-function gotFaces(results) {
-  faces = results;
+function draw() {
+  image(video, 0, 0, width, height);
+  for (const face of faces) {
+    for (const kp of face.keypoints) {
+      fill(0, 255, 128);
+      noStroke();
+      circle(kp.x, kp.y, 4);
+    }
+  }
 }
 ```
+
+### 3. Open-Source Community & Educator Workshops
+
+Beyond web engineering, I co-led public workshops introducing the ml5.js 1.0 ecosystem to educators, artists, and developers:
+
+- **Exploring Friendly Machine Learning for the Web with ml5.js 1.0** — Technical Workshop at the *OUR STUDY GROUP* symposium at Google NYC (October 2024).
+- **Machine Learning Tools for Creative Coding** — Open-Source Tools Showcase at *COSA × NYU* (March 2025), demonstrating ml5.js alongside [[jumpstart-electron|Jumpstart]].
